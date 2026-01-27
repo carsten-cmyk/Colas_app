@@ -735,7 +735,7 @@
 }
 
 .task-detail-start-btn.task-started {
-  background: #17C05B;
+  background: #00AB50;
   border: none;
   color: white;
 }
@@ -747,8 +747,8 @@
 }
 
 .task-detail-start-btn.task-started:hover {
-  background: #15a84f;
-  box-shadow: 0 6px 16px rgba(23, 192, 91, 0.3);
+  background: #009945;
+  box-shadow: 0 6px 16px rgba(0, 171, 80, 0.3);
 }
 
 .task-detail-start-btn:focus,
@@ -1135,7 +1135,7 @@
 
 /* Complete button */
 .task-complete-btn {
-  background-color: #17C05B;
+  background-color: #00AB50;
   border: none;
   border-radius: 12px;
   padding: 14px;
@@ -1154,9 +1154,9 @@
 }
 
 .task-complete-btn:hover {
-  background-color: #15a84f;
+  background-color: #009945;
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(23, 192, 91, 0.3);
+  box-shadow: 0 6px 16px rgba(0, 171, 80, 0.3);
 }
 
 .task-complete-btn:focus,
