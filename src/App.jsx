@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import TaskOverviewPage from './pages/TaskOverviewPage'
 import TaskDetailPage from './pages/TaskDetailPage'
+import TaskCompletePage from './pages/TaskCompletePage'
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/overview" element={<TaskOverviewPage />} />
             <Route path="/task/:taskId" element={<TaskDetailPage />} />
+            <Route path="/task/:taskId/complete" element={<TaskCompletePage />} />
           </Routes>
         </Router>
       </div>

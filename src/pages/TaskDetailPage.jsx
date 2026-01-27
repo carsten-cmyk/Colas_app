@@ -144,7 +144,7 @@ function TaskDetailPage() {
 
         {/* End task button - only show when task is started or paused */}
         {taskStatus !== 'not-started' && (
-          <button className="task-detail-end-btn">
+          <button className="task-detail-end-btn" onClick={() => navigate(`/task/${taskId}/complete`)}>
             <span>Afslut opgave</span>
           </button>
         )}
