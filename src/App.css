@@ -739,6 +739,14 @@
   box-shadow: 0 6px 16px rgba(23, 192, 91, 0.3);
 }
 
+.task-detail-start-btn:focus,
+.task-detail-start-btn:active,
+.task-detail-start-btn.task-started:focus,
+.task-detail-start-btn.task-started:active {
+  outline: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
 .task-detail-end-btn {
   background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(10px);
@@ -766,6 +774,12 @@
   background: rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+.task-detail-end-btn:focus,
+.task-detail-end-btn:active {
+  outline: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .task-detail-btn-icon {
