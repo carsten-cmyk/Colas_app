@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colas Transportberegner</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            margin-bottom: 30px;
+            color: #ffd700;
+        }
+        
+        .input-section {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        label {
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #ccc;
+        }
+        
+        input {
+            padding: 10px;
+            border: 1px solid #444;
+            border-radius: 4px;
+            background: #1a1a1a;
+            color: #fff;
+            font-size: 16px;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #ffd700;
+        }
+        
+        button {
+            padding: 12px 30px;
+            background: #ffd700;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #ffed4e;
+        }
+        
+        .results {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        .summary {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #1a1a1a;
+            border-radius: 4px;
+        }
+        
+        .summary-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .summary-label {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 4px;
+        }
+        
+        .summary-value {
+            font-size: 20px;
+            font-weight: 600;
+            color: #ffd700;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        
+        th {
+            background: #1a1a1a;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #444;
+            white-space: nowrap;
+        }
+        
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #333;
+        }
+        
+        tr:hover {
+            background: #333;
+        }
+        
+        .truck-icon {
+            display: inline-flex;
+            gap: 4px;
+        }
+        
+        .truck-part {
+            width: 12px;
+            height: 8px;
+            background: #4a9eff;
+            border-radius: 2px;
+        }
+        
+        .warning-red {
+            color: #ff4444;
+            font-weight: 600;
+        }
+        
+        .warning-orange {
+            color: #ff9944;
+            font-weight: 600;
+        }
+        
+        .truck-selection {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .truck-selection h3 {
+            margin-bottom: 15px;
+            color: #ffd700;
+            font-size: 18px;
+        }
+        
+        .truck-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+        
+        .truck-checkbox {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 12px 10px;
+            background: #1a1a1a;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            min-height: 50px;
+        }
+        
+        .truck-checkbox input[type="checkbox"] {
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+        
+        .truck-checkbox:hover {
+            background: #333;
+        }
+        
+        .truck-checkbox input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .truck-checkbox span {
+            font-size: 14px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            flex-direction: column;
+            width: 100%;
+        }
+        
+        .truck-checkbox .plate {
+            font-size: 11px;
+            padding: 1px 6px;
+        }
+        
+        .paused-row {
+            background: #3a2a1a !important;
+        }
+        
+        .paused-row:hover {
+            background: #4a3a2a !important;
+        }
+        
+        .cost-high {
+            color: #ff4444 !important;
+        }
+        
+        .cost-low {
+            color: #ff9944 !important;
+        }
+        
+        .cost-total {
+            color: #ff4444 !important;
+            font-size: 24px !important;
+        }
+        
+        
+        /* Simpel og elegant checkbox styling */
+        input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #555;
+            border-radius: 4px;
+            cursor: pointer;
+            position: relative;
+            background: #2a2a2a;
+            transition: all 0.2s ease;
+        }
+        
+        input[type="checkbox"]:hover {
+            border-color: #888;
+        }
+        
+        input[type="checkbox"]:checked {
+            background: #ffd700;
+            border-color: #ffd700;
+        }
+        
+        input[type="checkbox"]:checked::after {
+            content: '';
+            position: absolute;
+            left: 6px;
+            top: 2px;
+            width: 5px;
+            height: 10px;
+            border: solid #000;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+        
+        /* Nummerplade styling */
+        .plate {
+            display: inline-block;
+            background: #fff;
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            font-size: 13px;
+            border: 2px solid #003366;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        function TransportBeregner() {
+            const [input, setInput] = useState({
+                totalTons: 300,
+                interval: 29,
+                startTime: '06:00',
+                driveTime: 36,
+                loadTime: 10,
+                unloadTime: 10,
+                priceTeamPerHour: 4000,
+                priceSmallTruckPerHour: 800,
+                priceLargeTruckPerHour: 1200
+            });
+            
+            const [availableTrucks, setAvailableTrucks] = useState([
+                { id: 1, capacity: 30, enabled: true, name: 'Bil 1', plate: 'AB12345' },
+                { id: 2, capacity: 30, enabled: true, name: 'Bil 2', plate: 'CD67890' },
+                { id: 3, capacity: 30, enabled: true, name: 'Bil 3', plate: 'EF23456' },
+                { id: 4, capacity: 15, enabled: true, name: 'Bil 4', plate: 'GH78901' },
+                { id: 5, capacity: 30, enabled: false, name: 'Bil 5', plate: 'JK34567' },
+                { id: 6, capacity: 15, enabled: false, name: 'Bil 6', plate: 'LM89012' },
+                { id: 7, capacity: 30, enabled: false, name: 'Bil 7', plate: 'NP45678' },
+                { id: 8, capacity: 15, enabled: false, name: 'Bil 8', plate: 'QR90123' },
+                { id: 9, capacity: 30, enabled: false, name: 'Bil 9', plate: 'ST56789' },
+                { id: 10, capacity: 15, enabled: false, name: 'Bil 10', plate: 'UV01234' },
+                { id: 11, capacity: 30, enabled: false, name: 'Bil 11', plate: 'XY67890' },
+                { id: 12, capacity: 15, enabled: false, name: 'Bil 12', plate: 'ZÆ12345' }
+            ]);
+            
+            const [results, setResults] = useState(null);
+            const [pausedTrips, setPausedTrips] = useState(new Set());
+
+            const handleInputChange = (field, value) => {
+                setInput(prev => ({ ...prev, [field]: value }));
+            };
+            
+            const toggleTruck = (truckId) => {
+                setAvailableTrucks(prev => 
+                    prev.map(t => t.id === truckId ? { ...t, enabled: !t.enabled } : t)
+                );
+            };
+            
+            const togglePause = (tripNum) => {
+                setPausedTrips(prev => {
+                    const newSet = new Set(prev);
+                    if (newSet.has(tripNum)) {
+                        newSet.delete(tripNum);
+                    } else {
+                        newSet.add(tripNum);
+                    }
+                    return newSet;
+                });
+            };
+
+            const timeToMinutes = (timeStr) => {
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                return hours * 60 + minutes;
+            };
+
+            const minutesToTime = (minutes) => {
+                const h = Math.floor(minutes / 60);
+                const m = Math.round(minutes % 60);
+                return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            };
+
+            const calculate = () => {
+                const { totalTons, interval, startTime, driveTime, loadTime, unloadTime, priceTeamPerHour, priceSmallTruckPerHour, priceLargeTruckPerHour } = input;
+                
+                // Valider input
+                if (!totalTons || !interval || !driveTime || !loadTime || !unloadTime) {
+                    alert('Udfyld venligst alle felter');
+                    return;
+                }
+                
+                // Kun brug valgte biler
+                const enabledTrucks = availableTrucks.filter(t => t.enabled);
+                if (enabledTrucks.length === 0) {
+                    alert('Vælg mindst én bil');
+                    return;
+                }
+                
+                const startMinutes = timeToMinutes(startTime);
+                const roundTripTime = loadTime + driveTime + unloadTime + driveTime;
+                const recommendedTrucks = Math.ceil(roundTripTime / interval);
+                
+                // Beregn ture baseret på mix af bil-kapaciteter
+                const trips = [];
+                let remainingTons = totalTons;
+                let tripNum = 0;
+                
+                // Initialiser bil-status
+                const truckStates = enabledTrucks.map(t => ({
+                    ...t,
+                    available: 0,
+                    accumulatedDriveTime: 0
+                }));
+                
+                let lastUnloadEnd = startMinutes; // Kø på pladsen
+                let lastLoadEnd = startMinutes - driveTime - loadTime; // Kø på fabrikken
+                
+                while (remainingTons > 0) {
+                    tripNum++;
+                    
+                    // Find den først ledige bil (uanset størrelse)
+                    let selectedTruck = truckStates.reduce((min, t) => 
+                        t.available < min.available ? t : min
+                    );
+                    
+                    // Hvis vi har valget, prioriter biltype baseret på resterende tons
+                    if (remainingTons >= 30 && selectedTruck.capacity === 15) {
+                        // Tjek om der er en 30-tons bil der snart er ledig
+                        const trucks30 = truckStates.filter(t => t.capacity === 30);
+                        if (trucks30.length > 0) {
+                            const best30 = trucks30.reduce((min, t) => t.available < min.available ? t : min);
+                            // Brug 30-tons hvis den er ledig inden for 30 min
+                            if (best30.available - selectedTruck.available < 30) {
+                                selectedTruck = best30;
+                            }
+                        }
+                    } else if (remainingTons < 30 && remainingTons <= 15 && selectedTruck.capacity === 30) {
+                        // Til sidste små læs, tjek om der er 15-tons bil
+                        const trucks15 = truckStates.filter(t => t.capacity === 15);
+                        if (trucks15.length > 0) {
+                            const best15 = trucks15.reduce((min, t) => t.available < min.available ? t : min);
+                            // Brug 15-tons hvis den er ledig nogenlunde samtidig
+                            if (best15.available - selectedTruck.available < 30) {
+                                selectedTruck = best15;
+                            }
+                        }
+                    }
+                    
+                    const tons = Math.min(selectedTruck.capacity, remainingTons);
+                    const desiredArrival = startMinutes + ((tripNum - 1) * interval);
+                    const idealLoadStart = desiredArrival - driveTime - loadTime;
+                    
+                    // Bil skal vente på både: 1) at være tilbage fra sidste tur, 2) at fabrikken er ledig
+                    const actualLoadStart = Math.max(idealLoadStart, selectedTruck.available, lastLoadEnd);
+                    
+                    const loadEnd = actualLoadStart + loadTime;
+                    const arrivalTime = loadEnd + driveTime;
+                    const unloadStart = Math.max(arrivalTime, lastUnloadEnd);
+                    const unloadEnd = unloadStart + unloadTime;
+                    
+                    // Ventetider
+                    const waitTeam = Math.max(0, unloadStart - desiredArrival); // Lag venter
+                    const waitTruck = Math.max(0, unloadStart - arrivalTime); // Chauffør venter på pladsen
+                    const waitTruckFactory = Math.max(0, actualLoadStart - Math.max(idealLoadStart, selectedTruck.available)); // Chauffør venter på fabrikken
+                    const totalWaitTruck = waitTruck + waitTruckFactory;
+                    
+                    trips.push({
+                        tripNum,
+                        truckId: selectedTruck.id,
+                        truckName: selectedTruck.name,
+                        truckPlate: selectedTruck.plate,
+                        truckCapacity: selectedTruck.capacity,
+                        tons,
+                        loadStart: minutesToTime(actualLoadStart),
+                        loadTime,
+                        driveTime,
+                        unloadTime,
+                        arrivalTime: minutesToTime(arrivalTime),
+                        unloadEnd: minutesToTime(unloadEnd),
+                        waitTeam: Math.round(waitTeam),
+                        waitTruck: Math.round(totalWaitTruck),
+                        waitTruckFactory: Math.round(waitTruckFactory),
+                        isPaused: false
+                    });
+                    
+                    selectedTruck.available = unloadEnd + driveTime;
+                    selectedTruck.accumulatedDriveTime += driveTime * 2;
+                    lastUnloadEnd = unloadEnd;
+                    lastLoadEnd = loadEnd; // Opdater fabrikskø
+                    remainingTons -= tons;
+                }
+                
+                // Beregn omkostninger med differenterede priser per biltype
+                const totalWaitTeam = trips.reduce((sum, t) => sum + t.waitTeam, 0);
+                const totalWaitSmallTruck = trips.filter(t => t.truckCapacity === 15).reduce((sum, t) => sum + t.waitTruck, 0);
+                const totalWaitLargeTruck = trips.filter(t => t.truckCapacity === 30).reduce((sum, t) => sum + t.waitTruck, 0);
+                
+                const costTeam = Math.round((totalWaitTeam / 60) * priceTeamPerHour);
+                const costSmallTruck = Math.round((totalWaitSmallTruck / 60) * priceSmallTruckPerHour);
+                const costLargeTruck = Math.round((totalWaitLargeTruck / 60) * priceLargeTruckPerHour);
+                const costTruck = costSmallTruck + costLargeTruck;
+                
+                setResults({
+                    trips,
+                    numTrucks: enabledTrucks.length,
+                    recommendedTrucks,
+                    totalWaitTeam,
+                    totalWaitSmallTruck,
+                    totalWaitLargeTruck,
+                    totalWaitTruck: totalWaitSmallTruck + totalWaitLargeTruck,
+                    costTeam,
+                    costSmallTruck,
+                    costLargeTruck,
+                    costTruck,
+                    totalCost: costTeam + costTruck
+                });
+                
+                setPausedTrips(new Set());
+            };
+            
+            const recalculateWithPauses = () => {
+                if (!results) return;
+                
+                const { totalTons, interval, startTime, driveTime, loadTime, unloadTime, priceTeamPerHour, priceSmallTruckPerHour, priceLargeTruckPerHour } = input;
+                const enabledTrucks = availableTrucks.filter(t => t.enabled);
+                
+                if (enabledTrucks.length === 0) {
+                    alert('Vælg mindst én bil');
+                    return;
+                }
+                
+                const startMinutes = timeToMinutes(startTime);
+                
+                const newTrips = [];
+                const truckStates = enabledTrucks.map(t => ({
+                    ...t,
+                    available: 0,
+                    accumulatedDriveTime: 0
+                }));
+                
+                let lastUnloadEnd = startMinutes;
+                let lastLoadEnd = startMinutes - driveTime - loadTime;
+                let tripNum = 0;
+                let remainingTons = totalTons;
+                
+                results.trips.forEach((oldTrip, index) => {
+                    // Hvis denne tur er markeret som pause
+                    if (pausedTrips.has(oldTrip.tripNum)) {
+                        // Find bilen i vores aktuelle truck states (kun enabled biler)
+                        const truck = truckStates.find(t => t.id === oldTrip.truckId);
+                        
+                        // Kun tilføj pause hvis bilen stadig er enabled
+                        if (truck) {
+                            // Tilføj pause-række
+                            newTrips.push({
+                                ...oldTrip,
+                                isPaused: true,
+                                pauseDuration: 45
+                            });
+                            
+                            // Opdater bil-status
+                            const pauseStart = timeToMinutes(oldTrip.unloadEnd);
+                            truck.available = pauseStart + 45;
+                            truck.accumulatedDriveTime = 0; // Reset efter pause
+                        }
+                        // Hvis bilen ikke er enabled længere, skip denne pause
+                        return;
+                    }
+                    
+                    if (remainingTons <= 0) return;
+                    
+                    tripNum++;
+                    
+                    // Find den først ledige bil (uanset størrelse)
+                    let selectedTruck = truckStates.reduce((min, t) => 
+                        t.available < min.available ? t : min
+                    );
+                    
+                    // Hvis vi har valget, prioriter biltype baseret på resterende tons
+                    if (remainingTons >= 30 && selectedTruck.capacity === 15) {
+                        const trucks30 = truckStates.filter(t => t.capacity === 30);
+                        if (trucks30.length > 0) {
+                            const best30 = trucks30.reduce((min, t) => t.available < min.available ? t : min);
+                            if (best30.available - selectedTruck.available < 30) {
+                                selectedTruck = best30;
+                            }
+                        }
+                    } else if (remainingTons < 30 && remainingTons <= 15 && selectedTruck.capacity === 30) {
+                        const trucks15 = truckStates.filter(t => t.capacity === 15);
+                        if (trucks15.length > 0) {
+                            const best15 = trucks15.reduce((min, t) => t.available < min.available ? t : min);
+                            if (best15.available - selectedTruck.available < 30) {
+                                selectedTruck = best15;
+                            }
+                        }
+                    }
+                    
+                    const tons = Math.min(selectedTruck.capacity, remainingTons);
+                    const desiredArrival = startMinutes + ((tripNum - 1) * interval);
+                    const idealLoadStart = desiredArrival - driveTime - loadTime;
+                    const actualLoadStart = Math.max(idealLoadStart, selectedTruck.available, lastLoadEnd);
+                    
+                    const loadEnd = actualLoadStart + loadTime;
+                    const arrivalTime = loadEnd + driveTime;
+                    const unloadStart = Math.max(arrivalTime, lastUnloadEnd);
+                    const unloadEnd = unloadStart + unloadTime;
+                    
+                    const waitTeam = Math.max(0, unloadStart - desiredArrival);
+                    const waitTruck = Math.max(0, unloadStart - arrivalTime);
+                    const waitTruckFactory = Math.max(0, actualLoadStart - Math.max(idealLoadStart, selectedTruck.available));
+                    const totalWaitTruck = waitTruck + waitTruckFactory;
+                    
+                    newTrips.push({
+                        tripNum,
+                        truckId: selectedTruck.id,
+                        truckName: selectedTruck.name,
+                        truckPlate: selectedTruck.plate,
+                        truckCapacity: selectedTruck.capacity,
+                        tons,
+                        loadStart: minutesToTime(actualLoadStart),
+                        loadTime,
+                        driveTime,
+                        unloadTime,
+                        arrivalTime: minutesToTime(arrivalTime),
+                        unloadEnd: minutesToTime(unloadEnd),
+                        waitTeam: Math.round(waitTeam),
+                        waitTruck: Math.round(totalWaitTruck),
+                        waitTruckFactory: Math.round(waitTruckFactory),
+                        isPaused: false
+                    });
+                    
+                    selectedTruck.available = unloadEnd + driveTime;
+                    selectedTruck.accumulatedDriveTime += driveTime * 2;
+                    lastUnloadEnd = unloadEnd;
+                    lastLoadEnd = loadEnd;
+                    remainingTons -= tons;
+                });
+                
+                const totalWaitTeam = newTrips.filter(t => !t.isPaused).reduce((sum, t) => sum + t.waitTeam, 0);
+                const totalWaitSmallTruck = newTrips.filter(t => !t.isPaused && t.truckCapacity === 15).reduce((sum, t) => sum + t.waitTruck, 0);
+                const totalWaitLargeTruck = newTrips.filter(t => !t.isPaused && t.truckCapacity === 30).reduce((sum, t) => sum + t.waitTruck, 0);
+                
+                const costTeam = Math.round((totalWaitTeam / 60) * priceTeamPerHour);
+                const costSmallTruck = Math.round((totalWaitSmallTruck / 60) * priceSmallTruckPerHour);
+                const costLargeTruck = Math.round((totalWaitLargeTruck / 60) * priceLargeTruckPerHour);
+                const costTruck = costSmallTruck + costLargeTruck;
+                
+                setResults({
+                    ...results,
+                    trips: newTrips,
+                    totalWaitTeam,
+                    totalWaitSmallTruck,
+                    totalWaitLargeTruck,
+                    totalWaitTruck: totalWaitSmallTruck + totalWaitLargeTruck,
+                    costTeam,
+                    costSmallTruck,
+                    costLargeTruck,
+                    costTruck,
+                    totalCost: costTeam + costTruck
+                });
+                
+                // Clear pauser efter genberegning
+                setPausedTrips(new Set());
+            };
+
+            return (
+                <div className="container">
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px'}}>
+                        <h1 style={{margin: 0}}>Transportberegner</h1>
+                        <img src="RE_PA.png" alt="Colas" style={{height: '60px'}} />
+                    </div>
+                    
+                    <div className="input-section">
+                        <div className="form-grid">
+                            <div className="form-group">
+                                <label>Total tons</label>
+                                <input 
+                                    type="number" 
+                                    value={input.totalTons || ''}
+                                    onChange={(e) => handleInputChange('totalTons', e.target.value === '' ? '' : Number(e.target.value))}
+                                    min="1"
+                                />
+                            </div>
+                            
+                            <div className="form-group">
+                                <label>Ønsket interval (min)</label>
+                                <input 
+                                    type="number" 
+                                    value={input.interval || ''}
+                                    onChange={(e) => handleInputChange('interval', e.target.value === '' ? '' : Number(e.target.value))}
+                                    min="1"
+                                />
+                            </div>
+                            
+                            <div className="form-group">
+                                <label>Første levering</label>
+                                <input 
+                                    type="time" 
+                                    value={input.startTime}
+                                    onChange={(e) => handleInputChange('startTime', e.target.value)}
+                                />
+                            </div>
+                            
+                            <div className="form-group">
+                                <label>Køretid (min)</label>
+                                <input 
+                                    type="number" 
+                                    value={input.driveTime || ''}
+                                    onChange={(e) => handleInputChange('driveTime', e.target.value === '' ? '' : Number(e.target.value))}
+                                    min="1"
+                                />
+                            </div>
+                            
+                            <div className="form-group">
+                                <label>Lastning i min</label>
+                                <input 
+                                    type="number" 
+                                    value={input.loadTime || ''}
+                                    onChange={(e) => handleInputChange('loadTime', e.target.value === '' ? '' : Number(e.target.value))}
+                                    min="1"
+                                />
+                            </div>
+                            
+                            <div className="form-group">
+                                <label>Aflæsning i min</label>
+                                <input 
+                                    type="number" 
+                                    value={input.unloadTime || ''}
+                                    onChange={(e) => handleInputChange('unloadTime', e.target.value === '' ? '' : Number(e.target.value))}
+                                    min="1"
+                                />
+                            </div>
+                            
+                            <div className="form-group">
+                                <label>Hold pris (kr/time)</label>
+                                <input 
+                                    type="number" 
+                                    value={input.priceTeamPerHour || ''}
+                                    onChange={(e) => handleInputChange('priceTeamPerHour', e.target.value === '' ? '' : Number(e.target.value))}
+                                    min="0"
+                                />
+                            </div>
+                            
+                            <div className="form-group">
+                                <label>Lille bil pris (kr/time)</label>
+                                <input 
+                                    type="number" 
+                                    value={input.priceSmallTruckPerHour || ''}
+                                    onChange={(e) => handleInputChange('priceSmallTruckPerHour', e.target.value === '' ? '' : Number(e.target.value))}
+                                    min="0"
+                                />
+                            </div>
+                            
+                            <div className="form-group">
+                                <label>Stor bil pris (kr/time)</label>
+                                <input 
+                                    type="number" 
+                                    value={input.priceLargeTruckPerHour || ''}
+                                    onChange={(e) => handleInputChange('priceLargeTruckPerHour', e.target.value === '' ? '' : Number(e.target.value))}
+                                    min="0"
+                                />
+                            </div>
+                        </div>
+                        
+                        <button onClick={calculate}>Beregn køreplan</button>
+                    </div>
+                    
+                    {results && (
+                        <>
+                            <div className="truck-selection">
+                                <h3>Bil-ressourcer ({results.recommendedTrucks} anbefalet)</h3>
+                                <div className="truck-grid">
+                                    {availableTrucks.map(truck => {
+                                        // Find første tur for denne bil
+                                        const firstTrip = results.trips.find(t => !t.isPaused && t.truckId === truck.id);
+                                        const meetingTime = firstTrip ? firstTrip.loadStart : null;
+                                        
+                                        return (
+                                            <label key={truck.id} className="truck-checkbox">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={truck.enabled}
+                                                    onChange={() => toggleTruck(truck.id)}
+                                                />
+                                                <span style={{flexDirection: 'column', alignItems: 'flex-start', gap: '4px'}}>
+                                                    <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                                                        <span className="plate">{truck.plate}</span>
+                                                        <span>({truck.capacity}t)</span>
+                                                    </div>
+                                                    {meetingTime && (
+                                                        <div style={{fontSize: '11px', color: '#ffd700', fontWeight: 'bold'}}>
+                                                            Mødetid: {meetingTime}
+                                                        </div>
+                                                    )}
+                                                </span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                                {availableTrucks.filter(t => t.enabled).length > 0 && (
+                                    <div style={{marginTop: '15px', padding: '10px', background: '#1a1a1a', borderRadius: '4px'}}>
+                                        <div style={{fontSize: '13px', color: '#999'}}>Ankomst første levering:</div>
+                                        <div style={{fontSize: '20px', color: '#ffd700', fontWeight: 'bold', marginTop: '5px'}}>{input.startTime}</div>
+                                    </div>
+                                )}
+                                <button onClick={calculate} style={{marginTop: '15px'}}>
+                                    Genberegn med valgte biler
+                                </button>
+                            </div>
+                            
+                            <div className="results">
+                                <h3 style={{marginBottom: '15px', color: '#ffd700'}}>Omkostninger ventetid</h3>
+                                <div className="summary">
+                                    <div className="summary-item">
+                                        <span className="summary-label">Valgte biler</span>
+                                        <span className="summary-value">{results.numTrucks}</span>
+                                    </div>
+                                    <div className="summary-item">
+                                        <span className="summary-label">Antal ture</span>
+                                        <span className="summary-value">{results.trips.filter(t => !t.isPaused).length}</span>
+                                    </div>
+                                    <div className="summary-item">
+                                        <span className="summary-label">Ventetid hold</span>
+                                        <span className="summary-value">{results.totalWaitTeam || 0} min</span>
+                                    </div>
+                                    <div className="summary-item">
+                                        <span className="summary-label">Ventetid lille bil</span>
+                                        <span className="summary-value">{results.totalWaitSmallTruck || 0} min</span>
+                                    </div>
+                                    <div className="summary-item">
+                                        <span className="summary-label">Ventetid stor bil</span>
+                                        <span className="summary-value">{results.totalWaitLargeTruck || 0} min</span>
+                                    </div>
+                                    <div className="summary-item">
+                                        <span className="summary-label">Omkostninger hold</span>
+                                        <span className="summary-value cost-high">{(results.costTeam || 0).toLocaleString()} kr</span>
+                                    </div>
+                                    <div className="summary-item">
+                                        <span className="summary-label">Omkostning lille bil</span>
+                                        <span className="summary-value cost-low">{(results.costSmallTruck || 0).toLocaleString()} kr</span>
+                                    </div>
+                                    <div className="summary-item">
+                                        <span className="summary-label">Omkostning stor bil</span>
+                                        <span className="summary-value cost-low">{(results.costLargeTruck || 0).toLocaleString()} kr</span>
+                                    </div>
+                                    <div className="summary-item">
+                                        <span className="summary-label">Total omkostning</span>
+                                        <span className="summary-value cost-total">{(results.totalCost || 0).toLocaleString()} kr</span>
+                                    </div>
+                                </div>
+                                
+                                {pausedTrips.size > 0 && (
+                                    <div style={{marginBottom: '15px'}}>
+                                        <button onClick={recalculateWithPauses}>
+                                            Genberegn med pauser ({pausedTrips.size})
+                                        </button>
+                                        <div style={{fontSize: '12px', color: '#999', marginTop: '5px'}}>
+                                            Bemærk: Efter genberegning clears markerede pauser. Du kan markere nye pauser i den opdaterede plan.
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                <div className="table-wrapper">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Pause</th>
+                                                <th>Bil</th>
+                                                <th>Nummerplade</th>
+                                                <th>Tons</th>
+                                                <th>Ankomst fabrik</th>
+                                                <th>Lastning</th>
+                                                <th>Køretid</th>
+                                                <th>Aflæsning</th>
+                                                <th>Ankomst plads</th>
+                                                <th>Aflæsning færdig</th>
+                                                <th>Ventetid hold</th>
+                                                <th>Ventetid bil</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {results.trips.map((trip) => (
+                                                <tr key={trip.tripNum} className={trip.isPaused ? 'paused-row' : ''}>
+                                                    <td>
+                                                        {!trip.isPaused ? (
+                                                            <input 
+                                                                type="checkbox"
+                                                                checked={pausedTrips.has(trip.tripNum)}
+                                                                onChange={() => togglePause(trip.tripNum)}
+                                                                title="Markér pause efter denne tur"
+                                                            />
+                                                        ) : (
+                                                            <span style={{
+                                                                color: '#ffd700', 
+                                                                fontSize: '18px',
+                                                                fontWeight: 'bold'
+                                                            }}>✓</span>
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        {trip.isPaused ? (
+                                                            <span>⏸️</span>
+                                                        ) : (
+                                                            <div className="truck-icon">
+                                                                <div className="truck-part"></div>
+                                                                {(trip.truckCapacity || trip.tons) === 30 && <div className="truck-part"></div>}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        {trip.isPaused ? '-' : (
+                                                            <span className="plate">{trip.truckPlate || `#${trip.tripNum}`}</span>
+                                                        )}
+                                                    </td>
+                                                    <td>{trip.isPaused ? '-' : `${trip.tons} ton`}</td>
+                                                    <td>{trip.isPaused ? 'PAUSE' : trip.loadStart}</td>
+                                                    <td>{trip.isPaused ? '-' : `${trip.loadTime} min`}</td>
+                                                    <td>{trip.isPaused ? '-' : `${trip.driveTime} min`}</td>
+                                                    <td>{trip.isPaused ? '-' : `${trip.unloadTime} min`}</td>
+                                                    <td>{trip.isPaused ? '-' : trip.arrivalTime}</td>
+                                                    <td>{trip.isPaused ? `+${trip.pauseDuration} min` : trip.unloadEnd}</td>
+                                                    <td className={!trip.isPaused && trip.waitTeam > 0 ? 'warning-red' : ''}>
+                                                        {trip.isPaused ? '-' : `${trip.waitTeam} min`}
+                                                    </td>
+                                                    <td className={trip.isPaused ? 'warning-orange' : (!trip.isPaused && trip.waitTruck > 0 ? 'warning-orange' : '')}>
+                                                        {trip.isPaused ? `${trip.pauseDuration} min` : `${trip.waitTruck} min`}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.render(<TransportBeregner />, document.getElementById('root'));
+    </script>
+</body>
+</html>
