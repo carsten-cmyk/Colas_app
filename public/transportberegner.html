@@ -298,6 +298,26 @@
             border: 2px solid #003366;
             letter-spacing: 1px;
         }
+        
+        /* Status badges */
+        .badge {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
+        .badge-green {
+            background: #28a745;
+        }
+        
+        .badge-red {
+            background: #dc3545;
+        }
+        
+        .badge-yellow {
+            background: #ffc107;
+        }
     </style>
 </head>
 <body>
@@ -484,6 +504,7 @@
                 const totalWaitTeam = trips.reduce((sum, t) => sum + t.waitTeam, 0);
                 const totalWaitSmallTruck = trips.filter(t => t.truckCapacity === 15).reduce((sum, t) => sum + t.waitTruck, 0);
                 const totalWaitLargeTruck = trips.filter(t => t.truckCapacity === 30).reduce((sum, t) => sum + t.waitTruck, 0);
+                const totalWaitTruckFactory = trips.reduce((sum, t) => sum + (t.waitTruckFactory || 0), 0);
                 
                 const costTeam = Math.round((totalWaitTeam / 60) * priceTeamPerHour);
                 const costSmallTruck = Math.round((totalWaitSmallTruck / 60) * priceSmallTruckPerHour);
@@ -498,6 +519,7 @@
                     totalWaitSmallTruck,
                     totalWaitLargeTruck,
                     totalWaitTruck: totalWaitSmallTruck + totalWaitLargeTruck,
+                    totalWaitTruckFactory,
                     costTeam,
                     costSmallTruck,
                     costLargeTruck,
@@ -629,6 +651,7 @@
                 const totalWaitTeam = newTrips.filter(t => !t.isPaused).reduce((sum, t) => sum + t.waitTeam, 0);
                 const totalWaitSmallTruck = newTrips.filter(t => !t.isPaused && t.truckCapacity === 15).reduce((sum, t) => sum + t.waitTruck, 0);
                 const totalWaitLargeTruck = newTrips.filter(t => !t.isPaused && t.truckCapacity === 30).reduce((sum, t) => sum + t.waitTruck, 0);
+                const totalWaitTruckFactory = newTrips.filter(t => !t.isPaused).reduce((sum, t) => sum + (t.waitTruckFactory || 0), 0);
                 
                 const costTeam = Math.round((totalWaitTeam / 60) * priceTeamPerHour);
                 const costSmallTruck = Math.round((totalWaitSmallTruck / 60) * priceSmallTruckPerHour);
@@ -642,6 +665,7 @@
                     totalWaitSmallTruck,
                     totalWaitLargeTruck,
                     totalWaitTruck: totalWaitSmallTruck + totalWaitLargeTruck,
+                    totalWaitTruckFactory,
                     costTeam,
                     costSmallTruck,
                     costLargeTruck,
@@ -814,6 +838,14 @@
                                         <span className="summary-value">{results.totalWaitTeam || 0} min</span>
                                     </div>
                                     <div className="summary-item">
+                                        <span className="summary-label">Ventetid fabrik</span>
+                                        <span className="summary-value">{(results.totalWaitTruckFactory || 0)} min</span>
+                                    </div>
+                                    <div className="summary-item">
+                                        <span className="summary-label">Ventetid plads</span>
+                                        <span className="summary-value">{(results.totalWaitTruck || 0) - (results.totalWaitTruckFactory || 0)} min</span>
+                                    </div>
+                                    <div className="summary-item">
                                         <span className="summary-label">Ventetid lille bil</span>
                                         <span className="summary-value">{results.totalWaitSmallTruck || 0} min</span>
                                     </div>
@@ -864,8 +896,10 @@
                                                 <th>Aflæsning</th>
                                                 <th>Ankomst plads</th>
                                                 <th>Aflæsning færdig</th>
+                                                <th>Kan afmeldes</th>
                                                 <th>Ventetid hold</th>
-                                                <th>Ventetid bil</th>
+                                                <th>Ventetid fabrik</th>
+                                                <th>Ventetid plads</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -884,7 +918,7 @@
                                                                 color: '#ffd700', 
                                                                 fontSize: '18px',
                                                                 fontWeight: 'bold'
-                                                            }}>✓</span>
+                                                            }}>&#10003;</span>
                                                         )}
                                                     </td>
                                                     <td>
@@ -909,11 +943,32 @@
                                                     <td>{trip.isPaused ? '-' : `${trip.unloadTime} min`}</td>
                                                     <td>{trip.isPaused ? '-' : trip.arrivalTime}</td>
                                                     <td>{trip.isPaused ? `+${trip.pauseDuration} min` : trip.unloadEnd}</td>
+                                                    <td>
+                                                        {trip.isPaused ? (
+                                                            '-'
+                                                        ) : (() => {
+                                                            // Find om denne bil har flere ture efter denne
+                                                            const nextTrip = results.trips.find(t => 
+                                                                !t.isPaused && 
+                                                                t.truckId === trip.truckId && 
+                                                                t.tripNum > trip.tripNum
+                                                            );
+                                                            
+                                                            // Hvis ingen flere ture, eller næste tur er langt ude → Grøn (kan afmeldes)
+                                                            // Hvis flere ture snart → Rød (har måske læst / på vej)
+                                                            const badgeClass = nextTrip ? 'badge-red' : 'badge-green';
+                                                            
+                                                            return <span className={`badge ${badgeClass}`}></span>;
+                                                        })()}
+                                                    </td>
                                                     <td className={!trip.isPaused && trip.waitTeam > 0 ? 'warning-red' : ''}>
                                                         {trip.isPaused ? '-' : `${trip.waitTeam} min`}
                                                     </td>
-                                                    <td className={trip.isPaused ? 'warning-orange' : (!trip.isPaused && trip.waitTruck > 0 ? 'warning-orange' : '')}>
-                                                        {trip.isPaused ? `${trip.pauseDuration} min` : `${trip.waitTruck} min`}
+                                                    <td className={!trip.isPaused && (trip.waitTruckFactory || 0) > 0 ? 'warning-orange' : ''}>
+                                                        {trip.isPaused ? '-' : `${trip.waitTruckFactory || 0} min`}
+                                                    </td>
+                                                    <td className={!trip.isPaused && ((trip.waitTruck || 0) - (trip.waitTruckFactory || 0)) > 0 ? 'warning-orange' : ''}>
+                                                        {trip.isPaused ? `${trip.pauseDuration} min` : `${Math.max(0, (trip.waitTruck || 0) - (trip.waitTruckFactory || 0))} min`}
                                                     </td>
                                                 </tr>
                                             ))}
