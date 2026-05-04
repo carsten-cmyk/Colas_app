@@ -1,125 +1,201 @@
-# Claude Code Instructions - Colas Transport Apps
+# Claude Code Instructions — Colas Transport Apps
 
-## Project Overview
-
-Dette er et monorepo for Colas Transport apps. Projektet indeholder multiple native apps bygget med React Native/Expo.
-
-## Structure
+## Monorepo-struktur
 
 ```
 Colas/
-├── apps/              # Individual apps
-│   ├── chauffeur/     # Chauffeur/Driver app
-│   ├── vognmand/      # Haulier/Transport company app
-│   └── formand/       # Foreman app
-├── shared/            # Shared code across apps
-│   ├── components/    # Shared UI components
-│   ├── utils/         # Shared utilities
-│   └── styles/        # Shared styling
-└── .claude/docs/      # Development documentation
+├── apps/
+│   ├── chauffeur/     # Expo/React Native — MOBIL APP (eneste native app)
+│   ├── formand/       # React/Vite — web frontend for formænd
+│   ├── vognmand/      # React/Vite — web frontend for vognmænd (kommer)
+│   ├── fabrik/        # React/Vite — web frontend for fabrik (kommer)
+│   └── kunde/         # React/Vite — web frontend for kunder (kommer)
+├── shared/
+│   ├── components/    # Delte UI-komponenter på tværs af web-frontends
+│   ├── utils/         # Delte utilities
+│   └── types/         # Fælles TypeScript-typer — SINGLE SOURCE OF TRUTH
+├── Docs/
+│   ├── Formand/       # PRD, CONTEXT, REVIEW_SPEC, SCREENS, ARCHITECTURE, SPEC-filer
+│   └── Chauffør/      # PRD, REVIEW_SPEC_1, STRUCTURE, COMPONENT_SPEC, SPEC-filer
+└── .claude/
+    ├── commands/      # Custom slash-kommandoer: /review /new-component /new-page /new-hook /audit-tokens /status
+    └── docs/          # Projektdokumentation
 ```
 
-## Development Guidelines
+---
 
-### Always Reference Documentation
+## Workflow-guide
 
-Before starting work, reference relevant documentation from `.claude/docs/`:
+Se `.claude/WORKFLOW.md` — komplet guide til hvad du skriver og kører i hver situation.
+Se `.claude/STARTUP.md` — hvad du paster efter /clear.
 
-1. **PROJECT_STATUS.md** ⭐⭐⭐ - ALWAYS UPDATE THIS FILE with progress and todos
-2. **CONFIGURATION_STRATEGY.md** ⭐⭐ - CRITICAL: Avoid hardcoded values
-3. **TECH_STACK.md** ⭐⭐ - Technology decisions and setup
-4. **APP_MIGRATION_STRATEGY.md** ⭐ - Architecture decisions
-5. **FRONTEND_BEST_PRACTICES.md** - React Native patterns and hooks
-6. **DESIGN_SYSTEM.md** - UI components and styling patterns
-7. **TEST_STRATEGY.md** - Testing approach
+---
 
-### Technology Stack
+## Læs altid ved session start
 
-See TECH_STACK.md for complete details.
+1. `.claude/docs/PROJECT_STATUS.md` ⭐⭐⭐ — hvad er gjort, hvad er næste — OPDATER ALTID
+2. `Docs/Formand/CONTEXT.md` ⭐⭐⭐ — forretningskontekst, PLAN-systemet, nøglepersoner — GÆLDER ALLE APPS
+3. `.claude/docs/core/DESIGN_SYSTEM.md` ⭐⭐ — Colas tokens og copy-paste patterns
+4. `.claude/docs/OFFLINE_STRATEGY.md` ⭐ — offline, cache og fallback-regler
+5. Relevant app's PRD: `Docs/Formand/PRD.md` eller `Docs/Chauffør/PRD.md`
+6. Relevant app's REVIEW_SPEC: `Docs/Formand/REVIEW_SPEC.md` eller `Docs/Chauffør/REVIEW_SPEC_1.md`
 
-**Summary:**
-- **Framework**: React Native with Expo (Pro Plan)
-- **Backend**: Supabase (auth, database, storage)
-- **Testing**: Expo Go → TestFlight → App Store
-- **Deployment**: EAS Build, Netlify for web
-- **Native**: expo-location (GPS), expo-camera (Camera)
-- **Styling**: React Native StyleSheet (configuration-first approach)
+---
 
-### Code Organization
+## Tilgængelige slash-kommandoer
 
-- Keep app-specific code in `apps/<app-name>/`
-- Extract shared components to `shared/components/`
-- Extract shared utilities to `shared/utils/`
-- Follow the service layer pattern from APP_MIGRATION_STRATEGY.md
+| Kommando | Brug |
+|---|---|
+| `/review [fil]` | Kør REVIEW_SPEC på en komponent eller side |
+| `/new-component [Navn] [app]` | Scaffold komponent + story + test |
+| `/new-page [Navn] [app] [route]` | Scaffold side + hook + route |
+| `/new-hook [useNavn] [app]` | Scaffold data-hook + test |
+| `/audit-tokens [mappe]` | Find hardcodede værdier |
+| `/status` | Vis projekt-status |
 
-### Best Practices
+---
 
-1. **Component Structure**: Follow patterns from FRONTEND_BEST_PRACTICES.md
-2. **Styling**: Use consistent patterns (DESIGN_SYSTEM.md adapted for React Native)
-3. **Testing**: Test with Expo Go before committing
-4. **Performance**: Follow optimization patterns from LESSONS_LEARNED.md
+## Ufravigelige regler — ALLE apps
 
-### Figma Integration
+### Data & Mock
+- Mock-data altid i `src/mocks/` — aldrig inline i komponenter
+- `// TODO: Erstat med Supabase når klar` ved ALLE mock-punkter
+- Typer altid i `src/types/` — aldrig lokalt defineret i komponenter
+- Data-logik altid i `src/hooks/` — aldrig i JSX
 
-- Figma MCP is configured with authentication
-- Reference Figma designs during implementation
-- Ensure pixel-perfect implementation where specified
+### Styling
+- **Ingen hardcodede værdier** — farver, spacing, font sizes fra tokens kun
+- Web: Tailwind-klasser fra `tailwind.config.ts`
+- Mobil: StyleSheet.create() med værdier fra `tokens.ts`
+- Inline `style={}` kun ved genuint dynamiske værdier
 
-### Commit Messages
+### Komponenter
+- Props interface altid eksporteret: `[KomponentNavn]Props`
+- Ingen `any` types — TypeScript strict mode
+- JSDoc på ikke-oplagte props
+- Loading og error states altid implementeret
+- Touch targets minimum 44×44px
 
-Follow conventional commits:
-- `feat(chauffeur):` for new features
-- `fix(chauffeur):` for bug fixes
-- `refactor:` for code refactoring
-- `docs:` for documentation updates
+### Testing
+- Alle komponenter i `src/components/` har `.test.tsx`
+- Alle hooks i `src/hooks/` har `.test.ts`
+- Kør `npm run test` inden commit
+- Coverage-mål: 80% lines/functions, 70% branches
 
-### Feature Implementation Workflow
+### Offline & Fejlhåndtering
+- Alle data-hooks returnerer `{ data, loading, error }`
+- `useOnlineStatus()` + `<OfflineBanner />` i alle web-apps
+- Vis altid cached data ved netafbrud — crash aldrig
+- Se `.claude/docs/OFFLINE_STRATEGY.md` for patterns
 
-**ALWAYS follow this workflow for new features:**
+### Prototyper
+- Prototyper i `src/prototypes/` — må ALDRIG importeres i produktionskode
+- Lempeligere regler gælder i `src/prototypes/`
 
-1. **Planning Phase** (REQUIRED before coding)
-   - Analyze requirements (Figma design, user story, etc.)
-   - Create implementation todo list in PROJECT_STATUS.md
-   - Discuss and agree on approach with user
-   - Break down into small, testable tasks
+---
 
-2. **Implementation Phase**
-   - Follow the agreed todo plan
-   - Update PROJECT_STATUS.md as tasks complete
-   - Use configuration-first approach (CONFIGURATION_STRATEGY.md)
-   - Follow best practices (FRONTEND_BEST_PRACTICES.md)
+## Feature-workflow — ALTID følg dette
 
-3. **Testing Phase**
-   - Test with Expo Go: `npm run chauffeur:start`
-   - Scan QR code with phone
-   - Verify functionality
-   - Test edge cases
+1. **Plan** — læs PRD + REVIEW_SPEC, lav todo-liste, få godkendelse
+2. **Byg** — brug `/new-component` eller `/new-page` til scaffold
+3. **Test** — `npm run test` + `npm run lint` + `npm run typecheck`
+4. **Review** — kør `/review [fil]` på alt der er bygget
+5. **Commit** — opdater PROJECT_STATUS.md, commit med korrekt prefix
 
-4. **Completion Phase**
-   - Mark all related todos as [x] in PROJECT_STATUS.md
-   - Commit changes with clear message
-   - Update documentation if needed
+**Start aldrig at kode uden plan og godkendelse!**
 
-**Never start coding without a plan and user agreement!**
+---
 
-## Project Goals
+## Web frontends (Formand, Vognmand, Fabrik, Kunde)
 
-Build production-ready native apps for Colas Transport with:
-- Professional UI/UX following Figma designs
-- Solid architecture following documented best practices
-- Easy maintenance and scalability
-- Shared code across apps where sensible
+**Stack:** React 18 + TypeScript (strict) + Vite + Tailwind CSS + Storybook + Vitest
+**Database:** Fælles Supabase — alle frontends læser/skriver til samme DB
+**Typer:** `shared/types/` — single source of truth, importér herfra, ikke fra `src/types/`
+**Design system:** `.claude/docs/core/DESIGN_SYSTEM.md` — Colas tokens
+**Docs:** `Docs/Formand/PRD.md` + `Docs/Formand/REVIEW_SPEC.md` ← AUTORITATIV SPEC
+**Kontekst:** `Docs/Formand/CONTEXT.md` — Colas-forretning, PLAN-system, roller, nøglepersoner
+**Arkitektur:** `Docs/Formand/ARCHITECTURE.md` — komplet datamodel og systemflow
+**Screens:** `Docs/Formand/SCREENS.md` — UX/feature-reference (ikke design-spec)
 
-## Important Notes
+### Start
+```bash
+npm run formand:dev        # port 5174
+npm run formand:storybook  # port 6007
+npm run formand:test
+npm run formand:lint
+```
 
-### CRITICAL - Always Do This
-1. **Update PROJECT_STATUS.md** after completing any task
-2. **Never hardcode** colors, currencies, or config values (see CONFIGURATION_STRATEGY.md)
-3. **Follow tech stack** documented in TECH_STACK.md
-4. **Check PROJECT_STATUS.md** at start of every session for context
+### Mappestruktur (per web-app)
+```
+src/
+├── components/
+│   ├── ui/            # Atomar UI — knapper, kort, badges
+│   └── layout/        # TopBar, BottomTabBar, AppShell
+├── pages/             # En fil per route
+├── hooks/             # Data-hooks — useOrders, useDriverTasks osv.
+├── mocks/             # Mock-data med TODO-kommentarer
+├── types/             # TypeScript interfaces
+├── utils/             # Pure utility functions
+├── test/              # setup.ts — ingen test-filer her
+└── prototypes/        # Eksperimenter — aldrig i produktion
+```
 
-### General Best Practices
-- Keep documentation updated as patterns emerge
-- Add new lessons learned to LESSONS_LEARNED.md
-- Follow APP_MIGRATION_STRATEGY.md to ensure production readiness
-- Each app should be independently deployable
+### Storybook
+- Alle komponenter i `src/components/` kræver en `.stories.tsx`
+- CSF3 format: `satisfies Meta<typeof KomponentNavn>`
+- Dækker: default, alle varianter, edge cases (tom, lang tekst, loading, error)
+
+### WCAG 2.1 AA
+- Min. 4.5:1 kontrastratio på brødtekst
+- Tab-navigation — alle elementer nåbare med tastatur
+- `aria-label` på alle ikoner med funktion
+- `aria-live` på dynamiske statusændringer
+
+---
+
+## Chauffør App (Expo/React Native)
+
+**Stack:** React Native + Expo Pro + TypeScript
+**Test:** Expo Go → TestFlight → App Store
+**Docs:** `Docs/Chauffør/PRD.md` + `Docs/Chauffør/REVIEW_SPEC_1.md` + `Docs/Chauffør/STRUCTURE.md`
+
+### Regler
+- Navigation: state-based i App.js (ingen Expo Router endnu — se STRUCTURE.md ved migration)
+- Styling: StyleSheet.create() + tokens fra `src/styles/tokens.ts`
+- Safe areas: `useSafeAreaInsets()` — aldrig hardcodet padding
+- GPS: `expo-location`, Kamera: `expo-camera`
+- Outdoor-display: min. 14px font, høj kontrast, 44×44px touch targets
+
+### Byggede komponenter (genbyg ikke)
+| Komponent | Placering |
+|---|---|
+| StatCard, OrderMetrics | src/components/ui/ |
+| ContactCard, InfoCard, LocationCard, ActionButton | src/components/ui/ |
+| BottomTabBar, TaskSheet | src/components/layout/ |
+| TaskSwiper | src/components/screens/task/ |
+
+---
+
+## Commit Messages
+
+```
+feat(formand): add DriverCard component
+feat(chauffeur): add LocationCard component
+fix(formand): correct touch target on ActionButton
+fix: offline banner not showing on iOS
+test(formand): add useOrders hook tests
+refactor: extract shared utility to shared/utils
+docs: update PROJECT_STATUS with completed tasks
+```
+
+---
+
+## Design system — UFRAVIGELIG BESLUTNING
+
+Alle Colas-apps deler ét design system.
+- **Web:** `apps/formand/tailwind.config.ts` — tokens er frosne
+- **Mobil:** `apps/chauffeur/src/styles/tokens.ts` — tokens er frosne
+- **Reference:** `.claude/docs/core/DESIGN_SYSTEM.md`
+
+HTML-prototyper og eksterne designs er **UX/feature-reference** — aldrig design-spec.
+Hvis der er konflikt → **vores tokens vinder**.

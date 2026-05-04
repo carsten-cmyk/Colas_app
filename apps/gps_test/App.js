@@ -7,7 +7,18 @@ import InputScreen from './src/screens/InputScreen';
 import TrackingScreen from './src/screens/TrackingScreen';
 import ResultScreen from './src/screens/ResultScreen';
 
+// Toggle this to switch between Storybook and the main app
+const SHOW_STORYBOOK = true;
+
+let StorybookUI;
+if (SHOW_STORYBOOK) {
+  StorybookUI = require('./.rnstorybook/Storybook').default;
+}
+
 export default function App() {
+  if (SHOW_STORYBOOK && StorybookUI) {
+    return <StorybookUI />;
+  }
   const [currentScreen, setCurrentScreen] = useState('Splash');
   const [screenParams, setScreenParams] = useState({});
 

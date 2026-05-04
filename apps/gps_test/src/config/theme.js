@@ -9,10 +9,28 @@ export const theme = {
   // Colas Brand Colors
   colors: {
     // Primary brand colors
-    colasYellow: '#FEEE32',      // Main brand yellow (background) - CORRECT
+    colasYellow: '#FEEE32',      // Main brand yellow (background)
     colasYellowLight: '#FEF589', // Light yellow (button)
     colasBlack: '#000000',       // Logo and text
     colasWhite: '#FFFFFF',       // White text/elements
+
+    // Design system (Figma node 3-3)
+    darkTeal: '#0E4764',         // Brand secondary
+    deepTeal: '#0B3950',         // Stat card text (Ordre detaljer)
+    lightAqua: '#A0C7D7',        // Accent
+    charcoal: '#1D1D1D',         // Text primary
+    textSecondaryDark: '#2B2B2B',// Text secondary / headings
+    textMuted: '#717182',        // Muted / labels
+
+    // Action colors
+    statusSuccess: '#CAE6E3',    // Aktivt Projekt
+    statusWarning: '#FAEF68',    // Afventer Godkendelse
+    statusError: '#F04E4E',      // Urgent Handling
+
+    // Dæmpede baggrunde
+    softGray: '#F8F8F8',
+    softAqua: '#F0F7FA',
+    boxOutline: '#EDEDED',
 
     // Functional colors (for GPS tracking screens)
     primary: '#007AFF',
@@ -28,8 +46,12 @@ export const theme = {
     border: '#C7C7CC',
   },
 
-  // Typography - Inter Font Family
+  // Typography
   fonts: {
+    // Poppins — overskrifter og stats
+    poppinsMedium: 'Poppins_500Medium',
+    poppinsSemiBold: 'Poppins_600SemiBold',
+    // Inter — brødtekst og labels
     regular: 'Inter_400Regular',
     medium: 'Inter_500Medium',
     semibold: 'Inter_600SemiBold',

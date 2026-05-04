@@ -1,7 +1,7 @@
 # Project Status - Colas Transport Apps
 
-**Last Updated**: 2026-02-13 13:45
-**Current Phase**: GPS Test MVP + Splash Screen - Ready for Testing
+**Last Updated**: 2026-03-07
+**Current Phase**: Chauffeur App - Dashboard + Beskeder (prototype)
 
 ---
 
@@ -82,6 +82,20 @@
 - [x] Circular start button with #FEF589 border
 - [x] Responsive layout for iOS/Android
 - [x] Works in Expo Go
+
+### 2026-03-07 - Chauffeur Dashboard + Beskeder
+- [x] Full dashboard: DashboardHeader, ImageGrid, TaskSwiper, TaskCard, SectionLabel
+- [x] BottomTabBar with 4 tabs (Start, Opgaver, Beskeder, Profil)
+- [x] MessageWidget with unread count badge
+- [x] SplashScreen ported from gps_test with new logo (logo_splash.png)
+- [x] Storybook v10 set up for component development
+- [x] Beskeder section (prototype with mock data):
+  - MessagesListScreen (Indbakke/Arkiv tabs, pull-to-refresh)
+  - ConversationScreen (thread view, message bubbles, input)
+  - NewMessageScreen (recipient picker, project picker, textarea)
+  - MessageCard, MessageBubble, MessageInput, ProjectTag, TabSwitcher components
+  - messageUtils.ts: formatMessageTime, isArchived (>30 days)
+  - Navigation state-machine in DashboardScreen (no React Navigation)
 
 ---
 
@@ -169,6 +183,37 @@
 - [ ] Implement file transfer mechanism as fallback
 - [ ] Create admin dashboard (Netlify web app)
 - [ ] Set up webhooks for real-time events
+
+---
+
+## 🚨 Tech Debt / Prototype Gaps
+
+These items exist as mock data/state in the current prototype and **must be replaced** before production:
+
+### Navigation
+- [ ] **React Navigation**: Replace state-machine navigation in DashboardScreen with React Navigation (stack/tab navigator). Blocked by React 19 + Expo SDK 54 compatibility — test with `@react-navigation/native` v7+ before migrating.
+
+### Beskeder (Messages)
+- [ ] **Supabase realtime**: Replace `mockConversations` / `mockTasks` with Supabase realtime subscriptions
+- [ ] **`useMessages` hook**: Extract all message state + fetching into a `src/hooks/useMessages.ts` hook (fetch conversations, send message, mark as read, archive)
+- [ ] **Mark as read**: Currently `isRead` is static in mock data — need to call Supabase on conversation open
+- [ ] **Push notifications**: Use `expo-notifications` + Supabase Edge Function to send push on new message. Register device token on login.
+- [ ] **Optimistic UI**: `ConversationScreen.handleSend` adds message locally but doesn't persist — add Supabase insert + rollback on error
+- [ ] **NewMessageScreen.onSend**: Currently just closes — needs to create conversation row + first message in Supabase, then navigate to it
+- [ ] **Archive logic**: `isArchived` uses >30 days threshold on lastMessage date — verify business rule with stakeholders
+
+### Tasks
+- [ ] **`mockTasks`**: Replace with Supabase query filtered by `assignedUserId = auth.uid()` and `date = today`
+- [ ] **TaskDetailScreen**: Currently reads from mock — hook up to Supabase + allow status updates
+
+### Auth
+- [ ] **`senderId: 'me'`**: Hardcoded string — replace with `supabase.auth.getUser().id`
+- [ ] **Login flow**: SplashScreen → Login → Dashboard (auth gate not yet implemented)
+
+### General
+- [ ] Remove all `// TODO: Erstat med Supabase` comments once replaced
+- [ ] Add error states and loading skeletons to all list screens
+- [ ] Test all screens on physical Android device (primary target)
 
 ---
 

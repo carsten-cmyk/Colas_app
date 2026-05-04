@@ -11,12 +11,31 @@
     "chauffeur:start": "cd apps/chauffeur && npm start",
     "chauffeur:android": "cd apps/chauffeur && npm run android",
     "chauffeur:ios": "cd apps/chauffeur && npm run ios",
-    "chauffeur:web": "cd apps/chauffeur && npm run web",
     "gps-test:start": "cd apps/gps_test && npm start",
-    "gps-test:android": "cd apps/gps_test && npm run android",
-    "gps-test:ios": "cd apps/gps_test && npm run ios"
+    "formand:dev": "cd apps/formand && npm run dev",
+    "formand:build": "cd apps/formand && npm run build",
+    "formand:storybook": "cd apps/formand && npm run storybook",
+    "formand:test": "cd apps/formand && npm test",
+    "formand:lint": "cd apps/formand && npm run lint",
+    "formand:typecheck": "cd apps/formand && npm run typecheck",
+    "vognmand:dev": "cd apps/vognmand && npm run dev",
+    "vognmand:storybook": "cd apps/vognmand && npm run storybook",
+    "vognmand:test": "cd apps/vognmand && npm test",
+    "fabrik:dev": "cd apps/fabrik && npm run dev",
+    "fabrik:storybook": "cd apps/fabrik && npm run storybook",
+    "fabrik:test": "cd apps/fabrik && npm test",
+    "kunde:dev": "cd apps/kunde && npm run dev",
+    "kunde:storybook": "cd apps/kunde && npm run storybook",
+    "kunde:test": "cd apps/kunde && npm test",
+    "test:all": "npm run formand:test",
+    "lint:all": "npm run formand:lint",
+    "typecheck:all": "npm run formand:typecheck"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "react-dom": "^19.1.0",
+    "react-native-web": "^0.21.0"
   }
 }

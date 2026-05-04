@@ -1,0 +1,4 @@
+[build]
+  base    = "apps/formand"
+  command = "npm install && npm run build"
+  publish = "apps/formand/dist"

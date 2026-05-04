@@ -47,3 +47,18 @@ yarn-error.*
 # Testing
 coverage/
 .nyc_output/
+
+# Web builds
+apps/*/dist/
+apps/*/.storybook-out/
+storybook-static/
+
+# Test coverage
+apps/*/coverage/
+
+# Environment
+apps/*/.env.local
+apps/*/.env.*.local
+
+# Storybook
+debug-storybook.log
