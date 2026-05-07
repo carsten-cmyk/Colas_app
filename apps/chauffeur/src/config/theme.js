@@ -4,6 +4,13 @@ export const theme = {
     darkTeal: '#0E4764',
     deepTeal: '#0B3950',
     lightAqua: '#A0C7D7',
+    // Status — semantic (v2)
+    good: '#1F8A5B',
+    goodBg: '#E7F4EE',
+    bad: '#C8372D',
+    badBg: '#FBECEA',
+    warnBg: '#FFF6CC',
+    // Status — legacy (beholdes for eksisterende komponenter)
     success: '#CAE6E3',
     error: '#F04E4E',
     warning: '#FAEF68',

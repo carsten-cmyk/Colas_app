@@ -7,17 +7,40 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Brand
         yellow: '#FEEE32',
         'dark-teal': '#0E4764',
         'deep-teal': '#0B3950',
         'light-aqua': '#A0C7D7',
+        warning: '#FAEF68',
+
+        // Neutral layer (v2 — desktop/content areas)
+        page: '#FAFAFA',
+        surface: '#FFFFFF',
+        'surface-2': '#F5F5F5',
+        hairline: '#E8E8E8',
+        'hairline-2': '#DEDEDE',
+
+        // Status — semantic (v2)
+        good: '#1F8A5B',
+        'good-bg': '#E7F4EE',
+        bad: '#C8372D',
+        'bad-bg': '#FBECEA',
+        'warn-bg': '#FFF6CC',
+
+        // Status — legacy (beholdes for eksisterende komponenter)
         success: '#CAE6E3',
         error: '#F04E4E',
-        warning: '#FAEF68',
+
+        // Baggrunde
         'soft-gray': '#F8F8F8',
         'soft-aqua': '#F0F7FA',
+
+        // Borders
         'box-outline': '#EDEDED',
         'divider-strong': '#C4C4C4',
+
+        // Tekst
         'text-primary': '#1D1D1D',
         'text-secondary': '#2B2B2B',
         'text-muted': '#717182',
