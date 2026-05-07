@@ -409,14 +409,22 @@ export function OrdrePlanScreen() {
             {planlagtProductIds.has(activeProductId) ? (
               <div className="w-full flex items-center justify-center gap-xs px-sm py-xs rounded-xl bg-[#E7F4EE] border border-[#1F8A5B]/20">
                 <CheckCircle2 size={15} className="text-[#1F8A5B] flex-shrink-0" />
-                <span className="font-inter font-semibold text-sm text-[#1F8A5B]">Planlægning bekræftet</span>
+                <div className="flex flex-col items-start">
+                  <span className="font-inter font-semibold text-sm text-[#1F8A5B]">Planlægning bekræftet</span>
+                  <span className="font-inter text-xs text-[#1F8A5B]/70">
+                    {activeProduct.startDate ? formatShortDate(activeProduct.startDate) : '–'} – {activeProduct.endDate ? formatShortDate(activeProduct.endDate) : '–'} · {activeProduct.recipeName}
+                  </span>
+                </div>
               </div>
             ) : (
               <button
                 onClick={() => setPlanlagtProductIds(prev => new Set([...prev, activeProductId]))}
-                className="w-full flex items-center justify-center gap-xs font-inter font-semibold text-sm px-sm py-xs rounded-xl transition-all bg-[#2E9E65] text-white hover:bg-[#1F8A5B] active:scale-[0.98]"
+                className="w-full flex flex-col items-center px-sm py-xs rounded-xl transition-all bg-[#2E9E65] text-white hover:bg-[#1F8A5B] active:scale-[0.98]"
               >
-                Bekræft planlægning
+                <span className="font-inter font-semibold text-sm">Bekræft planlægning</span>
+                <span className="font-inter text-xs opacity-80">
+                  {activeProduct.startDate ? formatShortDate(activeProduct.startDate) : '–'} – {activeProduct.endDate ? formatShortDate(activeProduct.endDate) : '–'} · {activeProduct.recipeName}
+                </span>
               </button>
             )}
           </div>
