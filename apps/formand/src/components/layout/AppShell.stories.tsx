@@ -31,6 +31,7 @@ export const Default: Story = {
     orderNumber: '1212343',
     activeMode: 'planlægning',
     onModeChange: () => {},
+    children: null,
   },
 }
 

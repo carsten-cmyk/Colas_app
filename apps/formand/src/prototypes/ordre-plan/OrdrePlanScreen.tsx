@@ -1,5 +1,5 @@
 /**
- * PROTOTYPE — Ordre Planlægnings-mode
+ * PROTOTYPE — Ordre Planlægnings-mode (v2 layout)
  * Sprint 1 — Element 3
  * Viser dagfordeling, materiel og transport for én ordre.
  * Må ikke importeres i produktionskode.
@@ -11,19 +11,15 @@ import {
   Truck,
   X,
   Plus,
-  AlertCircle,
-  CheckCircle2,
-  Camera,
-  CheckCircle,
-  AlertTriangle,
   ChevronDown,
+  ChevronLeft,
   Trash2,
   Pencil,
   Mic,
+  Camera,
+  CloudRain,
 } from 'lucide-react'
 import { TopBar } from '@/components/layout/TopBar'
-import { BottomTabBar } from '@/components/layout/BottomTabBar'
-import type { TabName } from '@/types/navigation'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -32,8 +28,9 @@ type CancelReason = 'regn' | 'frost' | 'underlag' | 'andet'
 interface DayPlan {
   id: string
   day: number
-  date: string // YYYY-MM-DD
+  date: string         // YYYY-MM-DD
   tonsPlanned: number
+  morgenTons?: number  // morgen-bekræftelse
   cancelled: boolean
   cancelReason?: CancelReason
 }
@@ -50,8 +47,8 @@ interface MockProduct {
   estimatedTrucks: number
   estimatedTonsPerTruck: number
   days: DayPlan[]
-  startDate?: string   // YYYY-MM-DD
-  endDate?: string     // YYYY-MM-DD
+  startDate?: string
+  endDate?: string
 }
 
 interface MockResource {
@@ -66,8 +63,8 @@ interface TransportLine {
   id: string
   type: 'blokvogn' | 'kran-baand' | 'andet'
   direction: 'ud' | 'hjem'
-  date: string   // YYYY-MM-DD
-  time: string   // HH:MM
+  date: string
+  time: string
   status: 'planlagt' | 'ikke-planlagt'
 }
 
@@ -85,11 +82,11 @@ const INITIAL_PRODUCTS: MockProduct[] = [
     factory: { code: '29000', name: 'PROD A EAST KØGE PH', driveTimeMinutes: 36 },
     estimatedTrucks: 2,
     estimatedTonsPerTruck: 26,
-    startDate: '2026-03-14',
-    endDate: '2026-03-15',
+    startDate: '2026-03-19',
+    endDate: '2026-03-20',
     days: [
-      { id: 'd1-1', day: 1, date: '2026-03-14', tonsPlanned: 100, cancelled: false },
-      { id: 'd1-2', day: 2, date: '2026-03-15', tonsPlanned: 100, cancelled: false },
+      { id: 'd1-1', day: 1, date: '2026-03-19', tonsPlanned: 100, cancelled: false },
+      { id: 'd1-2', day: 2, date: '2026-03-20', tonsPlanned: 100, cancelled: false },
     ],
   },
   {
@@ -103,6 +100,8 @@ const INITIAL_PRODUCTS: MockProduct[] = [
     factory: { code: '29000', name: 'PROD A EAST KØGE PH', driveTimeMinutes: 36 },
     estimatedTrucks: 3,
     estimatedTonsPerTruck: 30,
+    startDate: '2026-03-16',
+    endDate: '2026-03-18',
     days: [
       { id: 'd2-1', day: 1, date: '2026-03-16', tonsPlanned: 250, cancelled: false },
       { id: 'd2-2', day: 2, date: '2026-03-17', tonsPlanned: 250, cancelled: false },
@@ -119,23 +118,23 @@ const INITIAL_RESOURCES: MockResource[] = [
 ]
 
 const INITIAL_TRANSPORT: TransportLine[] = [
-  { id: 't1', type: 'blokvogn',  direction: 'ud',   date: '2026-03-14', time: '06:00', status: 'ikke-planlagt' },
-  { id: 't2', type: 'blokvogn',  direction: 'hjem',  date: '2026-03-18', time: '15:00', status: 'ikke-planlagt' },
-  { id: 't3', type: 'kran-baand', direction: 'ud',   date: '2026-03-14', time: '06:30', status: 'ikke-planlagt' },
-  { id: 't4', type: 'kran-baand', direction: 'hjem', date: '2026-03-18', time: '15:30', status: 'ikke-planlagt' },
+  { id: 't1', type: 'blokvogn',   direction: 'ud',   date: '2026-03-16', time: '06:00', status: 'planlagt' },
+  { id: 't2', type: 'blokvogn',   direction: 'hjem', date: '2026-03-18', time: '15:00', status: 'planlagt' },
+  { id: 't3', type: 'kran-baand', direction: 'ud',   date: '2026-03-16', time: '06:30', status: 'planlagt' },
+  { id: 't4', type: 'kran-baand', direction: 'hjem', date: '2026-03-18', time: '15:30', status: 'planlagt' },
 ]
 
 const TRANSPORT_TYPE_LABEL: Record<TransportLine['type'], string> = {
-  'blokvogn':  'Blokvogn',
+  'blokvogn':   'Blokvogn',
   'kran-baand': 'Kran-Bånd',
-  'andet':     'Andet',
+  'andet':      'Andet',
 }
 
 const CANCEL_REASONS: { value: CancelReason; label: string }[] = [
-  { value: 'regn',    label: 'Regn' },
-  { value: 'frost',   label: 'Frost' },
+  { value: 'regn',     label: 'Regn' },
+  { value: 'frost',    label: 'Frost' },
   { value: 'underlag', label: 'Underlag' },
-  { value: 'andet',   label: 'Andet' },
+  { value: 'andet',    label: 'Andet' },
 ]
 
 const TODAY_STR = '2026-03-16'
@@ -155,23 +154,19 @@ const INITIAL_COMMENTS: NoteComment[] = [
     id: 'nc1',
     initials: 'OJ',
     name: 'Ole Jensen',
-    timestamp: '14. mar, 08:42',
+    timestamp: '14. mar · 08:42',
     text: 'Området er opmålt og klargjort. Underlag ser fornuftigt ud — mindre ujævnheder ved indkørslen mod nord er udbedret. Koordination med skolens vicevært er på plads, adgang sikret fra kl. 06:00.',
   },
   {
     id: 'nc2',
     initials: 'HT',
     name: 'Henrik Thor',
-    timestamp: '14. mar, 11:15',
+    timestamp: '14. mar · 11:15',
     text: 'Besigtigelse gennemført. Bemærk at det nordøstlige hjørne kræver ekstra komprimering — kunden har påpeget sætninger fra tidligere belægning. Aftalt med Ole at vi tager et ekstra gennemløb med HAMM HD10 i det område inden udlægning af lag 2.',
   },
 ]
 
-interface MockPhoto {
-  id: string
-  color: string   // placeholder farve
-  label: string
-}
+interface MockPhoto { id: string; color: string; label: string }
 
 const INITIAL_PHOTOS: MockPhoto[] = [
   { id: 'ph1', color: 'bg-dark-teal/20',  label: 'Foto 1' },
@@ -181,26 +176,19 @@ const INITIAL_PHOTOS: MockPhoto[] = [
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatWeekday(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  return ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag'][d.getDay()]
+function formatWeekday(dateStr: string) {
+  return ['søn', 'man', 'tir', 'ons', 'tor', 'fre', 'lør'][new Date(dateStr + 'T00:00:00').getDay()]
 }
 
-function formatShortDate(dateStr: string): string {
+function formatShortDate(dateStr: string) {
   const d = new Date(dateStr + 'T00:00:00')
   return `${d.getDate()}/${d.getMonth() + 1}`
 }
 
-function bumpDate(dateStr: string): string {
+function bumpDate(dateStr: string) {
   const d = new Date(dateStr + 'T00:00:00')
   d.setDate(d.getDate() + 1)
   return d.toISOString().split('T')[0]
-}
-
-function countDays(startStr: string, endStr: string): number {
-  const s = new Date(startStr + 'T00:00:00')
-  const e = new Date(endStr + 'T00:00:00')
-  return Math.max(0, Math.round((e.getTime() - s.getTime()) / 86400000) + 1)
 }
 
 function generateDays(startDateStr: string, endDateStr: string): DayPlan[] {
@@ -217,24 +205,20 @@ function generateDays(startDateStr: string, endDateStr: string): DayPlan[] {
   return result
 }
 
-// ─── Screen ───────────────────────────────────────────────────────────────────
+// ─── Types (mode) ─────────────────────────────────────────────────────────────
 
-type OrderMode = 'planlaegning' | 'udforsrel' | 'evaluering'
+type OrderMode = 'planlaegning' | 'udfoersel' | 'evaluering'
 
-const ORDER_MODES: { id: OrderMode; label: string }[] = [
-  { id: 'planlaegning', label: 'Planlægning' },
-  { id: 'udforsrel',   label: 'Udførsel' },
-  { id: 'evaluering',  label: 'Evaluering' },
+const ORDER_MODES: { id: OrderMode; label: string; step: string }[] = [
+  { id: 'planlaegning', label: 'Planlægning', step: 'Trin 1/3' },
+  { id: 'udfoersel',   label: 'Udførelse',   step: 'Trin 2/3' },
+  { id: 'evaluering',  label: 'Evaluering',  step: 'Trin 3/3' },
 ]
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export function OrdrePlanScreen() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState<TabName>('dagens-opgaver')
-
-  function handleTabPress(tab: TabName) {
-    if (tab === 'mine-opgaver') { navigate('/prototyper/gantt'); return }
-    setActiveTab(tab)
-  }
   const [activeMode, setActiveMode] = useState<OrderMode>('planlaegning')
   const [activeProductId, setActiveProductId] = useState('p2')
   const [products, setProducts] = useState<MockProduct[]>(INITIAL_PRODUCTS)
@@ -245,26 +229,32 @@ export function OrdrePlanScreen() {
   const [photos, setPhotos] = useState<MockPhoto[]>(INITIAL_PHOTOS)
   const [opmaalingOpen, setOpmaalingOpen] = useState(false)
   const [photosOpen, setPhotosOpen] = useState(false)
-  const [besigtigelseOpen, setBesigtigelseOpen] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
+  const [docsOpen, setDocsOpen] = useState(false)
   const [besigtigelseComment, setBesigtigelseComment] = useState('')
   const [noteComments, setNoteComments] = useState<NoteComment[]>(INITIAL_COMMENTS)
-
   const [koreplanBeregnet, setKoreplanBeregnet] = useState(false)
 
   const activeProduct = products.find(p => p.id === activeProductId)!
-  const startDate = activeProduct.startDate ?? (activeProduct.days[0]?.date ?? '')
-  const endDate = activeProduct.endDate ?? (activeProduct.days[activeProduct.days.length - 1]?.date ?? '')
-  const numDays = startDate && endDate && startDate <= endDate
-    ? countDays(startDate, endDate)
-    : activeProduct.days.length
   const days = activeProduct.days
   const allocated = days.filter(d => !d.cancelled).reduce((s, d) => s + d.tonsPlanned, 0)
   const remainder = activeProduct.tonsTotal - allocated
+  const isFullyAllocated = remainder === 0
+
+  const notPlanlagt = resources.filter(r => r.status === 'ikke-planlagt').length
 
   function updateTons(dayId: string, value: number) {
     setProducts(prev => prev.map(p =>
       p.id === activeProductId
         ? { ...p, days: p.days.map(d => d.id === dayId ? { ...d, tonsPlanned: value } : d) }
+        : p
+    ))
+  }
+
+  function updateMorgenTons(dayId: string, value: number | undefined) {
+    setProducts(prev => prev.map(p =>
+      p.id === activeProductId
+        ? { ...p, days: p.days.map(d => d.id === dayId ? { ...d, morgenTons: value } : d) }
         : p
     ))
   }
@@ -289,15 +279,10 @@ export function OrdrePlanScreen() {
   function addDay() {
     const last = days[days.length - 1]
     const newDate = last ? bumpDate(last.date) : TODAY_STR
-    const newDay: DayPlan = {
-      id: `${activeProductId}-${Date.now()}`,
-      day: days.length + 1,
-      date: newDate,
-      tonsPlanned: 0,
-      cancelled: false,
-    }
     setProducts(prev => prev.map(p =>
-      p.id === activeProductId ? { ...p, days: [...p.days, newDay] } : p
+      p.id === activeProductId
+        ? { ...p, days: [...p.days, { id: `${activeProductId}-${Date.now()}`, day: days.length + 1, date: newDate, tonsPlanned: 0, cancelled: false }] }
+        : p
     ))
   }
 
@@ -307,9 +292,7 @@ export function OrdrePlanScreen() {
       const updated = { ...p, [field]: value }
       const start = field === 'startDate' ? value : (p.startDate ?? '')
       const end   = field === 'endDate'   ? value : (p.endDate   ?? '')
-      if (start && end && start <= end) {
-        return { ...updated, days: generateDays(start, end) }
-      }
+      if (start && end && start <= end) return { ...updated, days: generateDays(start, end) }
       return updated
     }))
   }
@@ -325,618 +308,533 @@ export function OrdrePlanScreen() {
     ))
   }
 
-const fjernModalResource = fjernModalId ? resources.find(r => r.id === fjernModalId) : null
+  const fjernModalResource = fjernModalId ? resources.find(r => r.id === fjernModalId) : null
 
   return (
-    <div className="min-h-screen bg-soft-aqua flex flex-col">
+    <div className="min-h-screen bg-page">
+      {/* ── TopBar ───────────────────────────────────────────────────── */}
       <TopBar userInitials="OJ" userName="Ole J." onSettingsPress={() => {}} />
 
-      <main className="flex-1 overflow-y-auto" style={{ paddingBottom: 110 }}>
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: '280px 1fr', paddingTop: 52 }}
+      >
 
-        {/* ── Order header — light-aqua baggrund ──────────────────── */}
-        <div className="bg-soft-aqua px-sm pt-sm pb-sm">
+        {/* ── Venstre rail ─────────────────────────────────────────── */}
+        <aside
+          className="sticky border-r border-hairline flex flex-col gap-md p-md overflow-y-auto"
+          style={{ top: 52, height: 'calc(100vh - 52px)' }}
+        >
+          {/* Tilbage til Gantt */}
+          <button
+            onClick={() => navigate('/prototyper/gantt')}
+            className="flex items-center gap-xxxs font-inter text-xs text-text-muted hover:text-text-primary transition-colors self-start -ml-xxxs"
+          >
+            <ChevronLeft size={14} />
+            Mine opgaver
+          </button>
 
-          {/* Ordrenummer */}
-          <p className="font-inter font-semibold text-sm text-dark-teal leading-none pl-xs mb-xs">
-            Ordre 1212343
-          </p>
+          {/* Adresse + ordrenummer */}
+          <div>
+            <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">
+              Udførselssted · #1212343
+            </span>
+            <h1 className="font-poppins font-semibold text-xl text-text-primary leading-tight">
+              Søvej 6D<br />4900 Nakskov
+            </h1>
+          </div>
 
           {/* Mode-navigation */}
-          <div className="flex mb-sm">
-            {ORDER_MODES.map((mode, i) => (
-              <button
-                key={mode.id}
-                onClick={() => setActiveMode(mode.id)}
-                className="flex-1 py-[9px] font-inter font-semibold text-xxs border-0 outline-none focus:outline-none transition-colors"
-                style={{
-                  backgroundColor: activeMode === mode.id ? '#FEEE32' : '#0E4764',
-                  color: activeMode === mode.id ? '#0B3950' : 'rgba(255,255,255,0.5)',
-                  borderTopLeftRadius:    i === 0 ? 16 : 0,
-                  borderBottomLeftRadius: i === 0 ? 16 : 0,
-                  borderTopRightRadius:    i === ORDER_MODES.length - 1 ? 16 : 0,
-                  borderBottomRightRadius: i === ORDER_MODES.length - 1 ? 16 : 0,
-                }}
-              >
-                {mode.label}
-              </button>
+          <nav className="flex flex-col gap-[2px]" aria-label="Ordre-faser">
+            {ORDER_MODES.map(mode => {
+              const isActive = mode.id === activeMode
+              return (
+                <button
+                  key={mode.id}
+                  aria-current={isActive ? 'page' : undefined}
+                  onClick={() => setActiveMode(mode.id)}
+                  className={[
+                    'flex items-center justify-between px-xs py-[10px] rounded-lg transition-colors text-left',
+                    isActive
+                      ? 'bg-surface shadow-[inset_0_0_0_1px] shadow-hairline font-semibold text-text-primary'
+                      : 'font-medium text-text-muted hover:bg-surface-2 hover:text-text-secondary',
+                    'font-inter text-sm',
+                  ].join(' ')}
+                >
+                  <span className="flex items-center gap-xs">
+                    <span className={[
+                      'w-[6px] h-[6px] rounded-full flex-shrink-0 transition-all',
+                      isActive
+                        ? 'bg-yellow shadow-[0_0_0_3px_rgba(254,238,50,0.3)]'
+                        : 'bg-text-muted opacity-40',
+                    ].join(' ')} />
+                    {mode.label}
+                  </span>
+                  {isActive && (
+                    <span className="font-inter text-xxs text-text-muted font-normal">{mode.step}</span>
+                  )}
+                </button>
+              )
+            })}
+          </nav>
+
+          {/* Meta */}
+          <div className="flex flex-col gap-sm pt-md border-t border-hairline">
+            <div>
+              <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Kunde</span>
+              <p className="font-inter text-sm font-medium text-text-primary">Uddannelsescenter Syd</p>
+            </div>
+            <div>
+              <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Projektleder</span>
+              <div className="flex items-center gap-xs">
+                <div className="w-8 h-8 rounded-full bg-surface-2 flex items-center justify-center flex-shrink-0">
+                  <span className="font-inter font-bold text-xxs text-deep-teal">HT</span>
+                </div>
+                <div>
+                  <p className="font-inter text-sm font-semibold text-text-primary leading-tight">Henrik Thor</p>
+                  <a href="tel:+4540506070" className="font-inter text-xs text-dark-teal flex items-center gap-xxxs hover:text-deep-teal">
+                    <Phone size={11} />
+                    40 50 60 70
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Seneste beskeder */}
+          <div className="flex flex-col gap-xs pt-md border-t border-hairline">
+            <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest">Seneste beskeder</span>
+            {[
+              { text: 'Forsinkelse på asfaltfabrik i dag', warn: true },
+              { text: 'Vejrmelding: risiko for regn efter kl. 14', warn: false },
+            ].map(msg => (
+              <div key={msg.text} className="flex items-start gap-xs">
+                <span
+                  className="w-[6px] h-[6px] rounded-full flex-shrink-0 mt-[5px]"
+                  style={{ background: msg.warn ? '#D4A017' : '#7AA8C0' }}
+                />
+                <p className="font-inter text-xs text-text-secondary leading-snug">{msg.text}</p>
+              </div>
             ))}
           </div>
+        </aside>
 
-          {/* Info-bokse — horisontalt, samme stil som stats-kort */}
-          <div className="flex gap-xs">
+        {/* ── Hoved-indhold ────────────────────────────────────────── */}
+        <main className="flex flex-col gap-[48px] p-lg pb-[120px] max-w-[960px]">
 
-            {/* Kunde */}
-            <div className="flex-1 min-w-[110px] bg-white rounded-2xl shadow-md p-sm flex flex-col gap-xxxs">
-              <p className="font-inter text-xxs text-text-muted leading-none">Kunde</p>
-              <p className="font-inter font-medium text-xs text-dark-teal leading-tight mt-xxxs">
-                Uddannelsescenter Syd
-              </p>
-              <p className="font-inter text-xxs text-text-muted leading-tight mt-xxxs">
-                Søvej 6D, Nakskov
-              </p>
-            </div>
+          {/* ── Sektion: Udlægning ───────────────────────────────── */}
+          <section>
 
-            {/* Beskrivelse */}
-            <div className="flex-1 min-w-[130px] bg-white rounded-2xl shadow-md p-sm flex flex-col gap-xxxs">
-              <p className="font-inter text-xxs text-text-muted leading-none">Beskrivelse</p>
-              <p className="font-inter text-xs text-dark-teal leading-snug mt-xxxs">
-                Ny belægning på parkeringsplads. Koordinér med skolens administration.
-              </p>
-            </div>
-
-            {/* Projektleder */}
-            <div className="flex-1 min-w-[130px] bg-white rounded-2xl shadow-md p-sm flex flex-col gap-xxxs">
-              <p className="font-inter text-xxs text-text-muted leading-none">Projektleder</p>
-              <div className="flex items-center gap-xxxs mt-xxxs">
-                <div className="w-[20px] h-[20px] rounded-full bg-dark-teal/10 flex items-center justify-center flex-shrink-0">
-                  <span className="font-inter font-bold text-[9px] text-dark-teal">HT</span>
-                </div>
-                <p className="font-inter font-medium text-xs text-dark-teal truncate">Henrik Thor</p>
+            {/* Sektion-header + produkt-tabs */}
+            <div className="flex items-end justify-between gap-md pb-sm border-b border-hairline mb-lg">
+              <h2 className="font-poppins font-semibold text-xl text-text-primary">Planlægning</h2>
+              <div className="flex gap-xs" role="tablist" aria-label="Produkter">
+                {products.map(p => {
+                  const isActive = p.id === activeProductId
+                  const pStart = p.startDate ? formatShortDate(p.startDate) : '–'
+                  const pEnd   = p.endDate   ? formatShortDate(p.endDate)   : '–'
+                  return (
+                    <button
+                      key={p.id}
+                      role="tab"
+                      aria-pressed={isActive}
+                      onClick={() => setActiveProductId(p.id)}
+                      className={[
+                        'flex flex-col gap-xxxs items-start min-w-[150px] px-sm py-xs rounded-xl border transition-all',
+                        isActive
+                          ? 'bg-deep-teal border-deep-teal'
+                          : 'bg-surface border-hairline hover:border-hairline-2',
+                      ].join(' ')}
+                    >
+                      <span className={`font-poppins font-bold text-lg tabular-nums tracking-tight ${isActive ? 'text-white' : 'text-text-muted'}`}>
+                        {p.recipeCode}
+                      </span>
+                      <span className={`font-inter text-xs tabular-nums ${isActive ? 'text-white/70' : 'text-text-muted'}`}>
+                        {p.tonsTotal} t · {pStart} – {pEnd}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
-              <a
-                href="tel:+4540506070"
-                className="flex items-center gap-xxxs hover:opacity-70 transition-opacity mt-xxxs"
-              >
-                <Phone size={11} className="text-dark-teal flex-shrink-0" />
-                <span className="font-inter font-medium text-xs text-dark-teal">40 50 60 70</span>
-              </a>
             </div>
 
-            {/* Beskeder */}
-            <div className="flex-1 min-w-[150px] bg-white rounded-2xl shadow-md p-sm flex flex-col gap-xxxs">
-              <p className="font-inter text-xxs text-text-muted leading-none mb-xxxs">Seneste beskeder</p>
-
-              {[
-                'Forsinkelse på asfaltfabrik i dag',
-                'Vejrmelding: risiko for regn efter kl. 14',
-              ].map(msg => (
-                <div key={msg} className="flex items-start justify-between gap-xs mt-xxxs">
-                  <p className="font-inter text-xs text-dark-teal leading-tight flex-1 min-w-0 line-clamp-2">
-                    {msg}
-                  </p>
-                  <span className="flex-shrink-0 w-[22px] h-[22px] rounded-sm flex items-center justify-center" style={{ backgroundColor: '#CAE6E3' }}>
-                    <ChevronDown size={13} className="text-deep-teal -rotate-90" />
+            {/* Spec-grid */}
+            <div className="rounded-xl border border-hairline overflow-hidden mb-lg">
+              <div className="grid grid-cols-4 divide-x divide-hairline bg-surface">
+                <div className="p-sm">
+                  <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Tons</span>
+                  <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
+                    {activeProduct.tonsTotal}<small className="font-inter text-xs text-text-muted ml-xxxs">t</small>
                   </span>
                 </div>
-              ))}
-            </div>
-
-          </div>
-        </div>
-
-        {/* ── Sektion-overskrift ───────────────────────────────────── */}
-        <div className="pl-[32px] pr-sm pt-md pb-xs">
-          <h2 className="font-poppins font-bold text-2xl text-deep-teal leading-none">
-            Udlægning
-          </h2>
-        </div>
-
-        {/* ── Produkt-tabs — dark-teal strip under header ──────────── */}
-        <div className="bg-soft-aqua flex px-sm">
-          {products.map(p => {
-            const isActive = p.id === activeProductId
-            return (
-              <button
-                key={p.id}
-                onClick={() => setActiveProductId(p.id)}
-                className="flex-1 bg-dark-teal first:rounded-tl-2xl last:rounded-tr-2xl relative flex items-center justify-center px-xs py-xs gap-xs border-0 outline-none focus:outline-none"
-              >
-                <span className={`font-poppins font-semibold text-sm leading-tight ${isActive ? 'text-white' : 'text-white/50'}`}>
-                  {p.recipeCode}
-                </span>
-                <span className={`font-inter text-xs leading-none ${isActive ? 'text-white/70' : 'text-white/35'}`}>
-                  {p.tonsTotal}t
-                </span>
-                <div className={`absolute bottom-0 left-0 right-0 h-[5px] ${isActive ? 'bg-yellow' : ''}`} />
-              </button>
-            )
-          })}
-        </div>
-
-        {/* ── Tab content ──────────────────────────────────────────── */}
-        <div className="px-sm pb-sm pt-0 flex flex-col gap-sm">
-
-          {/* Stats — ingen top-runding, sidder flush mod fanerne */}
-          <div className="bg-white rounded-b-lg shadow-md p-sm">
-            <p className="font-poppins font-semibold text-xs text-deep-teal mb-sm">
-              Produkt {activeProduct.recipeCode}
-            </p>
-            <div className="grid grid-cols-4 gap-xs">
-              {[
-                { label: 'Tons',     value: `${activeProduct.tonsTotal}t` },
-                { label: 'KVM',      value: `${activeProduct.m2.toLocaleString('da-DK')} m²` },
-                { label: 'Tykkelse', value: `${activeProduct.thicknessMm} mm` },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex flex-col gap-xxxs">
-                  <p className="font-inter text-xxs text-text-muted">{label}</p>
-                  <p className="font-poppins font-semibold text-xs text-deep-teal">{value}</p>
+                <div className="p-sm">
+                  <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Produkt</span>
+                  <span className="font-poppins font-semibold text-sm text-text-primary">
+                    {activeProduct.recipeName} · {activeProduct.thicknessMm} mm
+                  </span>
                 </div>
-              ))}
-              <div className="flex flex-col gap-xxxs">
-                <p className="font-inter text-xxs text-text-muted">Fabrik</p>
-                <p className="font-poppins font-semibold text-xs text-deep-teal leading-tight">
-                  {activeProduct.factory.name}
-                </p>
-                <p className="font-inter text-xxs text-text-muted">
-                  {activeProduct.factory.driveTimeMinutes} min
-                </p>
-              </div>
-            </div>
-            <div className="mt-xs pt-xs border-t border-box-outline grid grid-cols-4 gap-xs">
-
-              {/* Dato for udlægning — kol 1–2 */}
-              <div className="col-span-2 flex flex-col gap-xxxs pr-sm">
-                <p className="font-inter font-semibold text-xxs text-text-secondary">Dato for udlægning</p>
-                <div className="flex items-center gap-[6px]">
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={e => updateProductDates(activeProduct.id, 'startDate', e.target.value)}
-                    className="font-inter text-xxs text-deep-teal rounded-md px-[6px] py-[5px] border-2 focus:outline-none min-w-0 flex-1"
-                    style={{
-                      borderColor: startDate ? '#A0C7D7' : '#FEEE32',
-                      backgroundColor: startDate ? '#F0F7FA' : '#FEFBCC',
-                    }}
-                  />
-                  <span className="font-inter text-xxs text-text-muted flex-shrink-0">–</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={e => updateProductDates(activeProduct.id, 'endDate', e.target.value)}
-                    className="font-inter text-xxs text-deep-teal rounded-md px-[6px] py-[5px] border-2 focus:outline-none min-w-0 flex-1"
-                    style={{
-                      borderColor: endDate ? '#A0C7D7' : '#FEEE32',
-                      backgroundColor: endDate ? '#F0F7FA' : '#FEFBCC',
-                    }}
-                  />
+                <div className="p-sm">
+                  <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Areal</span>
+                  <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
+                    {activeProduct.m2.toLocaleString('da-DK')}<small className="font-inter text-xs text-text-muted ml-xxxs">m²</small>
+                  </span>
+                </div>
+                <div className="p-sm">
+                  <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Fabrik</span>
+                  <span className="font-poppins font-semibold text-sm text-text-primary leading-tight block">
+                    {activeProduct.factory.name}
+                  </span>
+                  <span className="font-inter text-xs text-text-muted">
+                    {activeProduct.factory.code} · {activeProduct.factory.driveTimeMinutes} min
+                  </span>
                 </div>
               </div>
 
-              {/* Antal dage — kol 3 */}
-              <div className="flex flex-col gap-xxxs">
-                <p className="font-inter text-xxs text-text-muted">Antal dage</p>
-                <p className="font-poppins font-semibold text-xs text-deep-teal">
-                  {startDate && endDate && startDate <= endDate ? numDays : '–'}
-                </p>
+              {/* Kommentar + dato-split */}
+              <div className="grid grid-cols-4 divide-x divide-hairline border-t border-hairline bg-surface">
+                <div className="col-span-2 p-sm border-r border-hairline">
+                  <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Kommentar</span>
+                  <p className="font-inter text-sm text-text-secondary leading-relaxed">{activeProduct.activityName}</p>
+                </div>
+                <div className="col-span-2 p-sm">
+                  <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xs">Dato for udlægning</span>
+                  <div className="flex items-center gap-xs">
+                    <input
+                      type="date"
+                      value={activeProduct.startDate ?? ''}
+                      onChange={e => updateProductDates(activeProduct.id, 'startDate', e.target.value)}
+                      className="font-inter text-sm text-text-primary border border-hairline rounded-md px-xs py-xxxs
+                                 focus:outline-none focus:border-dark-teal focus:ring-2 focus:ring-dark-teal/10 bg-white"
+                    />
+                    <span className="text-text-muted font-inter text-sm">–</span>
+                    <input
+                      type="date"
+                      value={activeProduct.endDate ?? ''}
+                      onChange={e => updateProductDates(activeProduct.id, 'endDate', e.target.value)}
+                      className="font-inter text-sm text-text-primary border border-hairline rounded-md px-xs py-xxxs
+                                 focus:outline-none focus:border-dark-teal focus:ring-2 focus:ring-dark-teal/10 bg-white"
+                    />
+                  </div>
+                </div>
               </div>
-
-              {/* Beskrivelse — kol 4, flugter med Fabrik ovenover */}
-              <div className="col-start-4 flex flex-col gap-xxxs">
-                <p className="font-inter text-xxs text-text-muted">Beskrivelse</p>
-                <p className="font-inter text-xs text-text-secondary leading-snug">
-                  {activeProduct.activityName}
-                </p>
-              </div>
-
             </div>
-          </div>
 
-          {/* Days */}
-          <div>
-            <p className="font-poppins font-semibold text-xs text-deep-teal mb-xs pl-sm">Dagfordeling</p>
+            {/* Dagfordeling */}
+            <div className="flex flex-col gap-sm">
+              <div className="flex items-baseline justify-between">
+                <h3 className="font-poppins font-semibold text-md text-text-primary">Dagfordeling</h3>
+                <div className="flex items-center gap-sm font-inter text-xs text-text-muted tabular-nums">
+                  <div className="w-[120px] h-[4px] bg-surface-2 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${isFullyAllocated ? 'bg-good' : 'bg-text-primary'}`}
+                      style={{ width: `${Math.min(100, Math.round((allocated / activeProduct.tonsTotal) * 100))}%` }}
+                    />
+                  </div>
+                  {isFullyAllocated ? (
+                    <span className="flex items-center gap-xxxs text-good font-semibold">
+                      <span className="w-[6px] h-[6px] rounded-full bg-good" />
+                      Fuldt fordelt
+                    </span>
+                  ) : (
+                    <span>{allocated} / {activeProduct.tonsTotal} t</span>
+                  )}
+                </div>
+              </div>
 
-            {/* Scrollable day strip + fast remainder-kort til højre */}
-            <div className="flex gap-xs -mx-sm px-sm">
-              {/* Scrollable pills */}
-              <div className="flex gap-xs overflow-x-auto pb-xs">
+              <div className="flex gap-xs flex-wrap">
                 {days.map(day => (
-                  <DayPill
+                  <DayPillV2
                     key={day.id}
                     day={day}
                     isToday={day.date === TODAY_STR}
                     isSelectingReason={cancellingDayId === day.id}
                     onUpdateTons={updateTons}
+                    onUpdateMorgenTons={updateMorgenTons}
                     onStartCancel={() => setCancellingDayId(day.id)}
                     onConfirmCancel={cancelDay}
                     onRestore={restoreDay}
                   />
                 ))}
-
-                {/* Add day */}
                 <button
                   onClick={addDay}
-                  className="flex-shrink-0 w-[100px] h-[112px] border-2 border-dashed border-divider-strong rounded-lg flex flex-col items-center justify-center gap-xxxs hover:border-dark-teal hover:bg-white/60 transition-colors"
+                  className="flex flex-col items-center justify-center gap-xs
+                             w-[140px] min-h-[140px] rounded-xl
+                             border border-dashed border-hairline-2
+                             text-text-muted hover:text-text-secondary hover:border-text-muted
+                             hover:bg-surface-2 transition-all font-inter text-xs font-medium"
                 >
-                  <Plus size={18} className="text-text-muted" />
-                  <span className="font-inter text-xxs text-text-muted leading-tight text-center">
-                    Tilføj dag
-                  </span>
+                  <Plus size={16} />
+                  Tilføj dag
                 </button>
               </div>
+            </div>
+          </section>
 
-              {/* Remainder card — fast til højre, samme størrelse */}
-              <div className={`flex-shrink-0 w-[100px] h-[112px] pb-xs rounded-lg shadow-md flex flex-col items-center justify-center gap-xs ${
-                remainder === 0 ? 'bg-success/40' : 'bg-error/10'
-              }`}>
-                {remainder === 0 ? (
-                  <>
-                    <CheckCircle2 size={20} className="text-deep-teal" />
-                    <p className="font-inter text-xxs text-deep-teal text-center leading-tight px-xxxs">
-                      Fuldt fordelt
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle size={20} className="text-error" />
-                    <p className="font-inter text-sm text-error leading-none">
-                      {Math.abs(remainder)}t
-                    </p>
-                    <p className="font-inter text-xxs text-error text-center leading-tight">
-                      {remainder > 0 ? 'mangler' : 'over'}
-                    </p>
-                  </>
-                )}
-              </div>
+          {/* ── Dokumentation ───────────────────────────────────── */}
+          <section>
+            <div className="flex items-end justify-between pb-sm border-b border-hairline mb-lg">
+              <h2 className="font-poppins font-semibold text-xl text-text-primary">Dokumentation</h2>
             </div>
 
-            <RemainderLine allocated={allocated} tonsTotal={activeProduct.tonsTotal} />
-          </div>
-
-          {/* Materiel */}
-          <div>
-            <h2 className="font-poppins font-bold text-2xl text-deep-teal leading-none pl-sm mb-xs pt-sm">Materiel</h2>
-
-            {/* LAG 1 — Maskiner */}
-            <div className="flex flex-col gap-xs">
-              {resources.length === 0 ? (
-                <p className="font-inter text-xs text-text-muted">Intet materiel tilknyttet.</p>
-              ) : (
-                resources.map(r => (
-                  <div
-                    key={r.id}
-                    className="bg-white rounded-lg shadow-md px-sm py-[10px] flex items-center gap-sm"
-                  >
-                    <div className="w-[36px] h-[36px] rounded-md bg-soft-aqua flex items-center justify-center flex-shrink-0">
-                      <Truck size={16} className="text-dark-teal" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-inter text-xs text-text-primary font-medium leading-tight truncate">
-                        {r.description}
-                      </p>
-                      <div className="flex items-center gap-xs mt-xxxs">
-                        <span className="font-inter text-xxs text-text-muted">{r.plantNumber}</span>
-                        <TransportBadge tag={r.transportTag} />
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => toggleResourceStatus(r.id)}
-                      className="flex-shrink-0 w-[110px] flex items-center justify-center gap-[5px] py-[5px] rounded-md font-inter font-semibold text-xxs transition-opacity hover:opacity-75"
-                      style={
-                        r.status === 'planlagt'
-                          ? { backgroundColor: '#CAE6E3', color: '#0B3950' }
-                          : { backgroundColor: '#FDE8E8', border: '1px solid #F04E4E', color: '#F04E4E' }
-                      }
-                    >
-                      {r.status === 'planlagt'
-                        ? <><CheckCircle size={11} /> Planlagt</>
-                        : <><AlertTriangle size={11} /> Ikke planlagt</>
-                      }
-                    </button>
-                    <button
-                      onClick={() => setFjernModalId(r.id)}
-                      className="flex-shrink-0 p-[6px] rounded-md hover:bg-error/10 transition-colors"
-                      aria-label={`Fjern ${r.description}`}
-                    >
-                      <Trash2 size={13} className="text-text-muted" />
-                    </button>
-                  </div>
-                ))
-              )}
-
-              {/* Tilføj maskine */}
-              <button className="w-full flex items-center justify-center gap-xs border-2 border-dashed border-divider-strong rounded-lg py-[10px] hover:border-dark-teal hover:bg-white/60 transition-colors">
-                <Plus size={16} className="text-text-muted" />
-                <span className="font-inter text-xs text-text-muted">Tilføj materiel</span>
-              </button>
-            </div>
-
-            {/* LAG 2 — Transport af materiel */}
-            <p className="font-poppins font-semibold text-xs text-deep-teal mt-sm mb-xs pl-sm">
-              Transport af materiel
-            </p>
-            <div className="flex flex-col gap-xs">
-              {transport.map(t => (
-                <div
-                  key={t.id}
-                  className="bg-white rounded-lg shadow-md px-sm py-[10px] flex items-center gap-sm"
-                >
-                  <div className="w-[36px] h-[36px] rounded-md bg-soft-aqua flex items-center justify-center flex-shrink-0">
-                    <Truck size={16} className="text-dark-teal" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-inter text-xs text-text-primary font-medium leading-tight">
-                      {TRANSPORT_TYPE_LABEL[t.type]}
-                      <span className="font-normal text-text-muted"> · {t.direction === 'ud' ? 'Ud' : 'Hjem'}</span>
-                    </p>
-                    <p className="font-inter text-xxs text-text-muted mt-xxxs">
-                      {formatShortDate(t.date)} · kl. {t.time}
-                    </p>
-                  </div>
-                  <span
-                    className="flex-shrink-0 flex items-center gap-[5px] px-xs py-[5px] rounded-md font-inter font-semibold text-xxs whitespace-nowrap"
-                    style={{ backgroundColor: '#CAE6E3', color: '#0B3950' }}
-                  >
-                    <CheckCircle size={11} className="flex-shrink-0" />
-                    Tilføjet til kørselsplanlægning
+            <div className="bg-surface border border-hairline rounded-xl overflow-hidden">
+              {/* Toggle-header */}
+              <button
+                onClick={() => setDocsOpen(o => !o)}
+                className="w-full flex items-center justify-between px-sm py-sm hover:bg-surface-2 transition-colors"
+              >
+                <span className="flex items-center gap-md">
+                  <span className="font-poppins font-semibold text-sm text-text-primary">Dokumenter</span>
+                  <span className="flex items-center gap-xxxs font-inter text-xs text-bad font-medium">
+                    <span className="w-[6px] h-[6px] rounded-full bg-bad" />
+                    1 mangler
                   </span>
-                  <button
-                    className="flex-shrink-0 p-[6px] rounded-md hover:bg-soft-aqua transition-colors"
-                    aria-label="Rediger transport"
-                  >
-                    <Pencil size={13} className="text-text-muted" />
-                  </button>
-                </div>
-              ))}
-
-              {/* Tilføj transport */}
-              <button className="w-full flex items-center justify-center gap-xs border-2 border-dashed border-divider-strong rounded-lg py-[10px] hover:border-dark-teal hover:bg-white/60 transition-colors">
-                <Plus size={16} className="text-text-muted" />
-                <span className="font-inter text-xs text-text-muted">Tilføj materiel transport</span>
+                  <span className="flex items-center gap-xxxs font-inter text-xs text-bad font-medium">
+                    <span className="w-[6px] h-[6px] rounded-full bg-bad" />
+                    {notPlanlagt} materiel mangler
+                  </span>
+                </span>
+                <ChevronDown size={16} className={`text-text-muted transition-transform ${docsOpen ? 'rotate-180' : ''}`} />
               </button>
 
-            </div>
-          </div>
+              {docsOpen && (
+                <div className="border-t border-hairline">
 
-          {/* Dokumentation */}
-          <div className="flex flex-col gap-xs pt-sm">
-            <h2 className="font-poppins font-bold text-2xl text-deep-teal leading-none pl-sm">Dokumentation</h2>
-          <div className="bg-white rounded-lg shadow-md p-sm">
+                  {/* Opmåling */}
+                  <DocRow
+                    title="Opmåling af område"
+                    meta="PDF · 2,1 MB"
+                    status="ok"
+                    open={opmaalingOpen}
+                    onToggle={() => setOpmaalingOpen(o => !o)}
+                  >
+                    <img src="/opmaalings-kort.png" alt="Opmåling af område" className="w-full rounded-lg border border-hairline grayscale-[30%]" />
+                  </DocRow>
 
-            <div className="flex flex-col divide-y divide-box-outline">
-
-              {/* Opmåling — ekspanderbar */}
-              <div>
-                <button
-                  onClick={() => setOpmaalingOpen(o => !o)}
-                  className="w-full flex items-center justify-between py-xs gap-sm"
-                >
-                  <p className="font-inter text-xs text-text-secondary flex-shrink-0">
-                    Opmåling af område
-                  </p>
-                  <div className="flex items-center gap-xs">
-                    <span className="flex items-center gap-[5px] w-[76px] justify-center py-[5px] rounded-md bg-success/20 font-inter font-semibold text-xxs text-deep-teal">
-                      <CheckCircle size={11} /> OK
-                    </span>
-                    <ChevronDown
-                      size={14}
-                      className={`text-text-muted flex-shrink-0 transition-transform duration-200 ${opmaalingOpen ? 'rotate-180' : ''}`}
-                    />
-                  </div>
-                </button>
-                {opmaalingOpen && (
-                  <div className="pb-sm">
-                    <img
-                      src="/opmaalings-kort.png"
-                      alt="Opmåling af område"
-                      className="w-full rounded-md grayscale"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Billedmateriale — ekspanderbar */}
-              <div>
-                <button
-                  onClick={() => setPhotosOpen(o => !o)}
-                  className="w-full flex items-center justify-between py-xs gap-sm"
-                >
-                  <p className="font-inter text-xs text-text-secondary flex-shrink-0">
-                    Billedmateriale
-                  </p>
-                  <div className="flex items-center gap-xs">
-                    <span className="font-inter text-xxs text-text-muted">
-                      {photos.length} {photos.length === 1 ? 'billede' : 'billeder'}
-                    </span>
-                    <span className="flex items-center gap-[5px] w-[76px] justify-center py-[5px] rounded-md bg-success/20 font-inter font-semibold text-xxs text-deep-teal">
-                      <CheckCircle size={11} /> OK
-                    </span>
-                    <ChevronDown
-                      size={14}
-                      className={`text-text-muted flex-shrink-0 transition-transform duration-200 ${photosOpen ? 'rotate-180' : ''}`}
-                    />
-                  </div>
-                </button>
-                {photosOpen && (
-                  <div className="pb-sm">
+                  {/* Billeder */}
+                  <DocRow
+                    title="Billedmateriale"
+                    meta={`${photos.length} billeder`}
+                    status="ok"
+                    open={photosOpen}
+                    onToggle={() => setPhotosOpen(o => !o)}
+                  >
                     <div className="grid grid-cols-4 gap-xs">
                       {photos.map(photo => (
-                        <div
-                          key={photo.id}
-                          className={`aspect-square rounded-md ${photo.color} flex items-center justify-center relative group`}
-                        >
+                        <div key={photo.id} className={`aspect-square rounded-lg ${photo.color} flex items-center justify-center relative group border border-hairline`}>
                           <span className="font-inter text-xxs text-text-muted">{photo.label}</span>
                           <button
                             onClick={() => setPhotos(prev => prev.filter(p => p.id !== photo.id))}
-                            className="absolute top-[3px] right-[3px] w-[14px] h-[14px] bg-white/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute top-[4px] right-[4px] w-[16px] h-[16px] bg-white/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                           >
-                            <X size={8} className="text-error" />
+                            <X size={8} className="text-bad" />
                           </button>
                         </div>
                       ))}
-                      <label className="aspect-square rounded-md border-2 border-dashed border-divider-strong flex flex-col items-center justify-center cursor-pointer hover:border-dark-teal hover:bg-soft-aqua transition-colors">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          className="hidden"
+                      <label className="aspect-square rounded-lg border border-dashed border-hairline-2 flex flex-col items-center justify-center cursor-pointer hover:border-text-muted hover:bg-surface-2 transition-colors">
+                        <input type="file" accept="image/*" capture="environment" className="hidden"
                           onChange={e => {
                             if (e.target.files?.length) {
-                              const newPhoto: MockPhoto = {
-                                id: `ph${Date.now()}`,
-                                color: 'bg-yellow/20',
-                                label: `Foto ${photos.length + 1}`,
-                              }
-                              setPhotos(prev => [...prev, newPhoto])
+                              setPhotos(prev => [...prev, { id: `ph${Date.now()}`, color: 'bg-yellow/20', label: `Foto ${prev.length + 1}` }])
                             }
                           }}
                         />
                         <Camera size={16} className="text-text-muted" />
-                        <span className="font-inter text-xxs text-text-muted mt-xxxs leading-tight text-center">
-                          Tag<br />billede
-                        </span>
+                        <span className="font-inter text-xxs text-text-muted mt-xxxs">Tilføj</span>
                       </label>
                     </div>
-                  </div>
-                )}
-              </div>
+                  </DocRow>
 
-              {/* Projektleder besigtigelse — ekspanderbar */}
-              <div>
-                <button
-                  onClick={() => setBesigtigelseOpen(o => !o)}
-                  className="w-full flex items-center justify-between py-xs gap-sm"
-                >
-                  <p className="font-inter text-xs text-text-secondary flex-shrink-0">
-                    Noter til opgave
-                  </p>
-                  <div className="flex items-center gap-xs">
-                    <span className="flex items-center gap-[5px] w-[76px] justify-center py-[5px] rounded-md bg-error/15 font-inter font-semibold text-xxs text-error">
-                      <AlertTriangle size={11} /> Mangler
-                    </span>
-                    <ChevronDown
-                      size={14}
-                      className={`text-text-muted flex-shrink-0 transition-transform duration-200 ${besigtigelseOpen ? 'rotate-180' : ''}`}
-                    />
-                  </div>
-                </button>
-
-                {besigtigelseOpen && (
-                  <div className="pb-sm flex flex-col gap-xs">
-
-                    {/* Kommentar-tråd */}
-                    {noteComments.map(c => (
-                      <div key={c.id} className="flex gap-xs">
-                        <div
-                          className="w-[28px] h-[28px] rounded-full flex items-center justify-center flex-shrink-0 mt-xxxs"
-                          style={{ backgroundColor: c.initials === 'OJ' ? '#0E4764' : '#A0C7D7' }}
-                        >
-                          <span
-                            className="font-inter font-bold text-[9px]"
-                            style={{ color: c.initials === 'OJ' ? '#ffffff' : '#0B3950' }}
-                          >
-                            {c.initials}
-                          </span>
-                        </div>
-                        <div
-                          className="flex-1 rounded-lg rounded-tl-none px-xs py-xs"
-                          style={{ backgroundColor: c.initials === 'OJ' ? '#F0F7FA' : 'rgba(14,71,100,0.05)' }}
-                        >
-                          <div className="flex items-baseline gap-xs mb-xxxs">
-                            <p className="font-inter font-semibold text-xxs text-deep-teal">{c.name}</p>
-                            <p className="font-inter text-xxs text-text-muted">{c.timestamp}</p>
+                  {/* Noter */}
+                  <DocRow
+                    title="Noter til opgave"
+                    meta={`${noteComments.length} noter`}
+                    status="bad"
+                    open={notesOpen}
+                    onToggle={() => setNotesOpen(o => !o)}
+                    isLast
+                  >
+                    <div className="flex flex-col gap-sm">
+                      {noteComments.map(c => (
+                        <div key={c.id} className="flex gap-xs">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${c.initials === 'OJ' ? 'bg-deep-teal' : 'bg-surface-2'}`}>
+                            <span className={`font-inter font-bold text-[9px] ${c.initials === 'OJ' ? 'text-white' : 'text-deep-teal'}`}>{c.initials}</span>
                           </div>
-                          <p className="font-inter text-xs text-text-secondary leading-relaxed">{c.text}</p>
+                          <div className="flex-1 bg-surface-2 rounded-xl px-xs py-xs">
+                            <div className="flex items-baseline gap-xs mb-xxxs">
+                              <b className="font-inter font-semibold text-xs text-text-primary">{c.name}</b>
+                              <time className="font-inter text-xxs text-text-muted">{c.timestamp}</time>
+                            </div>
+                            <p className="font-inter text-xs text-text-secondary leading-relaxed">{c.text}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-
-                    {/* Tilføj bemærkning */}
-                    <div className="flex gap-xs mt-xxxs">
-                      <div className="w-[28px] h-[28px] rounded-full bg-dark-teal flex items-center justify-center flex-shrink-0 mt-xxxs">
-                        <span className="font-inter font-bold text-[9px] text-white">OJ</span>
-                      </div>
-                      <div className="flex-1 flex flex-col gap-xxxs">
-                        <div className="relative">
-                          <textarea
-                            value={besigtigelseComment}
-                            onChange={e => setBesigtigelseComment(e.target.value)}
-                            placeholder="Tilføj bemærkning..."
-                            rows={2}
-                            className="w-full rounded-lg border border-box-outline bg-soft-aqua px-xs py-xs pr-[36px] font-inter text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-dark-teal resize-none"
-                          />
-                          <button
-                            className="absolute bottom-[10px] right-[10px] w-[28px] h-[28px] rounded-full bg-dark-teal flex items-center justify-center hover:bg-deep-teal transition-colors"
-                            aria-label="Dikter bemærkning"
-                          >
-                            <Mic size={12} className="text-white" />
-                          </button>
+                      ))}
+                      <div className="flex gap-xs">
+                        <div className="w-7 h-7 rounded-full bg-deep-teal flex items-center justify-center flex-shrink-0">
+                          <span className="font-inter font-bold text-[9px] text-white">OJ</span>
                         </div>
-                        {besigtigelseComment.trim().length > 0 && (
-                          <button
-                            onClick={() => {
-                              setNoteComments(prev => [...prev, {
-                                id: `nc${Date.now()}`,
-                                initials: 'OJ',
-                                name: 'Ole Jensen',
-                                timestamp: 'Nu',
-                                text: besigtigelseComment.trim(),
-                              }])
-                              setBesigtigelseComment('')
-                            }}
-                            className="self-end bg-dark-teal text-white font-inter font-semibold text-xxs px-sm py-[6px] rounded-md hover:bg-deep-teal transition-colors"
-                          >
-                            Gem
-                          </button>
-                        )}
+                        <div className="flex-1">
+                          <div className="relative">
+                            <textarea
+                              value={besigtigelseComment}
+                              onChange={e => setBesigtigelseComment(e.target.value)}
+                              placeholder="Tilføj bemærkning..."
+                              rows={2}
+                              className="w-full rounded-xl border border-hairline bg-white px-xs py-xs pr-[40px]
+                                         font-inter text-xs text-text-primary placeholder:text-text-muted
+                                         focus:outline-none focus:border-dark-teal resize-none"
+                            />
+                            <button
+                              className="absolute bottom-[10px] right-[10px] w-7 h-7 rounded-full bg-dark-teal
+                                         flex items-center justify-center hover:bg-deep-teal transition-colors"
+                              aria-label="Dikter bemærkning"
+                            >
+                              <Mic size={12} className="text-white" />
+                            </button>
+                          </div>
+                          {besigtigelseComment.trim().length > 0 && (
+                            <button
+                              onClick={() => {
+                                setNoteComments(prev => [...prev, { id: `nc${Date.now()}`, initials: 'OJ', name: 'Ole Jensen', timestamp: 'Nu', text: besigtigelseComment.trim() }])
+                                setBesigtigelseComment('')
+                              }}
+                              className="mt-xxxs self-end float-right bg-dark-teal text-white font-inter font-semibold text-xxs px-sm py-xxxs rounded-lg hover:bg-deep-teal transition-colors"
+                            >
+                              Gem
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
+                  </DocRow>
 
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ── Materiel ─────────────────────────────────────────── */}
+          <section>
+            <div className="flex items-end justify-between pb-sm border-b border-hairline mb-lg">
+              <h2 className="font-poppins font-semibold text-xl text-text-primary">Materiel</h2>
+              {notPlanlagt > 0 && (
+                <span className="font-inter text-xs text-text-muted">{notPlanlagt} mangler planlægning</span>
+              )}
+            </div>
+
+            {/* Maskiner */}
+            <div className="bg-surface border border-hairline rounded-xl overflow-hidden mb-sm">
+              {resources.map((r, i) => (
+                <div
+                  key={r.id}
+                  className={`grid items-center gap-md px-sm py-sm hover:bg-surface-2 transition-colors ${i < resources.length - 1 ? 'border-b border-hairline' : ''}`}
+                  style={{ gridTemplateColumns: '36px 1fr 130px 100px 32px' }}
+                >
+                  <div className="w-9 h-9 rounded-md bg-surface-2 flex items-center justify-center text-deep-teal">
+                    <Truck size={16} />
                   </div>
-                )}
-              </div>
-
+                  <div>
+                    <p className="font-inter text-sm font-medium text-text-primary">{r.description}</p>
+                    <div className="flex items-center gap-xs mt-xxxs">
+                      <span className="font-inter text-xs text-text-muted tabular-nums">{r.plantNumber}</span>
+                      <TransportBadge tag={r.transportTag} />
+                    </div>
+                  </div>
+                  <span />
+                  <button
+                    onClick={() => toggleResourceStatus(r.id)}
+                    className={[
+                      'inline-flex items-center gap-xxxs font-inter font-semibold text-xs px-xs py-xxxs rounded-lg border transition-colors',
+                      r.status === 'planlagt'
+                        ? 'bg-good-bg text-good border-transparent'
+                        : 'bg-bad-bg text-bad border-bad/20',
+                    ].join(' ')}
+                  >
+                    <span className="w-[5px] h-[5px] rounded-full bg-current" />
+                    {r.status === 'planlagt' ? 'Planlagt' : 'Ikke planlagt'}
+                  </button>
+                  <button
+                    onClick={() => setFjernModalId(r.id)}
+                    className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-bad hover:bg-bad-bg rounded-md transition-colors"
+                    aria-label={`Fjern ${r.description}`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              <button className="w-full flex items-center justify-center gap-xs py-xs font-inter text-sm text-text-muted border-t border-hairline bg-surface-2 hover:bg-hairline transition-colors">
+                <Plus size={14} />
+                Tilføj materiel
+              </button>
             </div>
 
-          </div>
-          </div>{/* /Dokumentation wrapper */}
-
-          {/* Transport */}
-          <div className="flex flex-col gap-xs pt-sm">
-            <h2 className="font-poppins font-bold text-2xl text-deep-teal leading-none pl-sm">Transport</h2>
-          <div className="bg-white rounded-lg shadow-md px-sm pt-sm pb-md">
-
-            {/* Header */}
-            <div className="flex items-center justify-between gap-sm mb-sm">
-              <p className="font-poppins font-semibold text-xs text-deep-teal">
-                Forventet transport
-              </p>
-              <span className="font-inter text-xxs text-text-muted">
-                ~{activeProduct.estimatedTrucks} biler · {activeProduct.estimatedTrucks * activeProduct.estimatedTonsPerTruck}t/dag
-              </span>
+            {/* Transport af materiel */}
+            <p className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest mb-xs px-xxxs">
+              Transport af materiel
+            </p>
+            <div className="bg-surface border border-hairline rounded-xl overflow-hidden">
+              {transport.map((t, i) => (
+                <div
+                  key={t.id}
+                  className={`grid items-center gap-md px-sm py-[12px] hover:bg-surface-2 transition-colors ${i < transport.length - 1 ? 'border-b border-hairline' : ''}`}
+                  style={{ gridTemplateColumns: '36px 1fr 180px 32px' }}
+                >
+                  <div className="w-9 h-9 rounded-md bg-surface-2 flex items-center justify-center text-deep-teal">
+                    <Truck size={16} />
+                  </div>
+                  <div>
+                    <p className="font-inter text-sm font-medium text-text-primary">
+                      {TRANSPORT_TYPE_LABEL[t.type]}
+                      <span className="text-text-muted font-normal"> · {t.direction === 'ud' ? 'Ud' : 'Hjem'}</span>
+                    </p>
+                    <p className="font-inter text-xs text-text-muted tabular-nums">{formatShortDate(t.date)} · kl. {t.time}</p>
+                  </div>
+                  <span className="inline-flex items-center gap-xxxs bg-good-bg text-good font-inter font-semibold text-xs px-xs py-xxxs rounded-lg">
+                    <span className="w-[5px] h-[5px] rounded-full bg-good" />
+                    Tilføjet kørselsplan
+                  </span>
+                  <button className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-2 rounded-md transition-colors" aria-label="Rediger">
+                    <Pencil size={14} />
+                  </button>
+                </div>
+              ))}
+              <button className="w-full flex items-center justify-center gap-xs py-xs font-inter text-sm text-text-muted border-t border-hairline bg-surface-2 hover:bg-hairline transition-colors">
+                <Plus size={14} />
+                Tilføj materiel transport
+              </button>
             </div>
+          </section>
 
+        </main>
+      </div>
 
-            {/* Knap — altid synlig */}
-            <button
-              onClick={() => { setKoreplanBeregnet(true); navigate('/prototyper/transportberegner') }}
-              className="w-full font-inter font-semibold text-xs py-[11px] rounded-md transition-colors"
-              style={
-                koreplanBeregnet
-                  ? { backgroundColor: '#CAE6E3', color: '#0B3950' }
-                  : { backgroundColor: '#0E4764', color: '#ffffff' }
-              }
-            >
-              {koreplanBeregnet ? 'Se køreplan og tilpas' : 'Beregn køreplan'}
-            </button>
-
-          </div>
-          </div>{/* /Transport wrapper */}
-
+      {/* ── Sticky action bar ────────────────────────────────────────── */}
+      <div
+        className="sticky bottom-0 px-lg py-sm border-t border-hairline z-40
+                   flex items-center justify-between gap-md"
+        style={{ background: 'rgba(250,250,250,0.88)', backdropFilter: 'saturate(140%) blur(10px)' }}
+      >
+        <div className="font-inter text-sm text-text-muted">
+          <b className="text-text-primary font-semibold tabular-nums">{allocated} t</b> fordelt
+          {!isFullyAllocated && (
+            <span className="text-bad ml-sm font-medium">{Math.abs(remainder)} t {remainder > 0 ? 'mangler' : 'over'}</span>
+          )}
         </div>
-      </main>
+        <div className="flex gap-xs">
+          <button
+            onClick={() => { setKoreplanBeregnet(true); navigate('/prototyper/transportberegner') }}
+            className={[
+              'font-inter font-semibold text-sm px-sm py-xs rounded-xl transition-all',
+              koreplanBeregnet
+                ? 'bg-good-bg text-good'
+                : 'bg-yellow text-deep-teal hover:brightness-95',
+            ].join(' ')}
+          >
+            {koreplanBeregnet ? 'Se køreplan og tilpas' : 'Beregn køreplan'}
+          </button>
+        </div>
+      </div>
 
-      <BottomTabBar activeTab={activeTab} onTabPress={handleTabPress} messageCount={2} />
-
+      {/* ── Fjern-modal ──────────────────────────────────────────────── */}
       {fjernModalResource && (
         <FjernModal
           resource={fjernModalResource}
@@ -948,57 +846,41 @@ const fjernModalResource = fjernModalId ? resources.find(r => r.id === fjernModa
   )
 }
 
-// ─── DayPill ──────────────────────────────────────────────────────────────────
+// ─── DayPillV2 ────────────────────────────────────────────────────────────────
 
-function DayPill({
-  day,
-  isToday,
-  isSelectingReason,
-  onUpdateTons,
-  onStartCancel,
-  onConfirmCancel,
-  onRestore,
+function DayPillV2({
+  day, isToday, isSelectingReason,
+  onUpdateTons, onUpdateMorgenTons,
+  onStartCancel, onConfirmCancel, onRestore,
 }: {
   day: DayPlan
   isToday: boolean
   isSelectingReason: boolean
   onUpdateTons: (id: string, v: number) => void
+  onUpdateMorgenTons: (id: string, v: number | undefined) => void
   onStartCancel: () => void
   onConfirmCancel: (id: string, r: CancelReason) => void
   onRestore: (id: string) => void
 }) {
-  // Aflyst
   if (day.cancelled) {
     return (
-      <div className="flex-shrink-0 w-[100px] h-[112px] bg-white rounded-lg border border-error/30 flex flex-col items-center justify-center gap-xxxs opacity-70">
-        <p className="font-inter font-semibold text-xxs text-text-muted">{formatWeekday(day.date)}</p>
-        <p className="font-inter text-xxs text-text-muted">{formatShortDate(day.date)}</p>
-        <p className="font-inter text-xxs text-text-muted">Dag {day.day}</p>
-        <p className="font-inter font-semibold text-xxs text-error mt-xxxs">Aflyst</p>
-        {day.cancelReason && (
-          <p className="font-inter text-xxs text-text-muted capitalize">{day.cancelReason}</p>
-        )}
-        <button
-          onClick={() => onRestore(day.id)}
-          className="mt-xxxs font-inter text-xxs text-dark-teal underline"
-        >
-          Fortryd
-        </button>
+      <div className="w-[140px] min-h-[140px] bg-surface rounded-xl border border-bad/30 flex flex-col items-center justify-center gap-xxxs opacity-60 p-sm">
+        <p className="font-inter text-xxs font-semibold text-text-muted">{formatWeekday(day.date)}</p>
+        <p className="font-inter text-xxs text-text-muted tabular-nums">{formatShortDate(day.date)}</p>
+        <p className="font-inter font-semibold text-xs text-bad mt-xxxs">Aflyst</p>
+        {day.cancelReason && <p className="font-inter text-xxs text-text-muted capitalize">{day.cancelReason}</p>}
+        <button onClick={() => onRestore(day.id)} className="mt-xxxs font-inter text-xxs text-dark-teal underline">Fortryd</button>
       </div>
     )
   }
 
-  // Vælg årsag
   if (isSelectingReason) {
     return (
-      <div className="flex-shrink-0 w-[144px] bg-white rounded-lg shadow-md border border-error/20 p-xs flex flex-col gap-xxxs">
-        <p className="font-inter text-xxs text-text-muted font-medium mb-xxxs">Årsag til aflysning</p>
+      <div className="w-[152px] bg-surface rounded-xl border border-bad/20 p-xs flex flex-col gap-xxxs shadow-md">
+        <p className="font-inter text-xxs font-medium text-text-muted mb-xxxs">Årsag til aflysning</p>
         {CANCEL_REASONS.map(r => (
-          <button
-            key={r.value}
-            onClick={() => onConfirmCancel(day.id, r.value)}
-            className="w-full text-left px-xs py-[6px] rounded-md font-inter text-xs text-text-secondary hover:bg-soft-aqua hover:text-deep-teal transition-colors"
-          >
+          <button key={r.value} onClick={() => onConfirmCancel(day.id, r.value)}
+            className="w-full text-left px-xs py-[6px] rounded-lg font-inter text-xs text-text-secondary hover:bg-surface-2 hover:text-text-primary transition-colors">
             {r.label}
           </button>
         ))}
@@ -1006,99 +888,129 @@ function DayPill({
     )
   }
 
-  // Normal dag
   return (
-    <div
-      className={`flex-shrink-0 w-[100px] h-[112px] bg-white rounded-lg flex flex-col items-center pt-xs px-xxxs relative ${
-        isToday
-          ? 'border-2 border-yellow shadow-md'
-          : 'border border-box-outline shadow-md'
-      }`}
-    >
-      {/* Cancel */}
+    <div className={[
+      'relative w-[140px] bg-surface rounded-xl flex flex-col p-sm gap-xs transition-all',
+      isToday
+        ? 'border-2 border-text-primary shadow-[0_0_0_3px_rgba(0,0,0,0.04)]'
+        : 'border border-hairline hover:border-hairline-2',
+    ].join(' ')}>
+
+      {isToday && (
+        <span className="absolute -top-[10px] right-xs bg-text-primary text-white font-inter text-xxs font-semibold px-xs py-[2px] rounded-full uppercase tracking-wider">
+          I dag
+        </span>
+      )}
+
+      {/* Vejr-/aflysnings-knap */}
       <button
         onClick={onStartCancel}
-        className="absolute top-[5px] right-[5px] w-[16px] h-[16px] flex items-center justify-center rounded-full hover:bg-error/10 transition-colors"
-        aria-label="Aflys dag"
+        className="absolute top-[10px] right-[10px] w-6 h-6 rounded-full flex items-center justify-center text-light-aqua hover:text-dark-teal hover:bg-surface-2 transition-all"
+        aria-label="Vejrudsigt / aflys dag"
       >
-        <X size={9} className="text-text-muted" />
+        <CloudRain size={14} />
       </button>
 
-      <p className={`font-inter font-semibold text-xxs leading-none ${isToday ? 'text-deep-teal' : 'text-text-secondary'}`}>
-        {formatWeekday(day.date)}
-      </p>
-      <p className={`font-inter text-xxs leading-none mt-xxxs ${isToday ? 'text-deep-teal' : 'text-text-muted'}`}>
-        {formatShortDate(day.date)}
-      </p>
-      <p className="font-inter text-xxs text-text-muted mt-xxxs leading-none">Dag {day.day}</p>
-
-      <input
-        type="number"
-        value={day.tonsPlanned}
-        onChange={e => onUpdateTons(day.id, Math.max(0, parseInt(e.target.value, 10) || 0))}
-        className="mt-xs w-full text-center font-poppins font-bold text-md text-deep-teal bg-soft-aqua rounded-md border border-box-outline focus:outline-none focus:border-dark-teal py-xxxs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-        min={0}
-      />
-      <p className="font-inter text-xxs text-text-muted mt-xxxs leading-none">tons</p>
-    </div>
-  )
-}
-
-// ─── RemainderLine ────────────────────────────────────────────────────────────
-
-function RemainderLine({ allocated, tonsTotal }: { allocated: number; tonsTotal: number }) {
-  const pct = Math.min(100, Math.round((allocated / tonsTotal) * 100))
-  const isFull = allocated >= tonsTotal
-  const isOver = allocated > tonsTotal
-  return (
-    <div className="mt-xs">
-      <div className={`h-[6px] rounded-full overflow-hidden ${isFull ? 'bg-box-outline' : 'bg-error/20'}`}>
-        <div
-          className={`h-full rounded-full transition-all ${isOver ? 'bg-error' : 'bg-dark-teal'}`}
-          style={{ width: `${pct}%` }}
-        />
+      <div className="flex justify-between items-center">
+        <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest">{formatWeekday(day.date)}</span>
+        <span className="font-inter text-xs font-semibold text-text-secondary tabular-nums">{formatShortDate(day.date)}</span>
       </div>
-      <p className="font-inter font-semibold text-xxs text-text-muted mt-xxxs text-center">
-        {allocated}t fordelt af {tonsTotal}t total
-      </p>
+
+      {/* Forventet */}
+      <div>
+        <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block">Forventet</span>
+        <div className="flex items-baseline gap-xxxs">
+          <input
+            type="number"
+            value={day.tonsPlanned || ''}
+            onChange={e => onUpdateTons(day.id, Math.max(0, parseInt(e.target.value, 10) || 0))}
+            className="font-poppins font-semibold text-xl text-text-primary bg-transparent border-none outline-none w-full tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            placeholder="0"
+          />
+          <span className="font-inter text-xxs text-text-muted">t</span>
+        </div>
+      </div>
+
+      <hr className="border-hairline" />
+
+      {/* Morgen */}
+      <div>
+        <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block">Morgen</span>
+        <div className="flex items-baseline gap-xxxs">
+          <input
+            type="number"
+            value={day.morgenTons ?? ''}
+            onChange={e => {
+              const v = parseInt(e.target.value, 10)
+              onUpdateMorgenTons(day.id, isNaN(v) ? undefined : Math.max(0, v))
+            }}
+            className="font-poppins font-semibold text-xl text-deep-teal bg-transparent border-none outline-none w-full tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            placeholder="–"
+          />
+          <span className="font-inter text-xxs text-text-muted">t</span>
+        </div>
+      </div>
+
     </div>
   )
 }
 
+// ─── DocRow ───────────────────────────────────────────────────────────────────
+
+function DocRow({ title, meta, status, open, onToggle, children, isLast = false }: {
+  title: string
+  meta: string
+  status: 'ok' | 'bad'
+  open: boolean
+  onToggle: () => void
+  children: React.ReactNode
+  isLast?: boolean
+}) {
+  return (
+    <div className={!isLast ? 'border-b border-hairline' : undefined}>
+      <button
+        onClick={onToggle}
+        className="w-full grid items-center gap-md px-sm py-sm hover:bg-surface-2 transition-colors"
+        style={{ gridTemplateColumns: '1fr auto auto auto' }}
+      >
+        <span className="font-inter text-sm font-medium text-text-primary text-left">{title}</span>
+        <span className="font-inter text-xs text-text-muted">{meta}</span>
+        <span className={[
+          'inline-flex items-center gap-xxxs font-inter font-semibold text-xs px-xs py-xxxs rounded-lg',
+          status === 'ok' ? 'bg-good-bg text-good' : 'bg-bad-bg text-bad',
+        ].join(' ')}>
+          <span className="w-[5px] h-[5px] rounded-full bg-current" />
+          {status === 'ok' ? 'OK' : 'Mangler'}
+        </span>
+        <ChevronDown size={14} className={`text-text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="px-sm pb-sm border-t border-hairline">{children}</div>
+      )}
+    </div>
+  )
+}
 
 // ─── FjernModal ───────────────────────────────────────────────────────────────
 
-function FjernModal({
-  resource,
-  onConfirm,
-  onCancel,
-}: {
+function FjernModal({ resource, onConfirm, onCancel }: {
   resource: MockResource
   onConfirm: () => void
   onCancel: () => void
 }) {
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-end justify-center z-50 pb-[90px] px-sm">
-      <div className="bg-white rounded-2xl shadow-lg p-sm w-full max-w-sm">
-        <p className="font-poppins font-semibold text-sm text-deep-teal mb-xxxs">
-          Fjern maskine?
-        </p>
-        <p className="font-inter text-xs text-text-secondary mb-sm leading-relaxed">
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-md">
+      <div className="bg-surface rounded-2xl shadow-md p-md w-full max-w-sm border border-hairline">
+        <p className="font-poppins font-semibold text-md text-text-primary mb-xxxs">Fjern maskine?</p>
+        <p className="font-inter text-sm text-text-secondary mb-md leading-relaxed">
           <span className="font-medium">{resource.description}</span> fjernes fra ordren.
           Husk at opdatere transport hvis nødvendigt.
         </p>
         <div className="flex gap-xs">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-[11px] rounded-md border border-box-outline font-inter font-semibold text-xs text-text-secondary hover:border-dark-teal transition-colors"
-          >
+          <button onClick={onCancel} className="flex-1 py-xs rounded-xl border border-hairline font-inter font-semibold text-sm text-text-secondary hover:border-hairline-2 transition-colors">
             Annuller
           </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-[11px] rounded-md font-inter font-semibold text-xs text-white transition-colors"
-            style={{ backgroundColor: '#F04E4E' }}
-          >
+          <button onClick={onConfirm} className="flex-1 py-xs rounded-xl bg-bad text-white font-inter font-semibold text-sm hover:opacity-90 transition-opacity">
             Fjern
           </button>
         </div>
@@ -1110,9 +1022,9 @@ function FjernModal({
 // ─── TransportBadge ───────────────────────────────────────────────────────────
 
 const TRANSPORT_TAG_STYLES: Record<MockResource['transportTag'], string> = {
-  'blokvogn':    'bg-dark-teal/10 text-dark-teal',
-  'kran-baand':  'bg-warning/50 text-deep-teal',
-  'egen-korsel': 'bg-light-aqua/40 text-deep-teal',
+  'blokvogn':    'bg-surface-2 text-text-secondary',
+  'kran-baand':  'bg-warn-bg text-deep-teal',
+  'egen-korsel': 'bg-surface-2 text-text-secondary',
 }
 
 const TRANSPORT_TAG_LABEL: Record<MockResource['transportTag'], string> = {
@@ -1123,8 +1035,9 @@ const TRANSPORT_TAG_LABEL: Record<MockResource['transportTag'], string> = {
 
 function TransportBadge({ tag }: { tag: MockResource['transportTag'] }) {
   return (
-    <span className={`inline-block px-[6px] py-[2px] rounded-sm font-inter text-[9px] leading-none font-semibold ${TRANSPORT_TAG_STYLES[tag]}`}>
+    <span className={`inline-block px-xs py-[2px] rounded-md font-inter text-xxs font-medium ${TRANSPORT_TAG_STYLES[tag]}`}>
       {TRANSPORT_TAG_LABEL[tag]}
     </span>
   )
 }
+
