@@ -12,8 +12,6 @@ import {
   X,
   Plus,
   ChevronDown,
-  ChevronLeft,
-  Trash2,
   Pencil,
   Mic,
   Camera,
@@ -62,14 +60,6 @@ interface MockResource {
   status: 'planlagt' | 'ikke-planlagt'
 }
 
-interface TransportLine {
-  id: string
-  type: 'blokvogn' | 'kran-baand' | 'andet'
-  direction: 'ud' | 'hjem'
-  date: string
-  time: string
-  status: 'planlagt' | 'ikke-planlagt'
-}
 
 interface VehicleOrder {
   id: string
@@ -164,18 +154,7 @@ const INITIAL_RESOURCES: MockResource[] = [
   { id: 'r4', plantNumber: '9-0009', description: 'Sættevogn 7-aksel', transportTag: 'egen-korsel', status: 'ikke-planlagt' },
 ]
 
-const INITIAL_TRANSPORT: TransportLine[] = [
-  { id: 't1', type: 'blokvogn',   direction: 'ud',   date: '2026-03-16', time: '06:00', status: 'planlagt' },
-  { id: 't2', type: 'blokvogn',   direction: 'hjem', date: '2026-03-18', time: '15:00', status: 'planlagt' },
-  { id: 't3', type: 'kran-baand', direction: 'ud',   date: '2026-03-16', time: '06:30', status: 'planlagt' },
-  { id: 't4', type: 'kran-baand', direction: 'hjem', date: '2026-03-18', time: '15:30', status: 'planlagt' },
-]
 
-const TRANSPORT_TYPE_LABEL: Record<TransportLine['type'], string> = {
-  'blokvogn':   'Blokvogn',
-  'kran-baand': 'Kran-Bånd',
-  'andet':      'Andet',
-}
 
 const CANCEL_REASONS: { value: CancelReason; label: string }[] = [
   { value: 'regn',     label: 'Regn' },
@@ -184,7 +163,6 @@ const CANCEL_REASONS: { value: CancelReason; label: string }[] = [
   { value: 'andet',    label: 'Andet' },
 ]
 
-const TODAY_STR = '2026-03-16'
 
 // ─── Mock documentation data ──────────────────────────────────────────────────
 
@@ -253,7 +231,6 @@ export function OrdrePlanScreen() {
   const [activeProductId, setActiveProductId] = useState('p2')
   const [products, setProducts] = useState<MockProduct[]>(INITIAL_PRODUCTS)
   const [resources, setResources] = useState<MockResource[]>(INITIAL_RESOURCES)
-  const [transport] = useState<TransportLine[]>(INITIAL_TRANSPORT)
   const [fjernModalId, setFjernModalId] = useState<string | null>(null)
   const [cancellingDayId, setCancellingDayId] = useState<string | null>(null)
   const [photos, setPhotos] = useState<MockPhoto[]>(INITIAL_PHOTOS)
@@ -263,8 +240,6 @@ export function OrdrePlanScreen() {
   const [docsOpen, setDocsOpen] = useState(false)
   const [besigtigelseComment, setBesigtigelseComment] = useState('')
   const [noteComments, setNoteComments] = useState<NoteComment[]>(INITIAL_COMMENTS)
-  const [koreplanBeregnet, setKoreplanBeregnet] = useState(false)
-  const [fabricSent, setFabricSent] = useState(false)
   const [sentDayIds, setSentDayIds] = useState<Set<string>>(new Set())
   const [correctionDayIds, setCorrectionDayIds] = useState<Set<string>>(new Set())
   const [expandedResourceId, setExpandedResourceId] = useState<string | null>(null)
@@ -285,7 +260,6 @@ export function OrdrePlanScreen() {
   const activeDays = days.filter(d => !d.cancelled)
   const morgenTonsCount = activeDays.filter(d => d.morgenTons != null).length
 
-  const notPlanlagt = resources.filter(r => r.status === 'ikke-planlagt').length
 
   function updateTons(dayId: string, value: number) {
     setProducts(prev => prev.map(p =>
@@ -551,7 +525,6 @@ export function OrdrePlanScreen() {
                     <div key={day.id} className="flex flex-col gap-xs">
                       <DayPillV2
                         day={day}
-                        isToday={day.date === TODAY_STR}
                         isSelectingReason={cancellingDayId === day.id}
                         onUpdateTons={updateTons}
                         onUpdateMorgenTons={updateMorgenTons}
@@ -964,7 +937,7 @@ export function OrdrePlanScreen() {
                   }, 0)
                   const capacityOk = totalCapacity >= day.tonsPlanned
 
-                  function updateOrder(id: string, field: 'type' | 'antal', value: string | number) {
+                  function updateOrder(id: string, field: 'type' | 'antal' | 'foersteLaes', value: string | number | boolean) {
                     setKørselOrders(prev => ({
                       ...prev,
                       [day.id]: (prev[day.id] ?? []).map(o => o.id === id ? { ...o, [field]: value } : o),
@@ -1079,7 +1052,7 @@ export function OrdrePlanScreen() {
                                         <input
                                           type="checkbox"
                                           checked={o.foersteLaes ?? false}
-                                          onChange={e => updateOrder(o.id, 'foersteLaes' as any, e.target.checked)}
+                                          onChange={e => updateOrder(o.id, 'foersteLaes', e.target.checked)}
                                           className="accent-dark-teal w-[14px] h-[14px]"
                                         />
                                         <span className="font-inter text-xs text-text-secondary">Angiv som første læs</span>
@@ -1255,12 +1228,11 @@ export function OrdrePlanScreen() {
 // ─── DayPillV2 ────────────────────────────────────────────────────────────────
 
 function DayPillV2({
-  day, isToday, isSelectingReason,
+  day, isSelectingReason,
   onUpdateTons, onUpdateMorgenTons,
   onConfirmCancel, onRestore,
 }: {
   day: DayPlan
-  isToday: boolean
   isSelectingReason: boolean
   onUpdateTons: (id: string, v: number) => void
   onUpdateMorgenTons: (id: string, v: number | undefined) => void
