@@ -6,9 +6,12 @@
  */
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { TopBar } from '@/components/layout/TopBar'
 import { BottomTabBar } from '@/components/layout/BottomTabBar'
 import type { TabName } from '@/types/navigation'
+
+type ViewMode = 'uge' | '14-dage' | 'maaned'
 
 interface GanttOrder {
   id: string
@@ -109,29 +112,58 @@ const STATE_BADGE: Record<GanttOrder['state'], string> = {
   completed: 'bg-light-aqua text-deep-teal',
 }
 
+function getViewDays(mode: ViewMode): number {
+  if (mode === 'uge') return 7
+  if (mode === '14-dage') return 14
+  return 31 // maaned — fast 31 for prototypen
+}
+
+function getCellMinWidth(mode: ViewMode): number {
+  if (mode === 'maaned') return 34
+  return 46
+}
+
 export function GanttScreen() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<TabName>('mine-opgaver')
+  const [viewMode, setViewMode] = useState<ViewMode>('14-dage')
+  const [offset, setOffset] = useState(0) // i dage fra TODAY
 
   function handleTabPress(tab: TabName) {
     if (tab === 'dagens-opgaver') { navigate('/prototyper/ordre-plan'); return }
     setActiveTab(tab)
   }
 
-  // Window: 3 days back, 11 days forward = 14 days
-  const days = Array.from({ length: 14 }, (_, i) => addDays(TODAY, i - 3))
-  // Forudberegn today-index én gang så alle rækker bruger samme check
-  const todayIndex = days.findIndex(d => sameDay(d, TODAY))
-  const windowStart = days[0]
-  const windowEnd = days[13]
+  const viewDays = getViewDays(viewMode)
+  const cellMin = getCellMinWidth(viewMode)
 
-  // Filtrer ordrer der slet ikke overlapper med det synlige vindue
+  // Uge: start på mandag, ellers start på offset
+  function getWindowStart(): Date {
+    if (viewMode === 'uge') {
+      const base = addDays(TODAY, offset)
+      const dow = base.getDay() // 0=sø
+      const mondayOffset = dow === 0 ? -6 : 1 - dow
+      return addDays(base, mondayOffset)
+    }
+    return addDays(TODAY, offset)
+  }
+
+  const windowStart = getWindowStart()
+  const days = Array.from({ length: viewDays }, (_, i) => addDays(windowStart, i))
+  const windowEnd = days[days.length - 1]
+
+  const todayIndex = days.findIndex(d => sameDay(d, TODAY))
+
   const visibleOrders = MOCK_ORDERS.filter(o =>
     parseDate(o.endDate) >= windowStart && parseDate(o.startDate) <= windowEnd
   )
 
   const fmtShort = (d: Date) =>
     d.toLocaleDateString('da-DK', { day: 'numeric', month: 'short' })
+
+  function navigate_period(dir: 1 | -1) {
+    setOffset(prev => prev + dir * viewDays)
+  }
 
   return (
     <div className="min-h-screen bg-soft-aqua flex flex-col">
@@ -141,20 +173,66 @@ export function GanttScreen() {
         <div className="max-w-screen-xl mx-auto px-sm pt-md pb-md">
 
           {/* Page header */}
-          <div className="mb-sm pl-sm">
-            <h1 className="font-poppins font-bold text-2xl text-deep-teal leading-tight">
-              Opgave oversigt
-            </h1>
-            <p className="font-inter text-xs text-text-muted">
-              {fmtShort(windowStart)} – {fmtShort(windowEnd)}
-            </p>
+          <div className="mb-sm pl-sm flex items-center justify-between flex-wrap gap-sm">
+            <div>
+              <h1 className="font-poppins font-bold text-2xl text-deep-teal leading-tight">
+                Opgave oversigt
+              </h1>
+              <p className="font-inter text-xs text-text-muted">
+                {fmtShort(windowStart)} – {fmtShort(windowEnd)}
+              </p>
+            </div>
+
+            {/* Controls: view toggle + navigationspilar */}
+            <div className="flex items-center gap-xs">
+              {/* View toggle */}
+              <div className="flex bg-white border border-hairline rounded-lg overflow-hidden">
+                {(['uge', '14-dage', 'maaned'] as ViewMode[]).map(v => (
+                  <button
+                    key={v}
+                    onClick={() => { setViewMode(v); setOffset(0) }}
+                    className={[
+                      'px-sm py-xs font-inter text-xs font-medium transition-colors',
+                      viewMode === v
+                        ? 'bg-deep-teal text-white'
+                        : 'text-text-muted hover:bg-soft-aqua',
+                    ].join(' ')}
+                  >
+                    {v === 'uge' ? 'Uge' : v === '14-dage' ? '14 dage' : 'Måned'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Pilar */}
+              <div className="flex items-center gap-xxxs">
+                <button
+                  onClick={() => navigate_period(-1)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-hairline text-text-muted hover:bg-soft-aqua hover:text-deep-teal transition-colors"
+                  aria-label="Forrige periode"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  onClick={() => { setOffset(0); setViewMode(viewMode) }}
+                  className="px-sm py-xs font-inter text-xs font-medium bg-white border border-hairline rounded-lg text-text-muted hover:bg-soft-aqua hover:text-deep-teal transition-colors"
+                >
+                  I dag
+                </button>
+                <button
+                  onClick={() => navigate_period(1)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-hairline text-text-muted hover:bg-soft-aqua hover:text-deep-teal transition-colors"
+                  aria-label="Næste periode"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Gantt card */}
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
             <div className="overflow-x-auto">
-              {/* min-width: 160px info col + 90px status col + 14 × 46px = 894px */}
-              <div style={{ minWidth: 894 }}>
+              <div style={{ minWidth: 160 + 90 + viewDays * cellMin }}>
 
                 {/* Date header */}
                 <div className="flex border-b border-box-outline bg-soft-aqua">
@@ -170,7 +248,7 @@ export function GanttScreen() {
                       <div
                         key={i}
                         style={{
-                          flex: 1, minWidth: 46,
+                          flex: 1, minWidth: cellMin,
                           ...(isToday ? { backgroundColor: 'rgba(46, 158, 101, 0.1)' } : {}),
                         }}
                         className="flex flex-col items-center py-xs relative"
@@ -242,13 +320,13 @@ export function GanttScreen() {
                       const start = parseDate(order.startDate)
                       const end = parseDate(order.endDate)
                       const isFirst = inRange && (sameDay(day, start) || di === 0)
-                      const isLast = inRange && (sameDay(day, end) || di === 13)
+                      const isLast = inRange && (sameDay(day, end) || di === days.length - 1)
 
                       return (
                         <div
                           key={di}
                           style={{
-                            flex: 1, minWidth: 46,
+                            flex: 1, minWidth: cellMin,
                             ...(isToday ? { backgroundColor: 'rgba(46, 158, 101, 0.05)' } : {}),
                           }}
                           className="flex items-center relative"
