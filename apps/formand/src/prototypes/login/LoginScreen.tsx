@@ -9,70 +9,135 @@ export function LoginScreen() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen flex">
+    <div style={{ display: 'flex', minHeight: '100vh', overflow: 'hidden' }}>
 
       {/* ── Venstre: Hero-foto ─────────────────────────────────── */}
-      <div className="hidden md:block w-[55%] relative overflow-hidden">
+      <div style={{ position: 'relative', width: '55%', flexShrink: 0 }}>
         <img
           src="/hero-worker.png"
-          alt="Colas formand på pladsen"
-          className="absolute inset-0 w-full h-full object-cover object-center"
+          alt=""
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            objectPosition: 'center top',
+          }}
         />
-        {/* Subtil gradient i bunden for at forankre billedet */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'linear-gradient(to top, rgba(0,0,0,0.25) 0%, transparent 60%)',
+        }} />
       </div>
 
       {/* ── Højre: Login-panel ─────────────────────────────────── */}
-      <div className="flex-1 bg-[#FEEE32] flex flex-col items-start justify-center px-[8%] py-xl">
+      <div style={{
+        flex: 1,
+        backgroundColor: '#FEEE32',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '48px 10%',
+      }}>
 
-        {/* COLAS logo */}
-        <div className="mb-xl">
-          <span className="font-poppins font-black text-[36px] text-[#1D1D1D] tracking-tight leading-none">
-            COLAS
-          </span>
-        </div>
+        <div style={{ width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 0 }}>
 
-        {/* Velkomsttekst */}
-        <div className="mb-lg">
-          <h1 className="font-poppins font-bold text-[28px] text-[#1D1D1D] leading-tight mb-xs">
+          {/* Logo */}
+          <img
+            src="/colas-logo.png"
+            alt="Colas"
+            style={{ height: 40, width: 'auto', objectFit: 'contain', objectPosition: 'left', marginBottom: 40 }}
+          />
+
+          {/* Velkomsttekst */}
+          <h1 style={{
+            fontFamily: "'Poppins', sans-serif",
+            fontWeight: 700,
+            fontSize: 28,
+            color: '#1D1D1D',
+            lineHeight: 1.2,
+            margin: '0 0 8px 0',
+          }}>
             Velkommen
           </h1>
-          <p className="font-inter text-sm text-[#1D1D1D]/60">
+          <p style={{
+            fontFamily: "'Inter', sans-serif",
+            fontSize: 14,
+            color: 'rgba(29,29,29,0.55)',
+            margin: '0 0 40px 0',
+          }}>
             I dag bliver en god dag
           </p>
-        </div>
 
-        {/* Log ind med Microsoft */}
-        <div className="flex flex-col gap-sm w-full max-w-[320px]">
+          {/* Log ind med Microsoft */}
           <button
             onClick={() => navigate('/prototyper')}
-            className="w-full flex items-center gap-sm bg-white border border-[#1D1D1D]/10 rounded-xl px-sm py-xs shadow-sm hover:shadow-md hover:border-[#1D1D1D]/20 transition-all active:scale-[0.98] group"
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              backgroundColor: '#fff',
+              border: '1px solid rgba(29,29,29,0.12)',
+              borderRadius: 12,
+              padding: '12px 16px',
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              transition: 'box-shadow 0.15s, border-color 0.15s',
+            }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)'
+              ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(29,29,29,0.22)'
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)'
+              ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(29,29,29,0.12)'
+            }}
           >
             {/* Microsoft logo */}
-            <div className="flex-shrink-0 grid grid-cols-2 gap-[3px] w-[20px] h-[20px]">
-              <div className="bg-[#F25022] rounded-[1px]" />
-              <div className="bg-[#7FBA00] rounded-[1px]" />
-              <div className="bg-[#00A4EF] rounded-[1px]" />
-              <div className="bg-[#FFB900] rounded-[1px]" />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3, width: 20, height: 20, flexShrink: 0 }}>
+              <div style={{ backgroundColor: '#F25022', borderRadius: 1 }} />
+              <div style={{ backgroundColor: '#7FBA00', borderRadius: 1 }} />
+              <div style={{ backgroundColor: '#00A4EF', borderRadius: 1 }} />
+              <div style={{ backgroundColor: '#FFB900', borderRadius: 1 }} />
             </div>
-            <span className="font-inter font-semibold text-sm text-[#1D1D1D] group-hover:text-[#1D1D1D]">
+            <span style={{
+              fontFamily: "'Inter', sans-serif",
+              fontWeight: 600,
+              fontSize: 14,
+              color: '#1D1D1D',
+            }}>
               Log ind med Microsoft
             </span>
           </button>
 
-          <p className="font-inter text-xs text-[#1D1D1D]/40 text-center pt-xs">
+          <p style={{
+            fontFamily: "'Inter', sans-serif",
+            fontSize: 11,
+            color: 'rgba(29,29,29,0.35)',
+            textAlign: 'center',
+            marginTop: 16,
+          }}>
             Brug din Colas-arbejdsmail til at logge ind
           </p>
+
         </div>
 
         {/* Footer */}
-        <div className="mt-auto pt-xl">
-          <p className="font-inter text-xs text-[#1D1D1D]/30">
-            © {new Date().getFullYear()} Colas Danmark A/S
-          </p>
-        </div>
-      </div>
+        <p style={{
+          position: 'absolute',
+          bottom: 24,
+          fontFamily: "'Inter', sans-serif",
+          fontSize: 11,
+          color: 'rgba(29,29,29,0.25)',
+        }}>
+          © {new Date().getFullYear()} Colas Danmark A/S
+        </p>
 
+      </div>
     </div>
   )
 }
