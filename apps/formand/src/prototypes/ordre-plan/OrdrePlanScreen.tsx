@@ -245,7 +245,12 @@ export function OrdrePlanScreen() {
   const [expandedResourceId, setExpandedResourceId] = useState<string | null>(null)
   const [udlaantIds, setUdlaantIds] = useState<Set<string>>(new Set())
   const [fakturaOrdre, setFakturaOrdre] = useState<Record<string, string>>({})
-  const [sammeAfhentning, setSammeAfhentning] = useState<Record<string, boolean>>({})
+  const [afhentningAdresse, setAfhentningAdresse] = useState<Record<string, string>>({})
+  const [afhentningPostnr, setAfhentningPostnr] = useState<Record<string, string>>({})
+  const [afhentningKlar, setAfhentningKlar] = useState<Record<string, string>>({})
+  const [afhentningLevering, setAfhentningLevering] = useState<Record<string, string>>({})
+  // null = ikke besvaret endnu, true = samme som første, false = nyt sted
+  const [sammeAflæsning, setSammeAflæsning] = useState<Record<string, boolean | null>>({})
   const [planlagtProductIds, setPlanlagtProductIds] = useState<Set<string>>(new Set())
   const [kørselExpandedId, setKørselExpandedId] = useState<string | null>(null)
   const [kørselPlanlagtIds, setKørselPlanlagtIds] = useState<Set<string>>(new Set())
@@ -366,14 +371,31 @@ export function OrdrePlanScreen() {
             })}
           </nav>
 
-          {/* Projektleder */}
-          <div className="pt-md border-t border-hairline">
-            <div className="flex flex-col gap-xxxs px-xs">
+          {/* Kontakter */}
+          <div className="flex flex-col border-t border-hairline pt-xs">
+            <div className="flex flex-col gap-xxxs px-xs pb-xs">
               <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Projektleder</span>
               <p className="font-inter text-sm font-semibold text-text-primary leading-tight">Henrik Thor</p>
               <a href="tel:+4540506070" className="font-inter text-sm text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
                 <Phone size={13} />
                 40 50 60 70
+              </a>
+            </div>
+            <div className="flex flex-col gap-xxxs px-xs py-xs border-t border-hairline">
+              <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Fabrik</span>
+              <p className="font-inter text-sm font-semibold text-text-primary leading-tight">Køge Fabrik</p>
+              <a href="tel:+4556781234" className="font-inter text-sm text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
+                <Phone size={13} />
+                56 78 12 34
+              </a>
+            </div>
+            <div className="flex flex-col gap-xxxs px-xs pt-xs border-t border-hairline">
+              <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Kundekontakt</span>
+              <p className="font-inter text-xxs text-text-muted leading-tight mb-xxxs">Uddannelsescenter Syd</p>
+              <p className="font-inter text-sm font-semibold text-text-primary leading-tight">Jens Christensen</p>
+              <a href="tel:+4521345678" className="font-inter text-sm text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
+                <Phone size={13} />
+                21 34 56 78
               </a>
             </div>
           </div>
@@ -443,8 +465,14 @@ export function OrdrePlanScreen() {
                         <span className={`font-inter font-bold text-xs tabular-nums ${isActive ? 'text-white' : 'text-text-primary'}`}>
                           {pStart} – {pEnd}
                         </span>
-                        <span className={`font-poppins font-semibold text-sm tabular-nums tracking-tight ${isActive ? 'text-white' : 'text-text-muted'}`}>
-                          {p.recipeCode} · <span className="text-xs font-normal">{p.tonsTotal} tons</span>
+                        <span className={`font-poppins font-semibold text-sm tracking-tight ${isActive ? 'text-white' : 'text-text-primary'}`}>
+                          {p.recipeCode}
+                        </span>
+                        <span className={`font-inter text-xs ${isActive ? 'text-white/80' : 'text-text-muted'}`}>
+                          {p.recipeName} · {p.thicknessMm} mm
+                        </span>
+                        <span className={`font-inter text-xs tabular-nums ${isActive ? 'text-white/70' : 'text-text-muted'}`}>
+                          {p.tonsTotal} tons
                         </span>
                       </button>
                       {isPlanlagt ? (
@@ -484,7 +512,10 @@ export function OrdrePlanScreen() {
                 </div>
                 <div className="p-sm">
                   <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Produkt</span>
-                  <span className="font-poppins font-semibold text-sm text-text-primary">
+                  <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums block leading-tight">
+                    {activeProduct.recipeCode}
+                  </span>
+                  <span className="font-inter text-xs text-text-muted">
                     {activeProduct.recipeName} · {activeProduct.thicknessMm} mm
                   </span>
                 </div>
@@ -647,7 +678,16 @@ export function OrdrePlanScreen() {
                     open={opmaalingOpen}
                     onToggle={() => setOpmaalingOpen(o => !o)}
                   >
-                    <img src="/opmaalings-kort.png" alt="Opmåling af område" className="w-full rounded-lg border border-hairline grayscale-[30%]" />
+                    <div className="flex flex-col gap-sm">
+                      <img src="/opmaalings-kort.png" alt="Opmåling af område" className="w-full rounded-lg border border-hairline grayscale-[30%]" />
+                      <label className="flex items-center justify-center gap-xs border border-dashed border-hairline-2 rounded-lg py-sm cursor-pointer hover:border-dark-teal hover:bg-[#F5F9FA] transition-colors group">
+                        <input type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden"
+                          onChange={e => { if (e.target.files?.length) { /* TODO: håndter upload */ } }}
+                        />
+                        <Plus size={14} className="text-text-muted group-hover:text-dark-teal transition-colors" />
+                        <span className="font-inter text-xs text-text-muted group-hover:text-dark-teal transition-colors">Upload fil (PDF eller billede)</span>
+                      </label>
+                    </div>
                   </DocRow>
 
                   {/* Billeder */}
@@ -679,7 +719,18 @@ export function OrdrePlanScreen() {
                           }}
                         />
                         <Camera size={16} className="text-text-muted" />
-                        <span className="font-inter text-xxs text-text-muted mt-xxxs">Tilføj</span>
+                        <span className="font-inter text-xxs text-text-muted mt-xxxs">Kamera</span>
+                      </label>
+                      <label className="aspect-square rounded-lg border border-dashed border-hairline-2 flex flex-col items-center justify-center cursor-pointer hover:border-text-muted hover:bg-[#F5F5F5] transition-colors">
+                        <input type="file" accept="image/*" className="hidden"
+                          onChange={e => {
+                            if (e.target.files?.length) {
+                              setPhotos(prev => [...prev, { id: `ph${Date.now()}`, color: 'bg-light-aqua/30', label: `Foto ${prev.length + 1}` }])
+                            }
+                          }}
+                        />
+                        <Plus size={16} className="text-text-muted" />
+                        <span className="font-inter text-xxs text-text-muted mt-xxxs">Upload</span>
                       </label>
                     </div>
                   </DocRow>
@@ -755,7 +806,7 @@ export function OrdrePlanScreen() {
           {/* ── Materiel ─────────────────────────────────────────── */}
           <section>
             <div className="flex items-end justify-between pb-sm border-b border-hairline mb-lg">
-              <h2 className="font-poppins font-semibold text-xl text-text-primary">Materiel</h2>
+              <h2 className="font-poppins font-semibold text-xl text-text-primary">Materiellevering</h2>
             </div>
 
             {/* Maskiner */}
@@ -763,7 +814,9 @@ export function OrdrePlanScreen() {
               {resources.map((r, i) => {
                 const isExpanded = expandedResourceId === r.id
                 const isUdlaant = udlaantIds.has(r.id)
-                const isSamme = sammeAfhentning[r.id] !== false
+                const erFørste = i === 0
+                const firstResource = resources[0]
+                const sammeAflæsningValg = sammeAflæsning[r.id] ?? null
                 return (
                   <div key={r.id} className={i < resources.length - 1 || isExpanded ? 'border-b border-hairline' : ''}>
                     {/* Hoved-række */}
@@ -848,48 +901,104 @@ export function OrdrePlanScreen() {
 
                         <hr className="border-hairline" />
 
-                        {/* Aflæsning */}
-                        <div>
-                          <p className="font-inter text-xs font-semibold text-text-primary mb-xs">Aflæsningssted</p>
-                          <div className="w-full h-[180px] rounded-xl bg-[#E8EFF5] border border-hairline flex flex-col items-center justify-center gap-xs text-text-muted">
-                            <div className="w-8 h-8 rounded-full bg-dark-teal/10 flex items-center justify-center">
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-dark-teal"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg>
+                        {/* Afhentning */}
+                        <div className="flex flex-col gap-xs">
+                          <p className="font-inter text-xs font-semibold text-text-primary">Afhentningssted</p>
+
+                          <div className="grid grid-cols-2 gap-xs">
+                            <div className="flex flex-col gap-xxxs col-span-2">
+                              <label className="font-inter text-xxs text-text-muted">Adresse</label>
+                              <input
+                                type="text"
+                                value={afhentningAdresse[r.id] ?? ''}
+                                onChange={e => setAfhentningAdresse(prev => ({ ...prev, [r.id]: e.target.value }))}
+                                placeholder="Vejnavn og nummer"
+                                className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal placeholder:text-text-muted"
+                              />
                             </div>
-                            <p className="font-inter text-xs text-text-muted">Kortintegration tilgængelig efter opsætning</p>
-                            <p className="font-inter text-xxs text-text-muted opacity-60">Klik for at markere aflæsningssted</p>
+                            <div className="flex flex-col gap-xxxs">
+                              <label className="font-inter text-xxs text-text-muted">Postnummer</label>
+                              <input
+                                type="text"
+                                value={afhentningPostnr[r.id] ?? ''}
+                                onChange={e => setAfhentningPostnr(prev => ({ ...prev, [r.id]: e.target.value }))}
+                                placeholder="0000"
+                                className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal placeholder:text-text-muted"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-xs">
+                            <div className="flex flex-col gap-xxxs">
+                              <label className="font-inter text-xxs text-text-muted">Klar til afhentning</label>
+                              <input
+                                type="datetime-local"
+                                value={afhentningKlar[r.id] ?? ''}
+                                onChange={e => setAfhentningKlar(prev => ({ ...prev, [r.id]: e.target.value }))}
+                                className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
+                              />
+                            </div>
+                            <div className="flex flex-col gap-xxxs">
+                              <label className="font-inter text-xxs text-text-muted">Skal være på lokation</label>
+                              <input
+                                type="datetime-local"
+                                value={afhentningLevering[r.id] ?? ''}
+                                onChange={e => setAfhentningLevering(prev => ({ ...prev, [r.id]: e.target.value }))}
+                                className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
+                              />
+                            </div>
                           </div>
                         </div>
 
-                        {/* Afhentning */}
-                        <div>
-                          <div className="flex items-center justify-between mb-xs">
-                            <p className="font-inter text-xs font-semibold text-text-primary">Afhentningssted</p>
-                            <div className="flex items-center gap-xs">
-                              <span className="font-inter text-xs text-text-muted">Samme sted?</span>
+                        <hr className="border-hairline" />
+
+                        {/* Aflæsning */}
+                        <div className="flex flex-col gap-xs">
+                          <p className="font-inter text-xs font-semibold text-text-primary">Aflæsningssted</p>
+
+                          {/* Spørg fra 2. materiel og frem */}
+                          {!erFørste && sammeAflæsningValg === null && (
+                            <div className="flex items-center gap-sm bg-white border border-hairline rounded-xl px-sm py-xs">
+                              <span className="font-inter text-xs text-text-secondary flex-1">
+                                Samme aflæsningssted som <span className="font-medium text-text-primary">{firstResource.description}</span>?
+                              </span>
                               <div className="flex gap-xxxs">
                                 <button
-                                  onClick={() => setSammeAfhentning(prev => ({ ...prev, [r.id]: true }))}
-                                  className={`px-xs py-xxxs rounded-full font-inter text-xs font-medium border transition-colors ${isSamme ? 'bg-dark-teal text-white border-dark-teal' : 'bg-white text-text-muted border-hairline hover:border-dark-teal hover:text-dark-teal'}`}
+                                  onClick={() => setSammeAflæsning(prev => ({ ...prev, [r.id]: true }))}
+                                  className="px-xs py-xxxs rounded-full font-inter text-xs font-medium border bg-white text-text-muted border-hairline hover:border-dark-teal hover:text-dark-teal transition-colors"
                                 >Ja</button>
                                 <button
-                                  onClick={() => setSammeAfhentning(prev => ({ ...prev, [r.id]: false }))}
-                                  className={`px-xs py-xxxs rounded-full font-inter text-xs font-medium border transition-colors ${!isSamme ? 'bg-dark-teal text-white border-dark-teal' : 'bg-white text-text-muted border-hairline hover:border-dark-teal hover:text-dark-teal'}`}
+                                  onClick={() => setSammeAflæsning(prev => ({ ...prev, [r.id]: false }))}
+                                  className="px-xs py-xxxs rounded-full font-inter text-xs font-medium border bg-white text-text-muted border-hairline hover:border-dark-teal hover:text-dark-teal transition-colors"
                                 >Nej</button>
                               </div>
                             </div>
-                          </div>
-                          {isSamme ? (
-                            <div className="w-full py-sm px-sm rounded-xl bg-[#E7F4EE] border border-[#1F8A5B]/20 flex items-center gap-xs">
-                              <span className="w-[6px] h-[6px] rounded-full bg-[#1F8A5B] flex-shrink-0" />
-                              <span className="font-inter text-xs text-text-secondary">Samme placering som aflæsningssted</span>
+                          )}
+
+                          {/* Arvet aflæsningssted */}
+                          {!erFørste && sammeAflæsningValg === true && (
+                            <div className="flex items-center justify-between bg-[#E7F4EE] border border-[#1F8A5B]/20 rounded-xl px-sm py-xs">
+                              <div className="flex items-center gap-xs">
+                                <span className="w-[6px] h-[6px] rounded-full bg-[#1F8A5B] flex-shrink-0" />
+                                <span className="font-inter text-xs text-text-secondary">
+                                  Arver aflæsningssted fra <span className="font-medium text-text-primary">{firstResource.description}</span>
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => setSammeAflæsning(prev => ({ ...prev, [r.id]: null }))}
+                                className="font-inter text-xxs text-text-muted hover:text-text-primary transition-colors"
+                              >Ændre</button>
                             </div>
-                          ) : (
-                            <div className="w-full h-[180px] rounded-xl bg-[#E8EFF5] border border-hairline flex flex-col items-center justify-center gap-xs text-text-muted">
+                          )}
+
+                          {/* Vis kort: altid for første, eller hvis valgt "nej" */}
+                          {(erFørste || sammeAflæsningValg === false) && (
+                            <div className="w-full h-[140px] rounded-xl bg-[#E8EFF5] border border-hairline flex flex-col items-center justify-center gap-xs text-text-muted">
                               <div className="w-8 h-8 rounded-full bg-dark-teal/10 flex items-center justify-center">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-dark-teal"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg>
                               </div>
                               <p className="font-inter text-xs text-text-muted">Kortintegration tilgængelig efter opsætning</p>
-                              <p className="font-inter text-xxs text-text-muted opacity-60">Klik for at markere alternativt afhentningssted</p>
+                              <p className="font-inter text-xxs text-text-muted opacity-60">Klik for at markere aflæsningssted</p>
                             </div>
                           )}
                         </div>
@@ -923,7 +1032,7 @@ export function OrdrePlanScreen() {
             {/* Kørsel */}
             <div className="mt-lg">
               <div className="flex items-end justify-between pb-sm border-b border-hairline mb-lg">
-                <h2 className="font-poppins font-semibold text-xl text-text-primary">Kørsel</h2>
+                <h2 className="font-poppins font-semibold text-xl text-text-primary">Asfalt kørsel</h2>
               </div>
               <div className="bg-white border border-hairline rounded-xl overflow-hidden">
                 {activeDays.map((day, i) => {
@@ -931,10 +1040,19 @@ export function OrdrePlanScreen() {
                   const isPlanlagt = kørselPlanlagtIds.has(day.id)
                   const orders = kørselOrders[day.id] ?? []
                   const params = kørselParams[day.id] ?? DEFAULT_KØRSEL_PARAMS
-                  const totalCapacity = orders.reduce((sum, o) => {
+                  const singleLoadCapacity = orders.reduce((sum, o) => {
                     const vt = VEHICLE_TYPES.find(v => v.label === o.type)
                     return sum + (vt ? vt.tons * o.antal : 0)
                   }, 0)
+                  const totalTrucks = orders.reduce((s, o) => s + o.antal, 0)
+                  // Rundtid = 2× køretid + 15 min læsning + 15 min aflæsning
+                  const roundTime = activeProduct.factory.driveTimeMinutes * 2 + 30
+                  const [rsh, rsm] = (params.firstLoadTime || '07:00').split(':').map(Number)
+                  const workEndMinutes = 15 * 60 + 30 // 15:30
+                  const roundsPerTruck = Math.max(0, Math.floor((workEndMinutes - (rsh * 60 + rsm)) / roundTime))
+
+                  // Total dagkapacitet = enkeltlæs × runder
+                  const totalCapacity = singleLoadCapacity * (roundsPerTruck || 1)
                   const capacityOk = totalCapacity >= day.tonsPlanned
 
                   function updateOrder(id: string, field: 'type' | 'antal' | 'foersteLaes', value: string | number | boolean) {
@@ -952,13 +1070,6 @@ export function OrdrePlanScreen() {
                   }
                   function updateParam<K extends keyof KørselDayParams>(key: K, value: KørselDayParams[K]) {
                     setKørselParams(prev => ({ ...prev, [day.id]: { ...(prev[day.id] ?? DEFAULT_KØRSEL_PARAMS), [key]: value } }))
-                  }
-                  function addPause() {
-                    const p: KørselPause = { id: `p-${Date.now()}`, time: '09:00', durationMin: 30 }
-                    updateParam('pauses', [...params.pauses, p])
-                  }
-                  function removePause(id: string) {
-                    updateParam('pauses', params.pauses.filter(p => p.id !== id))
                   }
 
                   return (
@@ -998,7 +1109,20 @@ export function OrdrePlanScreen() {
                             </div>
                           ) : (
                             <button
-                              onClick={() => isExpanded ? (setKørselPlanlagtIds(prev => new Set([...prev, day.id])), setKørselExpandedId(null)) : setKørselExpandedId(day.id)}
+                              onClick={() => {
+                                if (isExpanded) {
+                                  setKørselPlanlagtIds(prev => new Set([...prev, day.id]))
+                                  setKørselExpandedId(null)
+                                } else {
+                                  setKørselExpandedId(day.id)
+                                  if ((kørselOrders[day.id] ?? []).length === 0) {
+                                    setKørselOrders(prev => ({
+                                      ...prev,
+                                      [day.id]: [{ id: `vo-${Date.now()}`, type: '', antal: 1 }],
+                                    }))
+                                  }
+                                }
+                              }}
                               className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap"
                             >
                               {isExpanded ? 'Gem kørsel' : 'Planlæg kørsel'}
@@ -1025,6 +1149,7 @@ export function OrdrePlanScreen() {
                                         onChange={e => updateOrder(o.id, 'type', e.target.value)}
                                         className="flex-1 font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
                                       >
+                                        <option value="">Vælg biltype</option>
                                         {VEHICLE_TYPES.map(v => (
                                           <option key={v.label} value={v.label}>{v.label} · {v.tons} tons</option>
                                         ))}
@@ -1070,13 +1195,35 @@ export function OrdrePlanScreen() {
                               </button>
                             </div>
                             {orders.length > 0 && (
-                              <div className={`mt-md flex items-center gap-xs px-xs py-xxxs rounded-lg ${capacityOk ? 'bg-[#E7F4EE]' : 'bg-[#FBECEA]'}`}>
-                                <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 ${capacityOk ? 'bg-[#1F8A5B]' : 'bg-[#C8372D]'}`} />
-                                <span className="font-inter text-xs font-medium text-text-primary tabular-nums">
-                                  Gns. {totalCapacity} tons kapacitet / {day.tonsPlanned} tons
-                                </span>
-                                {!capacityOk && (
-                                  <span className="font-inter text-xs text-[#C8372D]">{day.tonsPlanned - totalCapacity} tons mangler</span>
+                              <div className="flex flex-col gap-xs mt-md">
+                                <div className={`flex items-center gap-xs px-xs py-xxxs rounded-lg border ${capacityOk ? 'bg-[#E7F4EE] border-[#1F8A5B]/20' : 'bg-[#FBECEA] border-[#C8372D]/20'}`}>
+                                  <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 ${capacityOk ? 'bg-[#1F8A5B]' : 'bg-[#C8372D]'}`} />
+                                  <span className={`font-inter text-xs font-medium tabular-nums ${capacityOk ? 'text-text-primary' : 'text-[#C8372D]'}`}>
+                                    {capacityOk ? 'Kapacitet dækket' : `${day.tonsPlanned - totalCapacity} tons á forventet ${day.tonsPlanned} tons mangler disponering`}
+                                  </span>
+                                </div>
+                                {roundsPerTruck > 0 && (
+                                  <div className="flex items-center gap-xs px-xs py-xxxs rounded-lg bg-[#F0F4FF] border border-[#4A6FBF]/15">
+                                    <span className="font-inter text-xs text-text-primary tabular-nums">
+                                      Rundtid <span className="font-semibold">{roundTime} min</span>
+                                    </span>
+                                    <span className="text-text-muted">·</span>
+                                    <span className="font-inter text-xs text-text-primary tabular-nums">
+                                      <span className="font-semibold">{roundsPerTruck}</span> runder/bil
+                                    </span>
+                                    <span className="text-text-muted">·</span>
+                                    {(() => {
+                                      const avgTons = (totalTrucks > 0 && singleLoadCapacity > 0)
+                                        ? Math.round(singleLoadCapacity / totalTrucks)
+                                        : 30
+                                      const recommended = Math.ceil(day.tonsPlanned / (avgTons * roundsPerTruck))
+                                      return (
+                                        <span className="font-inter text-xs text-text-primary tabular-nums">
+                                          Anbefalet: <span className="font-semibold">{recommended}</span> biler (á gns {avgTons} tons)
+                                        </span>
+                                      )
+                                    })()}
+                                  </div>
                                 )}
                               </div>
                             )}
@@ -1084,96 +1231,57 @@ export function OrdrePlanScreen() {
 
                           <hr className="border-hairline" />
 
-                          {/* Fabrik – Plads */}
+                          {/* Første læs + Interval */}
                           <div>
-                            <p className="font-inter text-xs font-semibold text-text-primary mb-xs">Fabrik – Plads</p>
-                            <div className="grid grid-cols-4 gap-xs">
-                              {([
-                                { label: 'Køretid (en vej)', key: 'driveMinutes' as const },
-                                { label: 'Pålæsning',        key: 'loadMinutes' as const },
-                                { label: 'Aflæsning',        key: 'deliverMinutes' as const },
-                                { label: 'Interval',         key: 'intervalMinutes' as const },
-                              ]).map(f => (
-                                <div key={f.key} className="flex flex-col gap-xxxs">
-                                  <label className="font-inter text-xxs text-text-muted">{f.label}</label>
-                                  <div className="flex items-center gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs">
-                                    <input
-                                      type="number"
-                                      value={params[f.key] as number}
-                                      onChange={e => updateParam(f.key, Math.max(1, parseInt(e.target.value) || 1))}
-                                      className="w-full font-inter text-xs text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                                    />
-                                    <span className="font-inter text-xxs text-text-muted">min</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          <hr className="border-hairline" />
-
-                          {/* Leveringstid */}
-                          <div>
-                            <p className="font-inter text-xs font-semibold text-text-primary mb-xs">Leveringstid på pladsen</p>
+                            <p className="font-inter text-xs font-semibold text-text-primary mb-xs">
+                              Kørsel: {activeProduct.factory.name} – Søvej 6D, 4900 Nakskov
+                            </p>
                             <div className="grid grid-cols-2 gap-xs">
-                              {([
-                                { label: 'Første læs', key: 'firstLoadTime' as const },
-                                { label: 'Sidste læs', key: 'lastLoadTime' as const },
-                              ]).map(f => (
-                                <div key={f.key} className="flex flex-col gap-xxxs">
-                                  <label className="font-inter text-xxs text-text-muted">{f.label}</label>
+                              <div className="flex flex-col gap-xxxs">
+                                <label className="font-inter text-xxs text-text-muted">Første læs</label>
+                                <input
+                                  type="time"
+                                  value={params.firstLoadTime}
+                                  onChange={e => updateParam('firstLoadTime', e.target.value)}
+                                  className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-xxxs">
+                                <label className="font-inter text-xxs text-text-muted">Interval</label>
+                                <div className="flex items-center gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs focus-within:border-dark-teal">
                                   <input
-                                    type="time"
-                                    value={params[f.key] as string}
-                                    onChange={e => updateParam(f.key, e.target.value)}
-                                    className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
+                                    type="number"
+                                    value={params.intervalMinutes}
+                                    onChange={e => updateParam('intervalMinutes', Math.max(1, parseInt(e.target.value) || 1))}
+                                    className="w-full font-inter text-xs text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
                                   />
+                                  <span className="font-inter text-xxs text-text-muted">min</span>
                                 </div>
-                              ))}
+                              </div>
                             </div>
                           </div>
 
-                          <hr className="border-hairline" />
-
-                          {/* Pauser */}
-                          <div>
-                            <p className="font-inter text-xs font-semibold text-text-primary mb-xs">Pauser</p>
-                            <div className="flex flex-col gap-xs">
-                              {params.pauses.map(p => (
-                                <div key={p.id} className="flex items-center gap-xs">
-                                  <div className="flex flex-col gap-xxxs flex-1">
-                                    <label className="font-inter text-xxs text-text-muted">Tidspunkt</label>
-                                    <input
-                                      type="time"
-                                      value={p.time}
-                                      onChange={e => updateParam('pauses', params.pauses.map(x => x.id === p.id ? { ...x, time: e.target.value } : x))}
-                                      className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                                    />
-                                  </div>
-                                  <div className="flex flex-col gap-xxxs flex-1">
-                                    <label className="font-inter text-xxs text-text-muted">Varighed</label>
-                                    <div className="flex items-center gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs">
-                                      <input
-                                        type="number"
-                                        value={p.durationMin}
-                                        onChange={e => updateParam('pauses', params.pauses.map(x => x.id === p.id ? { ...x, durationMin: Math.max(1, parseInt(e.target.value) || 1) } : x))}
-                                        className="w-full font-inter text-xs text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                                      />
-                                      <span className="font-inter text-xxs text-text-muted">min</span>
-                                    </div>
-                                  </div>
-                                  <button onClick={() => removePause(p.id)} className="text-text-muted hover:text-bad transition-colors mt-sm">
-                                    <X size={14} />
-                                  </button>
-                                </div>
-                              ))}
-                              <button
-                                onClick={addPause}
-                                className="inline-flex items-center gap-xxxs font-inter text-xs text-dark-teal hover:text-deep-teal transition-colors self-start"
-                              >
-                                <Plus size={13} />
-                                Tilføj pause
-                              </button>
+                          {/* Info-linje */}
+                          <div className="grid grid-cols-2 gap-xs">
+                            <div className="flex flex-col gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs">
+                              <span className="font-inter text-xxs text-text-muted">Estimeret køretid (en vej)</span>
+                              <span className="font-inter text-xs font-semibold text-text-primary tabular-nums">
+                                {activeProduct.factory.driveTimeMinutes} min
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs">
+                              <span className="font-inter text-xxs text-text-muted">Forventet sidste bil</span>
+                              <span className="font-inter text-xs font-semibold text-text-primary tabular-nums">
+                                {(() => {
+                                  if (!totalTrucks || !params.firstLoadTime || roundsPerTruck === 0) return '–'
+                                  const [h, m] = params.firstLoadTime.split(':').map(Number)
+                                  // Sidste afgang: første læs + (N-1)×interval + (runder-1)×rundtid
+                                  // Sidste ankomst: + køretid én vej
+                                  const lastDeparture = h * 60 + m + (totalTrucks - 1) * params.intervalMinutes + (roundsPerTruck - 1) * roundTime
+                                  const lastArrival = lastDeparture + activeProduct.factory.driveTimeMinutes
+                                  return `${String(Math.floor(lastArrival / 60)).padStart(2, '0')}:${String(lastArrival % 60).padStart(2, '0')}`
+                                })()}
+                              </span>
                             </div>
                           </div>
 
@@ -1267,23 +1375,30 @@ function DayPillV2({
   }
 
   return (
-    <div className="relative w-[140px] min-h-[172px] bg-white rounded-xl flex flex-col p-sm gap-xs transition-all border border-hairline hover:border-hairline-2">
+    <div className="relative w-[140px] min-h-[172px] bg-white rounded-xl flex flex-col p-sm pb-lg gap-xs transition-all border border-hairline hover:border-hairline-2">
 
 
       {/* Vejr-knap */}
-      <button
-        onClick={() => setWeatherActive(w => !w)}
-        className={[
-          'absolute bottom-[10px] right-[10px] w-7 h-7 rounded-lg flex items-center justify-center border transition-all',
-          weatherActive
-            ? 'bg-dark-teal text-white border-dark-teal'
-            : 'bg-[#F5F5F5] text-dark-teal border-hairline hover:bg-dark-teal hover:text-white hover:border-dark-teal',
-        ].join(' ')}
-        aria-label="Markér vejrrisiko"
-        aria-pressed={weatherActive}
-      >
-        <CloudRain size={14} />
-      </button>
+      <div className="absolute bottom-[12px] right-[8px] group/weather">
+        <button
+          onClick={() => setWeatherActive(w => !w)}
+          className={[
+            'w-7 h-7 rounded-lg flex items-center justify-center border transition-all',
+            weatherActive
+              ? 'bg-dark-teal text-white border-dark-teal'
+              : 'bg-[#F5F5F5] text-dark-teal border-hairline hover:bg-dark-teal hover:text-white hover:border-dark-teal',
+          ].join(' ')}
+          aria-label="Markér vejrrisiko"
+          aria-pressed={weatherActive}
+        >
+          <CloudRain size={14} />
+        </button>
+        <div className="absolute bottom-full right-0 mb-xxxs opacity-0 group-hover/weather:opacity-100 transition-opacity pointer-events-none">
+          <span className="whitespace-nowrap bg-[#1D1D1D] text-white font-inter text-xxs px-xs py-xxxs rounded-md">
+            Minus regn
+          </span>
+        </div>
+      </div>
 
       <div className="flex justify-between items-center">
         <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest">{formatWeekday(day.date)}</span>
@@ -1292,25 +1407,28 @@ function DayPillV2({
 
       {/* Forventet */}
       <div>
-        <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block">Forventet</span>
-        <div className="flex items-baseline gap-xxxs">
+        <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block mb-xxxs">Forventet</span>
+        <div className="flex items-center gap-xxxs bg-[#F5F5F5] border border-hairline rounded-lg px-xs py-xxxs focus-within:border-dark-teal focus-within:bg-white transition-colors">
           <input
             type="number"
             value={day.tonsPlanned || ''}
             onChange={e => onUpdateTons(day.id, Math.max(0, parseInt(e.target.value, 10) || 0))}
-            className="font-poppins font-semibold text-xl text-text-primary bg-transparent border-none outline-none w-full tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="font-poppins font-semibold text-lg text-text-primary bg-transparent border-none outline-none w-full tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             placeholder="0"
           />
-          <span className="font-inter text-xxs text-text-muted">tons</span>
+          <span className="font-inter text-xxs text-text-muted flex-shrink-0">tons</span>
         </div>
       </div>
 
-      <hr className="border-hairline" />
-
       {/* Morgen */}
-      <div className={`rounded-lg px-xs py-xxxs -mx-xs transition-colors ${day.morgenTons == null ? 'bg-[#FBECEA]' : 'bg-[#E7F4EE]'}`}>
-        <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block">Morgen tons</span>
-        <div className="flex items-baseline gap-xxxs">
+      <div>
+        <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block mb-xxxs">Morgen tons</span>
+        <div className={[
+          'flex items-center gap-xxxs border rounded-lg px-xs py-xxxs transition-colors focus-within:border-dark-teal focus-within:bg-white',
+          day.morgenTons == null
+            ? 'bg-[#FBECEA] border-[#C8372D]/25'
+            : 'bg-[#E7F4EE] border-[#1F8A5B]/25',
+        ].join(' ')}>
           <input
             type="number"
             value={day.morgenTons ?? ''}
@@ -1318,10 +1436,10 @@ function DayPillV2({
               const v = parseInt(e.target.value, 10)
               onUpdateMorgenTons(day.id, isNaN(v) ? undefined : Math.max(0, v))
             }}
-            className="font-poppins font-semibold text-xl text-text-primary bg-transparent border-none outline-none w-full tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="font-poppins font-semibold text-lg text-text-primary bg-transparent border-none outline-none w-full tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             placeholder="–"
           />
-          <span className="font-inter text-xxs text-text-muted">tons</span>
+          <span className="font-inter text-xxs text-text-muted flex-shrink-0">tons</span>
         </div>
       </div>
 
@@ -1369,7 +1487,7 @@ function DocRow({ title, meta, status, open, onToggle, children, isLast = false 
     <div className={!isLast ? 'border-b border-hairline' : undefined}>
       <button
         onClick={onToggle}
-        className="w-full grid items-center gap-md px-sm py-sm hover:bg-[#F5F5F5] transition-colors"
+        className={`w-full grid items-center gap-md px-sm py-sm transition-colors ${!open ? 'hover:bg-[#F5F5F5]' : ''}`}
         style={{ gridTemplateColumns: '1fr auto auto auto' }}
       >
         <span className="font-inter text-sm font-medium text-text-primary text-left">{title}</span>
@@ -1383,7 +1501,7 @@ function DocRow({ title, meta, status, open, onToggle, children, isLast = false 
         <ChevronDown size={14} className={`text-text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="px-sm pb-sm border-t border-hairline">{children}</div>
+        <div className="px-sm pt-sm pb-sm border-t border-hairline">{children}</div>
       )}
     </div>
   )

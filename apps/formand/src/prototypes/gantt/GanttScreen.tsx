@@ -13,6 +13,17 @@ import type { TabName } from '@/types/navigation'
 
 type ViewMode = 'uge' | '14-dage' | 'maaned'
 
+interface GanttProduct {
+  id: string
+  recipeCode: string
+  recipeName: string
+  thicknessMm: number
+  tonsTotal: number
+  startDate: string
+  endDate: string
+  planlagt: boolean
+}
+
 interface GanttOrder {
   id: string
   orderNumber: string
@@ -22,6 +33,7 @@ interface GanttOrder {
   endDate: string   // YYYY-MM-DD
   tonsTotal: number
   tonsDelivered: number
+  products: GanttProduct[]
 }
 
 // Anchored to prototype date
@@ -37,6 +49,10 @@ const MOCK_ORDERS: GanttOrder[] = [
     endDate: '2026-03-20',
     tonsTotal: 952,
     tonsDelivered: 250,
+    products: [
+      { id: 'p1', recipeCode: '82101H', recipeName: 'SMA 11S',  thicknessMm: 45, tonsTotal: 752, startDate: '2026-03-16', endDate: '2026-03-18', planlagt: true },
+      { id: 'p2', recipeCode: '23001B', recipeName: 'GAB I',    thicknessMm: 80, tonsTotal: 200, startDate: '2026-03-19', endDate: '2026-03-20', planlagt: false },
+    ],
   },
   {
     id: '2',
@@ -47,6 +63,9 @@ const MOCK_ORDERS: GanttOrder[] = [
     endDate: '2026-03-23',
     tonsTotal: 450,
     tonsDelivered: 0,
+    products: [
+      { id: 'p3', recipeCode: '41002C', recipeName: 'ABB 11',   thicknessMm: 60, tonsTotal: 450, startDate: '2026-03-18', endDate: '2026-03-23', planlagt: false },
+    ],
   },
   {
     id: '3',
@@ -57,6 +76,9 @@ const MOCK_ORDERS: GanttOrder[] = [
     endDate: '2026-03-14',
     tonsTotal: 320,
     tonsDelivered: 320,
+    products: [
+      { id: 'p4', recipeCode: '82101H', recipeName: 'SMA 11S',  thicknessMm: 45, tonsTotal: 320, startDate: '2026-03-09', endDate: '2026-03-14', planlagt: true },
+    ],
   },
   {
     id: '4',
@@ -67,6 +89,9 @@ const MOCK_ORDERS: GanttOrder[] = [
     endDate: '2026-03-26',
     tonsTotal: 180,
     tonsDelivered: 0,
+    products: [
+      { id: 'p5', recipeCode: '31005A', recipeName: 'GAB 0/16', thicknessMm: 70, tonsTotal: 180, startDate: '2026-03-23', endDate: '2026-03-26', planlagt: false },
+    ],
   },
 ]
 
