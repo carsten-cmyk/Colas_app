@@ -43,13 +43,13 @@ export function LoginScreen() {
         padding: '48px 10%',
       }}>
 
-        <div style={{ width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 0 }}>
+        <div style={{ width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
 
           {/* Logo */}
           <img
             src="/colas-logo.png"
             alt="Colas"
-            style={{ height: 40, width: 'auto', objectFit: 'contain', objectPosition: 'left', marginBottom: 40 }}
+            style={{ height: 64, width: 'auto', objectFit: 'contain', marginBottom: 40 }}
           />
 
           {/* Velkomsttekst */}
@@ -60,6 +60,7 @@ export function LoginScreen() {
             color: '#1D1D1D',
             lineHeight: 1.2,
             margin: '0 0 8px 0',
+            textAlign: 'center',
           }}>
             Velkommen
           </h1>
@@ -68,6 +69,7 @@ export function LoginScreen() {
             fontSize: 14,
             color: 'rgba(29,29,29,0.55)',
             margin: '0 0 40px 0',
+            textAlign: 'center',
           }}>
             I dag bliver en god dag
           </p>
@@ -79,6 +81,7 @@ export function LoginScreen() {
               width: '100%',
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'center',
               gap: 12,
               backgroundColor: '#fff',
               border: '1px solid rgba(29,29,29,0.12)',
