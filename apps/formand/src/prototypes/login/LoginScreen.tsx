@@ -74,7 +74,7 @@ export function LoginScreen() {
 
           {/* Log ind med Microsoft */}
           <button
-            onClick={() => navigate('/prototyper')}
+            onClick={() => navigate('/prototyper/gantt')}
             style={{
               width: '100%',
               display: 'flex',
