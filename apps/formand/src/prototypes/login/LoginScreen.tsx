@@ -136,7 +136,7 @@ export function LoginScreen() {
           <div
             style={{
               display: 'flex',
-              gap: 10,
+              gap: 6,
               marginBottom: 16,
               animation: shake ? 'shake 0.4s ease' : 'none',
             }}
@@ -154,13 +154,13 @@ export function LoginScreen() {
                 onKeyDown={e => handleKeyDown(i, e)}
                 onPaste={handlePaste}
                 style={{
-                  width: 44,
-                  height: 52,
+                  width: 34,
+                  height: 40,
                   textAlign: 'center',
-                  fontSize: 22,
+                  fontSize: 17,
                   fontFamily: "'Inter', sans-serif",
                   fontWeight: 600,
-                  borderRadius: 10,
+                  borderRadius: 8,
                   border: error ? '1.5px solid #C8372D' : '1.5px solid rgba(29,29,29,0.18)',
                   backgroundColor: '#fff',
                   outline: 'none',
