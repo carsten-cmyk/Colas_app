@@ -1,12 +1,70 @@
+/// <reference types="vite/client" />
 /**
  * PROTOTYPE — Login-side
- * Dummy AD/SSO login til illustration.
- * Må ikke importeres i produktionskode.
+ * Dummy PIN-beskyttelse. Må ikke importeres i produktionskode.
  */
+import { useRef, useState, KeyboardEvent, ClipboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+
+const CORRECT_PIN = import.meta.env.VITE_DEMO_PIN ?? '123456'
+const PIN_LENGTH = 6
 
 export function LoginScreen() {
   const navigate = useNavigate()
+  const [digits, setDigits] = useState<string[]>(Array(PIN_LENGTH).fill(''))
+  const [error, setError] = useState(false)
+  const [shake, setShake] = useState(false)
+  const inputs = useRef<(HTMLInputElement | null)[]>([])
+
+  function submit(pin: string) {
+    if (pin === CORRECT_PIN) {
+      sessionStorage.setItem('formand_auth', '1')
+      navigate('/prototyper/gantt')
+    } else {
+      setShake(true)
+      setError(true)
+      setDigits(Array(PIN_LENGTH).fill(''))
+      inputs.current[0]?.focus()
+      setTimeout(() => setShake(false), 500)
+    }
+  }
+
+  function handleChange(index: number, value: string) {
+    if (!/^\d*$/.test(value)) return
+    const next = [...digits]
+    next[index] = value.slice(-1)
+    setDigits(next)
+    setError(false)
+
+    if (value && index < PIN_LENGTH - 1) {
+      inputs.current[index + 1]?.focus()
+    }
+
+    if (next.every(d => d !== '') && next.join('').length === PIN_LENGTH) {
+      submit(next.join(''))
+    }
+  }
+
+  function handleKeyDown(index: number, e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Backspace' && !digits[index] && index > 0) {
+      inputs.current[index - 1]?.focus()
+    }
+    if (e.key === 'Enter') {
+      const pin = digits.join('')
+      if (pin.length === PIN_LENGTH) submit(pin)
+    }
+  }
+
+  function handlePaste(e: ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, PIN_LENGTH)
+    const next = [...digits]
+    pasted.split('').forEach((d, i) => { next[i] = d })
+    setDigits(next)
+    setError(false)
+    inputs.current[Math.min(pasted.length, PIN_LENGTH - 1)]?.focus()
+    if (pasted.length === PIN_LENGTH) submit(pasted)
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', overflow: 'hidden' }}>
@@ -71,60 +129,67 @@ export function LoginScreen() {
             margin: '0 0 40px 0',
             textAlign: 'center',
           }}>
-            I dag bliver en god dag
+            Indtast adgangskode for at fortsætte
           </p>
 
-          {/* Log ind med Microsoft */}
-          <button
-            onClick={() => navigate('/prototyper/gantt')}
+          {/* PIN-felter */}
+          <div
             style={{
-              width: '100%',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 12,
-              backgroundColor: '#fff',
-              border: '1px solid rgba(29,29,29,0.12)',
-              borderRadius: 12,
-              padding: '12px 16px',
-              cursor: 'pointer',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-              transition: 'box-shadow 0.15s, border-color 0.15s',
-            }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)'
-              ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(29,29,29,0.22)'
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)'
-              ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(29,29,29,0.12)'
+              gap: 10,
+              marginBottom: 16,
+              animation: shake ? 'shake 0.4s ease' : 'none',
             }}
           >
-            {/* Microsoft logo */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3, width: 20, height: 20, flexShrink: 0 }}>
-              <div style={{ backgroundColor: '#F25022', borderRadius: 1 }} />
-              <div style={{ backgroundColor: '#7FBA00', borderRadius: 1 }} />
-              <div style={{ backgroundColor: '#00A4EF', borderRadius: 1 }} />
-              <div style={{ backgroundColor: '#FFB900', borderRadius: 1 }} />
-            </div>
-            <span style={{
-              fontFamily: "'Inter', sans-serif",
-              fontWeight: 600,
-              fontSize: 14,
-              color: '#1D1D1D',
-            }}>
-              Log ind med Microsoft
-            </span>
-          </button>
+            {digits.map((d, i) => (
+              <input
+                key={i}
+                ref={el => { inputs.current[i] = el }}
+                type="password"
+                inputMode="numeric"
+                maxLength={1}
+                value={d}
+                autoFocus={i === 0}
+                onChange={e => handleChange(i, e.target.value)}
+                onKeyDown={e => handleKeyDown(i, e)}
+                onPaste={handlePaste}
+                style={{
+                  width: 44,
+                  height: 52,
+                  textAlign: 'center',
+                  fontSize: 22,
+                  fontFamily: "'Inter', sans-serif",
+                  fontWeight: 600,
+                  borderRadius: 10,
+                  border: error ? '1.5px solid #C8372D' : '1.5px solid rgba(29,29,29,0.18)',
+                  backgroundColor: '#fff',
+                  outline: 'none',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                  transition: 'border-color 0.15s',
+                  caretColor: 'transparent',
+                }}
+                onFocus={e => {
+                  if (!error) e.currentTarget.style.borderColor = 'rgba(29,29,29,0.5)'
+                }}
+                onBlur={e => {
+                  if (!error) e.currentTarget.style.borderColor = 'rgba(29,29,29,0.18)'
+                }}
+              />
+            ))}
+          </div>
 
+          {/* Fejlbesked */}
           <p style={{
             fontFamily: "'Inter', sans-serif",
-            fontSize: 11,
-            color: 'rgba(29,29,29,0.35)',
+            fontSize: 12,
+            color: '#C8372D',
             textAlign: 'center',
-            marginTop: 16,
+            minHeight: 20,
+            marginBottom: 8,
+            opacity: error ? 1 : 0,
+            transition: 'opacity 0.2s',
           }}>
-            Brug din Colas-arbejdsmail til at logge ind
+            Forkert kode — prøv igen
           </p>
 
         </div>
@@ -141,6 +206,16 @@ export function LoginScreen() {
         </p>
 
       </div>
+
+      <style>{`
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          20% { transform: translateX(-8px); }
+          40% { transform: translateX(8px); }
+          60% { transform: translateX(-6px); }
+          80% { transform: translateX(6px); }
+        }
+      `}</style>
     </div>
   )
 }
