@@ -1,12 +1,18 @@
 # Project Status — Colas Transport Apps
 
-**Last updated**: 2026-05-04
-**Current phase**: Formand — OrdrePlanScreen prototype → production
+**Last updated**: 2026-05-11
+**Current phase**: Vognmand — Gantt prototype fase 1 i gang
 
 ---
 
 ## Naeste skridt (denne session)
 
+### Vognmand — Gantt prototype (aktiv)
+1. **Reviewer Gantt-prototypen** med bruger — justeringer efter feedback
+2. **Disponerings-view** (DayScreen) — bygges efter Gantt er godkendt
+3. **Navigation** fra Gantt-celle → disponerings-view (TODO-placeholders i kode)
+
+### Formand (parkeret)
 1. **Upgrade OrdrePlanScreen prototype** — `/upgrade-prototype OrdrePlanScreen formand`
 2. **Skrive foerste tests** — BottomTabBar + TopBar komponenter
 3. **Koble Netlify til GitHub** — bruger goer dette i browseren (se nedenfor)
@@ -96,4 +102,17 @@ Oprettes efter moede med Colas (Colas-ejede konti).
 - [ ] Supabase schema baseret paa datamodel (order.ts + driver.ts)
 - [ ] Autentifikation (email/password)
 - [ ] Dagsoversigt (/) — naeste skraem efter OrdrePlanScreen
-- [ ] Vognmand-app (apps/vognmand/) — starter naar formand v1 er klar
+- [x] Vognmand-app (apps/vognmand/) — bootstrapped, Gantt-prototype korer paa port 5177
+
+### Vognmand — prototype (2026-05-11)
+- [x] App-shell med topbar (Colas-logo, height 52) + sidebar (280px, bg-page)
+- [x] Sidebar: Transportør-info i bunden, menu: Aktive ordre + Ordre arkiv
+- [x] Aktive ordre (liste-view): kort per ordre, dag-tabel med kolonner, Disponer-knap (grøn)
+- [x] Kalender view (Gantt): uge/14-dage/måned toggle, periode-navigation
+- [x] View-toggle på begge sider: Aktive ordre ↔ Kalender view
+- [x] Typer udvidet: mødetidFabrik, tidFabrikTilPlads, kommentar, TidligereKørtBil
+- [x] Kører på port 5177
+
+### Næste: Disponerings-view
+- [ ] Klik på "Disponer" → ordre-detalje med biltildeling per dag
+- [ ] Spec afklares med bruger

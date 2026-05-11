@@ -1,0 +1,72 @@
+// TODO: Erstat med Supabase når klar
+import type { Ordre } from '@/types/vognmand'
+
+export const MOCK_ORDRER: Ordre[] = [
+  {
+    id: 'o1',
+    ordrenr: '1212343',
+    titel: 'Uddannelsescenter Syd',
+    adresse: 'Søndre Boulevard 44, 4900 Nakskov',
+    lokation: 'Nakskov',
+    fabrik: 'PROD A · KØGE PH',
+    produktKode: 'AB 11t',
+    mængdeTotal: 480,
+    startDate: '2026-03-16',
+    endDate: '2026-03-18',
+    dage: [
+      // Mandag 16/3 — ingen disponeret → rød
+      { dato: '2026-03-16', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 45 },
+      // Tirsdag 17/3 — delvist disponeret → orange
+      { dato: '2026-03-17', bestilteBiler: 3, disponeredeBiler: 1, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 45, kommentar: 'Smal adgangsvej' },
+      // Onsdag 18/3 — fuldt disponeret → grøn
+      { dato: '2026-03-18', bestilteBiler: 2, disponeredeBiler: 2, ændretAfFormand: false, mødetidFabrik: '07:00', tidFabrikTilPlads: 60 },
+    ],
+    tidligereKørte: [
+      {
+        ordrenr: '1212343',
+        fraDato: '2026-02-10',
+        tilDato: '2026-02-12',
+        biler: [
+          { reg: 'XE32114', chauffør: 'Lars' },
+          { reg: 'AB54231', chauffør: 'Brian' },
+          { reg: 'CV98012', chauffør: 'Mads' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'o2',
+    ordrenr: '1212401',
+    titel: 'Vestre Ringvej',
+    adresse: 'Vestre Ringvej 112, 4700 Næstved',
+    lokation: 'Næstved',
+    fabrik: 'PROD B · GLOSTRUP',
+    produktKode: 'SMA 8t',
+    mængdeTotal: 210,
+    startDate: '2026-03-20',
+    endDate: '2026-03-22',
+    dage: [
+      // Fredag 20/3 — ændret af formand → gul
+      { dato: '2026-03-20', bestilteBiler: 2, disponeredeBiler: 2, ændretAfFormand: true, mødetidFabrik: '06:00', tidFabrikTilPlads: 30 },
+    ],
+  },
+  {
+    id: 'o3',
+    ordrenr: '1212455',
+    titel: 'Lufthavnsvej etape 2',
+    adresse: 'Lufthavnsvej 1, 4000 Roskilde',
+    lokation: 'Roskilde',
+    fabrik: 'PROD A · KØGE PH',
+    produktKode: 'AB 16t',
+    mængdeTotal: 760,
+    startDate: '2026-03-24',
+    endDate: '2026-03-27',
+    dage: [
+      // Tirsdag–fredag 24–27/3 — alle ikke disponeret → rød
+      { dato: '2026-03-24', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 40 },
+      { dato: '2026-03-25', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 40 },
+      { dato: '2026-03-26', bestilteBiler: 2, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '07:00', tidFabrikTilPlads: 60 },
+      { dato: '2026-03-27', bestilteBiler: 2, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '07:00', tidFabrikTilPlads: 60, kommentar: 'Afvent signal fra formand' },
+    ],
+  },
+]
