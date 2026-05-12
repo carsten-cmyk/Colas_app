@@ -222,6 +222,9 @@ const ORDER_MODES: { id: OrderMode; label: string; step: string }[] = [
   { id: 'evaluering',  label: 'Evaluering',  step: 'Trin 3/3' },
 ]
 
+type UnderlagType = 'asfalt' | 'grus' | 'beton' | 'fraeset' | 'andet'
+type UnderlaegsAarsag = 'revner' | 'sporkoert' | 'krakeleret' | 'ujaevn' | 'saetninger' | 'snavs' | 'bloed' | 'graes-ukrudt'
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export function OrdrePlanScreen() {
@@ -430,6 +433,7 @@ export function OrdrePlanScreen() {
 
         {/* ── Hoved-indhold ────────────────────────────────────────── */}
         <main className="px-lg pb-[120px] pt-xs">
+          {activeMode === 'planlaegning' && (
           <div className="flex flex-col gap-[48px]">
 
           {/* ── Sektion: Udlægning ───────────────────────────────── */}
@@ -1307,6 +1311,19 @@ export function OrdrePlanScreen() {
           </section>
 
           </div>
+          )}
+
+          {activeMode === 'udfoersel' && (
+            <UdfoerselContent
+              onAddPhotos={(newPhotos) => setPhotos(prev => [...prev, ...newPhotos])}
+            />
+          )}
+
+          {activeMode === 'evaluering' && (
+            <div className="flex items-center justify-center min-h-[400px]">
+              <p className="font-inter text-sm text-text-muted">Evaluering tilgængelig når ordren er afsluttet — kommer i næste sprint</p>
+            </div>
+          )}
 
         </main>
       </div>
@@ -1554,6 +1571,264 @@ function TransportBadge({ tag }: { tag: MockResource['transportTag'] }) {
     <span className={`inline-block px-xs py-[2px] rounded-md font-inter text-xxs font-medium ${TRANSPORT_TAG_STYLES[tag]}`}>
       {TRANSPORT_TAG_LABEL[tag]}
     </span>
+  )
+}
+
+// ─── Forundersøgelse data ─────────────────────────────────────────────────────
+
+const UNDERLAG_OPTIONS: { value: UnderlagType; label: string }[] = [
+  { value: 'asfalt',  label: 'Asfalt'  },
+  { value: 'grus',    label: 'Grus'    },
+  { value: 'beton',   label: 'Beton'   },
+  { value: 'fraeset', label: 'Fræset'  },
+  { value: 'andet',   label: 'Andet'   },
+]
+
+const AARSAG_OPTIONS: { value: UnderlaegsAarsag; label: string }[] = [
+  { value: 'revner',       label: 'Revner'      },
+  { value: 'sporkoert',    label: 'Sporkørt'    },
+  { value: 'krakeleret',   label: 'Krakeleret'  },
+  { value: 'ujaevn',       label: 'Ujævn'       },
+  { value: 'saetninger',   label: 'Sætninger'   },
+  { value: 'snavs',        label: 'Snavs'       },
+  { value: 'bloed',        label: 'Blød'        },
+  { value: 'graes-ukrudt', label: 'Græs/ukrudt' },
+]
+
+// ─── ForCheckbox ──────────────────────────────────────────────────────────────
+
+function ForCheckbox({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+  return (
+    <div
+      onClick={onChange}
+      role="checkbox"
+      aria-checked={checked}
+      className={[
+        'w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2 transition-all cursor-pointer',
+        checked
+          ? 'bg-deep-teal border-deep-teal'
+          : 'bg-white border-slate-300 hover:border-dark-teal',
+      ].join(' ')}
+    >
+      {checked && (
+        <svg width="10" height="8" viewBox="0 0 10 8" fill="none" aria-hidden="true">
+          <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </div>
+  )
+}
+
+// ─── UdfoerselContent ─────────────────────────────────────────────────────────
+
+function UdfoerselContent({ onAddPhotos }: { onAddPhotos: (p: MockPhoto[]) => void }) {
+  const [underlaegsTyper, setUnderlaegsTyper] = useState<Set<UnderlagType>>(new Set(['asfalt']))
+  const [underlaegsAndet, setUnderlaegsAndet] = useState('')
+  const [tilfredsstillende, setTilfredsstillende] = useState<boolean | null>(null)
+  const [underlaegsAarsager, setUnderlaegsAarsager] = useState<Set<UnderlaegsAarsag>>(new Set())
+  const [aftaltMed, setAftaltMed] = useState('')
+  const [forbehold, setForbehold] = useState(
+    'Bæreevnen af den eksisterende belægning der efterfølgende kan forårsage sætninger og revnedannelse i den nye asfaltbelægning.'
+  )
+  const [fotos, setFotos] = useState<MockPhoto[]>([])
+  const [saved, setSaved] = useState(false)
+
+  const PHOTO_COLORS = ['bg-dark-teal/20', 'bg-yellow/20', 'bg-light-aqua/40']
+
+  function toggleUnderlag(type: UnderlagType) {
+    setUnderlaegsTyper(prev => {
+      const next = new Set(prev)
+      if (next.has(type)) next.delete(type); else next.add(type)
+      return next
+    })
+    setSaved(false)
+  }
+
+  function toggleAarsag(a: UnderlaegsAarsag) {
+    setUnderlaegsAarsager(prev => {
+      const next = new Set(prev)
+      if (next.has(a)) next.delete(a); else next.add(a)
+      return next
+    })
+    setSaved(false)
+  }
+
+  function handleAddPhoto() {
+    const foto: MockPhoto = {
+      id: `fo-${Date.now()}`,
+      color: PHOTO_COLORS[fotos.length % PHOTO_COLORS.length],
+      label: `Forundersøgelse ${fotos.length + 1}`,
+    }
+    setFotos(prev => [...prev, foto])
+    onAddPhotos([foto])
+  }
+
+  return (
+    <div className="flex flex-col gap-[48px]">
+      <section>
+        <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Forundersøgelse</h2>
+
+        <div className="bg-white rounded-2xl border border-hairline overflow-hidden shadow-sm">
+
+          {/* ── Underlag / Bund ───────────────────────────────────── */}
+          <div className="p-md border-b border-hairline">
+            <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest mb-sm">
+              Underlag / Bund
+            </p>
+            <div className="flex flex-col gap-sm">
+              {UNDERLAG_OPTIONS.map(opt => (
+                <label key={opt.value} className="flex items-center gap-sm cursor-pointer">
+                  <ForCheckbox
+                    checked={underlaegsTyper.has(opt.value)}
+                    onChange={() => toggleUnderlag(opt.value)}
+                  />
+                  <span className="font-inter text-sm text-text-primary select-none">{opt.label}</span>
+                </label>
+              ))}
+              {underlaegsTyper.has('andet') && (
+                <input
+                  type="text"
+                  value={underlaegsAndet}
+                  onChange={e => { setUnderlaegsAndet(e.target.value); setSaved(false) }}
+                  placeholder="Beskriv underlag..."
+                  className="ml-[32px] font-inter text-sm text-text-primary bg-[#F5F5F5] border border-hairline rounded-xl px-sm py-xs focus:outline-none focus:border-dark-teal focus:bg-white transition-colors"
+                />
+              )}
+            </div>
+          </div>
+
+          {/* ── Underlagets tilstand ──────────────────────────────── */}
+          <div className="p-md border-b border-hairline">
+            <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest mb-sm">
+              Underlagets tilstand
+            </p>
+            <div className="flex items-center gap-xs">
+              <span className="font-inter text-sm text-text-secondary mr-xs">Tilfredsstillende:</span>
+              {([true, false] as const).map(val => (
+                <button
+                  key={String(val)}
+                  onClick={() => { setTilfredsstillende(val); setSaved(false) }}
+                  className={[
+                    'px-sm py-[6px] rounded-xl font-inter text-sm font-semibold border-2 transition-all min-w-[64px]',
+                    tilfredsstillende === val
+                      ? val
+                        ? 'bg-[#2E9E65] border-[#2E9E65] text-white'
+                        : 'bg-bad border-bad text-white'
+                      : 'bg-white border-hairline text-text-secondary hover:border-dark-teal/40',
+                  ].join(' ')}
+                >
+                  {val ? 'Ja' : 'Nej'}
+                </button>
+              ))}
+            </div>
+
+            {tilfredsstillende === false && (
+              <div className="flex flex-col gap-md pt-md mt-md border-t border-hairline">
+                <div>
+                  <p className="font-inter text-xs font-medium text-text-muted mb-sm">Angiv årsag:</p>
+                  <div className="grid grid-cols-2 gap-sm">
+                    {AARSAG_OPTIONS.map(opt => (
+                      <label key={opt.value} className="flex items-center gap-xs cursor-pointer">
+                        <ForCheckbox
+                          checked={underlaegsAarsager.has(opt.value)}
+                          onChange={() => toggleAarsag(opt.value)}
+                        />
+                        <span className="font-inter text-sm text-text-primary select-none">{opt.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest mb-xs">
+                    Aftalt med
+                  </p>
+                  <input
+                    type="text"
+                    value={aftaltMed}
+                    onChange={e => { setAftaltMed(e.target.value); setSaved(false) }}
+                    placeholder="Navn / firma..."
+                    className="w-full font-inter text-sm text-text-primary bg-[#F5F5F5] border border-hairline rounded-xl px-sm py-xs focus:outline-none focus:border-dark-teal focus:bg-white transition-colors"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Forbehold ─────────────────────────────────────────── */}
+          <div className="p-md border-b border-hairline">
+            <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest mb-sm">
+              Forbehold
+            </p>
+            <textarea
+              value={forbehold}
+              onChange={e => { setForbehold(e.target.value); setSaved(false) }}
+              rows={3}
+              placeholder="Beskriv forbehold for ordren..."
+              className="w-full font-inter text-sm text-text-primary bg-[#F5F5F5] border border-hairline rounded-xl px-sm py-xs focus:outline-none focus:border-dark-teal focus:bg-white transition-colors resize-none leading-relaxed"
+            />
+          </div>
+
+          {/* ── Billeder ──────────────────────────────────────────── */}
+          <div className="p-md border-b border-hairline">
+            <div className="flex items-center justify-between mb-sm">
+              <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest">Billeder</p>
+              {fotos.length > 0 && (
+                <span className="inline-flex items-center gap-xxxs font-inter text-xs text-[#1F8A5B]">
+                  <CheckCircle2 size={12} />
+                  {fotos.length} billede{fotos.length !== 1 ? 'r' : ''} tilføjet til Dokumentation
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-xs">
+              {fotos.map(foto => (
+                <div
+                  key={foto.id}
+                  className={`w-[88px] h-[88px] rounded-xl ${foto.color} border border-hairline flex flex-col items-center justify-center gap-xxxs`}
+                >
+                  <Camera size={16} className="text-text-muted" />
+                  <span className="font-inter text-xxs text-text-muted text-center px-xxxs leading-tight">{foto.label}</span>
+                </div>
+              ))}
+              <div
+                onClick={handleAddPhoto}
+                role="button"
+                aria-label="Tilføj billede"
+                className="w-[88px] h-[88px] rounded-xl border-2 border-dashed border-hairline-2 flex flex-col items-center justify-center gap-xxxs cursor-pointer hover:border-dark-teal hover:bg-[#F5F9FA] transition-colors group"
+              >
+                <Plus size={20} className="text-text-muted group-hover:text-dark-teal transition-colors" />
+                <span className="font-inter text-xxs text-text-muted group-hover:text-dark-teal transition-colors leading-tight text-center">
+                  Tilføj billede
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Footer ────────────────────────────────────────────── */}
+          <div className="p-md flex items-center justify-between gap-sm">
+            <button
+              className="inline-flex items-center gap-xs font-inter text-sm font-semibold text-white bg-[#2E9E65] px-md py-xs rounded-xl hover:bg-[#1F8A5B] active:scale-[0.98] transition-all"
+              aria-label="Tilføj ekstraarbejde"
+            >
+              <Plus size={16} />
+              Tilføj ekstraarbejde
+            </button>
+
+            <button
+              onClick={() => setSaved(true)}
+              className={[
+                'inline-flex items-center gap-xs font-inter text-sm font-semibold px-md py-xs rounded-xl transition-all active:scale-[0.98]',
+                saved
+                  ? 'bg-[#E7F4EE] text-[#1F8A5B] border border-[#1F8A5B]/20 cursor-default'
+                  : 'bg-deep-teal text-white hover:opacity-90',
+              ].join(' ')}
+            >
+              {saved ? <><CheckCircle2 size={15} className="mr-xxxs" />Gemt</> : 'Gem forundersøgelse'}
+            </button>
+          </div>
+
+        </div>
+      </section>
+    </div>
   )
 }
 
