@@ -113,7 +113,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 lineHeight: 1.3,
               }}
             >
-              Velkommen til{'\n'}{MOCK.pickup.name}
+              Velkommen til<br />{MOCK.pickup.name}
             </p>
 
             {/* Instruktionskort 1 — Vægten */}
