@@ -120,7 +120,7 @@ export function QRScanScreen({ onClose, onSuccess }: QRScanScreenProps) {
   if (permission && !permission.granted) {
     return (
       <SafeAreaView style={styles.permissionRoot} edges={['top', 'bottom']}>
-        <Ionicons name="camera-off-outline" size={48} color={theme.colors.textMuted} />
+        <Ionicons name="camera-outline" size={48} color={theme.colors.textMuted} />
         <Text style={styles.permissionTitle}>Kameratilladelse mangler</Text>
         <Text style={styles.permissionSub}>
           Giv adgang til kameraet i Indstillinger for at scanne QR-koder.
