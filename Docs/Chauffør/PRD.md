@@ -186,3 +186,38 @@ export interface Task {
 - Kort/GPS-visning
 - Redigering af opgave
 - **TaskSheet animation** (slide-up + fade-in via react-native-reanimated) — kræver development build, ikke Expo Go. Implementeres når projektet skifter til `expo run:ios`.
+
+---
+
+## 8. Gode idéer — ikke implementeret (AnkommetFabrikScreen)
+
+Forslag fra `ux-design-reviewer` (2026-05-13) som er parkeret til senere overvejelse. Skal ikke bygges nu, men beholdes så de ikke går tabt.
+
+### 8.1 FlowStepper-komponent
+Lille progressionsindikator øverst på skærmen — fx prikker eller cirkler der viser hvor langt chaufføren er i fabrik-flowet (`Ankomst → QR-scan → Bekræft → Udvejet`).
+
+**Props:** `steps: string[]`, `currentStep: number`
+
+**Hvorfor parkeret:** Chaufføren ser ét trin ad gangen — stepper vurderes som visuel støj på lille skærm. Genvurder hvis flere multi-trin-flows tilføjes.
+
+### 8.2 ContextHeader-komponent
+Persistent strip på alle sub-screens der viser fx "Ordre 1212343 — Køge Asfaltfabrik".
+
+**Props:** `orderNumber: string`, `locationName: string`, `tons?: number`
+
+**Hvorfor parkeret:** Ordrenummer er nu kun på `udvejet`-skærmen. Genvurder hvis brugertest viser at chauffører mister kontekst undervejs.
+
+### 8.3 Haptisk feedback ved QR-scan
+Kort vibration (`navigator.vibrate(200)`) når QR-koden er scannet — taktil bekræftelse uden at chaufføren skal kigge på skærmen.
+
+**Hvorfor parkeret:** Kræver afklaring af browser-support i app-frame, samt at chaufføren rent faktisk holder telefonen i hånden ved scanning.
+
+### 8.4 Slide-transition mellem sub-screens
+Glidende overgang mellem `ankomst → qr-scan → bekraeft → udvejet` i stedet for hård state-switch.
+
+**Hvorfor parkeret:** Æstetisk forbedring, ikke funktionel. Tages med når øvrig animations-strategi for app er besluttet.
+
+### 8.5 Ordrenummer + tons på bekræftelsesskærmen
+Vis last-data ved siden af silo/produkt på `bekraeft`-skærmen så chaufføren kan validere tons inden silo åbnes.
+
+**Hvorfor parkeret:** Kræver afklaring af om tons skal komme fra ordre eller fra vægt-system før lastning.

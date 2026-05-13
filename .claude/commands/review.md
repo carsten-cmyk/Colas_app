@@ -1,35 +1,8 @@
-Kør et professionelt code review af følgende fil: $ARGUMENTS
+Brug reviewer-agenten til at gennemgå følgende fil: $ARGUMENTS
 
-Følg REVIEW_SPEC præcist — læs den fra `Docs/formand/REVIEW_SPEC.md` (eller det relevante app's REVIEW_SPEC).
+Reviewer-agenten er read-only og tjekker mod REVIEW_SPEC alle 8 kategorier:
+TYPES · TOKENS · REACT PATTERNS · TILGÆNGELIGHED · TOUCH · ROBUSTHED · STATE & HOOKS · STORYBOOK
 
-## Fremgangsmåde
+Output gemmes i `.claude/docs/REVIEW_ISSUES.md` med dato og komponent-navn.
 
-1. Læs filen der skal reviewes
-2. Læs den relevante REVIEW_SPEC
-3. Gennemgå ALLE 9 checkliste-punkter systematisk:
-   - TYPES — props interface, JSDoc, ingen `any`
-   - TOKENS — ingen hardcodede farver/spacing, kun Tailwind tokens
-   - REACT/WEB PATTERNS — semantisk HTML, key props, konstanter udenfor render
-   - TILGÆNGELIGHED — WCAG 2.1 AA, aria-label, fokus-ring, 4.5:1 kontrast
-   - TOUCH/TABLET — 44×44px touch targets
-   - PROPS & ROBUSTHED — optional props, array guards, loading/error states
-   - STATE & HOOKS — useEffect dependencies, mock TODO-kommentarer, logik i hooks
-   - RESPONSIVE — 768px og 1280px breakpoints
-   - STORYBOOK — story med alle varianter og edge cases
-
-## Output-format
-
-For hvert issue:
-
-```
-[PRIORITET] filsti:linjenummer
-Problem: Hvad er forkert
-Fix: Konkret kodeeksempel der løser det
-```
-
-Prioriteter: CRITICAL | RECOMMENDED | NICE-TO-HAVE
-
-Afslut med:
-- Samlet vurdering (klar til merge / kræver rettelser / større refaktor nødvendig)
-- Antal issues per prioritet
-- Gem issues i `.claude/docs/REVIEW_ISSUES.md` med dato og komponentnavn
+Samlet vurdering: KLAR TIL MERGE / KRÆVER RETTELSER / STØRRE REFAKTOR

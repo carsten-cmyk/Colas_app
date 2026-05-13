@@ -1,31 +1,40 @@
-# Session Start — Colas Monorepo
+# Session Start — Colas
 
-Se `.claude/WORKFLOW.md` for komplet guide.
+CLAUDE.md indlæses automatisk. Ingen manuel paste nødvendig.
 
-## Paste dette efter /clear
-
-```
-Læs disse filer før du gør noget:
-1. .claude/docs/PROJECT_STATUS.md
-2. Docs/Formand/CONTEXT.md
-3. .claude/docs/core/DESIGN_SYSTEM.md
-4. .claude/docs/OFFLINE_STRATEGY.md
-
-Bekræft at du har læst dem, og fortæl hvad der er næste prioritet.
-```
-
-Tilføj hvis Formand/web: `Læs også: Docs/Formand/PRD.md og Docs/Formand/REVIEW_SPEC.md`
-
-Tilføj hvis Chauffør/app: `Læs også: Docs/Chauffør/PRD.md og Docs/Chauffør/REVIEW_SPEC_1.md og Docs/Chauffør/STRUCTURE.md`
-
-## Prototype-mode
+## Hvis du vil orientere Claude hurtigt
 
 ```
-Vi arbejder i prototype-mode på [beskrivelse].
-Filen skal ligge i src/prototypes/[mappe]/[Navn]Screen.tsx
-Ingen tests, ingen hooks — fokus er UX og flow.
+Hvad er status og næste prioritet?
 ```
 
-## Kommandoer
+Claude læser PROJECT_STATUS.md og svarer.
 
-/review /cleanup /test /new-component /new-page /new-hook /upgrade-prototype /audit-tokens /status
+## Starte en ny feature
+
+```
+/develop-screen [hvad du vil bygge] [app]
+```
+
+Eksempler:
+```
+/develop-screen AnkomstFabrik chauffeur
+/develop-screen Bilbestilling formand
+/develop-screen Disponering vognmand
+```
+
+## Prototype cleanup
+
+```
+/token-check apps/chauffeur-web/src
+```
+
+## Commit når du er klar
+
+```
+/git
+```
+
+## Alle kommandoer
+
+/develop-screen · /review · /cleanup · /token-check · /test · /git · /new-component · /new-page · /status

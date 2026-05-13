@@ -28,6 +28,8 @@ const C = {
   deepTeal: '#0E4764',
   yellow: '#FEEE32',
   green: '#2E9E65',
+  good: '#1F8A5B',
+  goodBg: '#E7F4EE',
   white: '#FFFFFF',
   bg: '#F8F8F8',
   border: '#EDEDED',
@@ -183,18 +185,24 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 onClick={() => setSubScreen('qr-scan')}
                 aria-label="Åbn QR-scanner"
                 style={{
-                  width: 72,
-                  height: 72,
-                  borderRadius: '50%',
-                  backgroundColor: '#F0F7FA',
+                  backgroundColor: C.yellow,
                   border: 'none',
+                  borderRadius: 50,
+                  minHeight: 56,
+                  width: '100%',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  gap: 8,
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 16,
+                  color: C.deepTeal,
                 }}
               >
-                <Camera size={36} color={C.deepTeal} />
+                <Camera size={20} color={C.deepTeal} />
+                Scan QR-kode
               </button>
               <p
                 style={{
@@ -297,25 +305,28 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
 
         {subScreen === 'bekraeft' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Success icon */}
+            {/* Success banner */}
             <div
               style={{
+                backgroundColor: C.goodBg,
+                borderRadius: 12,
+                padding: '24px 20px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: 8,
-                paddingTop: 24,
+                gap: 12,
               }}
             >
-              <CheckCircle size={56} color="#1F8A5B" />
+              <CheckCircle size={56} color={C.good} />
               <p
                 style={{
                   fontFamily: 'Poppins, sans-serif',
-                  fontWeight: 600,
-                  fontSize: 20,
-                  color: C.textPrimary,
+                  fontWeight: 700,
+                  fontSize: 24,
+                  color: C.deepTeal,
                   margin: 0,
                   textAlign: 'center',
+                  lineHeight: 1.2,
                 }}
               >
                 Du kan nu starte lastningen
@@ -374,15 +385,15 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
             <button
               onClick={() => setSubScreen('udvejet')}
               style={{
-                backgroundColor: C.green,
+                backgroundColor: C.yellow,
                 border: 'none',
                 borderRadius: 50,
-                height: 52,
+                minHeight: 56,
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
                 fontSize: 15,
-                color: C.white,
+                color: C.deepTeal,
                 width: '100%',
               }}
             >
@@ -393,6 +404,18 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
 
         {subScreen === 'udvejet' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <p
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                fontSize: 13,
+                color: C.textMuted,
+                margin: 0,
+                textAlign: 'center',
+              }}
+            >
+              Ordrenummer {MOCK.orderNumber}
+            </p>
+
             {/* Instruktionskort — Udvejet */}
             <div
               style={{

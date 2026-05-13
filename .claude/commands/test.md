@@ -1,3 +1,9 @@
+Brug test-writer-agenten til at skrive tests for følgende fil: $ARGUMENTS
+
+Kald kun denne kommando efter /review har returneret KLAR TIL MERGE.
+
+---
+
 Skriv tests for følgende fil: $ARGUMENTS
 
 ## Fremgangsmåde

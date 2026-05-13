@@ -12,11 +12,15 @@ import {
   X,
   Plus,
   ChevronDown,
+  ChevronUp,
   Pencil,
   Mic,
   Camera,
   CloudRain,
   CheckCircle2,
+  AlertTriangle,
+  MessageSquare,
+  Check,
 } from 'lucide-react'
 import { TopBar } from '@/components/layout/TopBar'
 import { BottomTabBar } from '@/components/layout/BottomTabBar'
@@ -53,10 +57,14 @@ interface MockProduct {
   // Felter fra PLAN — kilde: PLAN-system
   kravTilSamlinger?: string           // fx "Klæbet" / "Ikke klæbet"
   ekstraTemperaturmaalinger?: boolean // Ja/Nej
-  // TODO: Entreprisekontrol (1 eller 2) styrer om A3/A4 (og MKS ved 2) skal
-  // vises under Udførelse → Kvalitetssikring. Lyt på denne værdi fra PLAN
-  // og vis de relevante formularer dynamisk på Udførelse-siden.
+  // TODO: Erstat med Supabase når klar — A3/A4/MKS-skemaer oprettes senere under Udførelse-menupunktet.
+  // Entreprisekontrol og Temperaturmåling kommer fra PLAN og styrer skema-krav:
+  //   værdi 1 → kun MKS skal udfyldes
+  //   værdi 2 → A3, A4, MKS skal udfyldes
+  //   undefined → intet skema-krav
+  // Når begge felter er sat, vises union af krav (strengeste vinder).
   entreprisekontrol?: 1 | 2
+  temperaturmaaling?: 1 | 2
 }
 
 interface MockResource {
@@ -131,6 +139,7 @@ const INITIAL_PRODUCTS: MockProduct[] = [
     kravTilSamlinger: 'Klæbet',
     ekstraTemperaturmaalinger: true,
     entreprisekontrol: 1,
+    temperaturmaaling: 1,
     days: [
       { id: 'd1-1', day: 1, date: '2026-03-19', tonsPlanned: 100, cancelled: false },
       { id: 'd1-2', day: 2, date: '2026-03-20', tonsPlanned: 100, cancelled: false },
@@ -152,6 +161,7 @@ const INITIAL_PRODUCTS: MockProduct[] = [
     kravTilSamlinger: 'Klæbet',
     ekstraTemperaturmaalinger: true,
     entreprisekontrol: 2,
+    temperaturmaaling: 2,
     days: [
       { id: 'd2-1', day: 1, date: '2026-03-16', tonsPlanned: 250, cancelled: false },
       { id: 'd2-2', day: 2, date: '2026-03-17', tonsPlanned: 250, cancelled: false },
@@ -238,11 +248,36 @@ const ORDER_MODES: { id: OrderMode; label: string; step: string }[] = [
 type UnderlagType = 'asfalt' | 'grus' | 'beton' | 'fraeset' | 'andet'
 type UnderlaegsAarsag = 'revner' | 'sporkoert' | 'krakeleret' | 'ujaevn' | 'saetninger' | 'snavs' | 'bloed' | 'graes-ukrudt'
 
+// ─── Afregning types (inline prototype) ──────────────────────────────────────
+
+type AfregningType = 'time' | 'akkord'
+
+interface ChauffoerAfregning {
+  chauffoer_navn: string
+  reg_nr?: string                // null for materiel
+  afregning_type?: AfregningType // undefined → fallback time + banner
+  // Prædufyldte fra chauffør-app (alle valgfrie)
+  // TODO: Erstat med Supabase når klar — afregning_type kommer fra vognmand.aftaler.chauffoerer[], timer fra chauffeur-app, tons fra plan_vejebilag-tabel
+  koretimer?: number
+  ventetid?: number
+  pause?: number
+  tons_koert?: number            // fra PLAN vejebilag (mock for nu)
+  chauffoer_kommentar?: string
+  // State
+  godkendt_af_formand: boolean
+  godkendt_tidspunkt?: string
+}
+
 interface ConfirmedTruck {
   regnr: string
   chauffoer: string
   tlf: string
   biltype: string
+  afregning?: Omit<ChauffoerAfregning, 'chauffoer_navn' | 'reg_nr'>
+  /** Sat til true for biler der kører materiel (blokvogn, kran-bånd etc.) */
+  er_materiel_bil?: boolean
+  /** Liste over materiel-beskrivelser bilen kører, fx ['HAMM HD10 VT', 'VÖGELE 1900-3I'] */
+  koert_materiel?: string[]
 }
 
 interface VognmandBekraeftelse {
@@ -259,6 +294,12 @@ interface ConfirmedMaterielItem {
   chauffoer: string
   tlf: string
   transportType: string
+  // Afregning — kun første materiel-enhed per chauffør bærer afregning
+  // TODO: Erstat med Supabase når klar — afregning_type kommer fra vognmand.aftaler.chauffoerer[], timer fra chauffeur-app, tons fra plan_vejebilag-tabel
+  afregning_type?: AfregningType
+  afregning_timer?: number
+  afregning_ventetid?: number
+  afregning_chauffoer_kommentar?: string
 }
 
 interface VognmandMaterielBekraeftelse {
@@ -273,12 +314,47 @@ interface VognmandMaterielBekraeftelse {
 //   3. Badges i Planlægning → Materiellevering skifter til grønt
 //   4. UdfoerselContent → Materiel-sektion viser bekræftede data
 // Se .claude/docs/MATERIEL_FLOW.md for fuld spec.
+// TODO: Erstat med Supabase når klar — afregning_type kommer fra vognmand.aftaler.chauffoerer[], timer fra chauffeur-app, tons fra plan_vejebilag-tabel
 const INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE: VognmandMaterielBekraeftelse = {
   bekraeftetTidspunkt: '15. mar · 17:05',
   items: [
-    { resourceId: 'r1', anlaegsNr: '5-0034', beskrivelse: 'HAMM HD10 VT',   regnr: 'BL77331', chauffoer: 'Lars Pedersen',  tlf: '20 30 40 50', transportType: 'Blokvogn' },
-    { resourceId: 'r2', anlaegsNr: '3-0112', beskrivelse: 'VÖGELE 1900-3I', regnr: 'BL77331', chauffoer: 'Lars Pedersen',  tlf: '20 30 40 50', transportType: 'Blokvogn' },
-    { resourceId: 'r3', anlaegsNr: '7-0078', beskrivelse: 'HAMM DV70VV',    regnr: 'BL77331', chauffoer: 'Lars Pedersen',  tlf: '20 30 40 50', transportType: 'Kran-bånd' },
+    {
+      resourceId: 'r1',
+      anlaegsNr: '5-0034',
+      beskrivelse: 'HAMM HD10 VT',
+      regnr: 'BL77331',
+      chauffoer: 'Lars Pedersen',
+      tlf: '20 30 40 50',
+      transportType: 'Blokvogn',
+      // Første og eneste materiel for Lars Pedersen → afregning herunder
+      afregning_type: 'time',
+      afregning_timer: 8.5,
+      afregning_ventetid: 1,
+      afregning_chauffoer_kommentar: 'Pakket ud og ind 2 gange — ændret placering af tromle.',
+    },
+    {
+      resourceId: 'r2',
+      anlaegsNr: '3-0112',
+      beskrivelse: 'VÖGELE 1900-3I',
+      regnr: 'BL77331',
+      chauffoer: 'Lars Pedersen',
+      tlf: '20 30 40 50',
+      transportType: 'Blokvogn',
+      // Anden enhed for Lars Pedersen → ingen afregning-knap (groupering)
+    },
+    {
+      resourceId: 'r3',
+      anlaegsNr: '7-0078',
+      beskrivelse: 'HAMM DV70VV',
+      regnr: 'KK45892',
+      chauffoer: 'Bent Sørensen',
+      tlf: '31 42 53 64',
+      transportType: 'Kran-bånd',
+      // Kun én enhed for Bent Sørensen → afregning herunder
+      afregning_type: 'time',
+      afregning_timer: 7,
+      afregning_ventetid: 0,
+    },
   ],
 }
 
@@ -290,14 +366,85 @@ const INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE: VognmandMaterielBekraeftelse = {
 //   3. Badges i Planlægning → Asfalt kørsel skifter per dag
 //   4. UdfoerselContent → Bestilte biler viser bekræftede biler for dagens dato
 // Se .claude/docs/MATERIEL_FLOW.md for fuld spec.
+// TODO: Erstat med Supabase når klar — afregning_type kommer fra vognmand.aftaler.chauffoerer[], timer fra chauffeur-app, tons fra plan_vejebilag-tabel
 const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
   'd2-1': {
     dayId: 'd2-1',
     bekraeftetTidspunkt: '15. mar · 16:42',
     biler: [
-      { regnr: 'AB 12 345', chauffoer: 'Morten Lund',  tlf: '22 33 44 55', biltype: '6 Aks' },
-      { regnr: 'CD 67 890', chauffoer: 'Søren Karlsen', tlf: '26 77 88 99', biltype: '6 Aks' },
-      { regnr: 'EF 11 223', chauffoer: 'Lars Holm',    tlf: '40 12 56 78', biltype: '7 Aks' },
+      {
+        regnr: 'AB 12 345',
+        chauffoer: 'Morten Lund',
+        tlf: '22 33 44 55',
+        biltype: '6 Aks',
+        // time-afregning med prædufyldte værdier fra chauffør-app
+        afregning: {
+          afregning_type: 'time',
+          koretimer: 7.5,
+          ventetid: 0.5,
+          pause: 0.5,
+          chauffoer_kommentar: 'Ventet 30 min ved fabrikken pga. kø ved indvejning.',
+          godkendt_af_formand: false,
+        },
+      },
+      {
+        regnr: 'CD 67 890',
+        chauffoer: 'Søren Karlsen',
+        tlf: '26 77 88 99',
+        biltype: '6 Aks',
+        // akkord-afregning med tons prædufyldt
+        afregning: {
+          afregning_type: 'akkord',
+          tons_koert: 148,
+          ventetid: 0,
+          godkendt_af_formand: false,
+        },
+      },
+      {
+        regnr: 'EF 11 223',
+        chauffoer: 'Lars Holm',
+        tlf: '40 12 56 78',
+        biltype: '7 Aks',
+        // INGEN afregning_type → trigger fallback-banner + default time
+        afregning: {
+          afregning_type: undefined,
+          koretimer: 8,
+          ventetid: 0,
+          pause: 0,
+          godkendt_af_formand: true,
+          godkendt_tidspunkt: '16. mar · 09:14',
+        },
+      },
+      // TODO: Erstat med Supabase når klar — materiel-biler fra vognmand.aftaler.materiel[]
+      {
+        regnr: 'BL77331',
+        chauffoer: 'Lars Pedersen',
+        tlf: '20 30 40 50',
+        biltype: 'Blokvogn',
+        er_materiel_bil: true,
+        koert_materiel: ['HAMM HD10 VT (5-0034)', 'VÖGELE 1900-3I (3-0112)'],
+        afregning: {
+          afregning_type: 'time',
+          koretimer: 8.5,
+          ventetid: 1,
+          chauffoer_kommentar: 'Pakket ud og ind 2 gange — ændret placering af tromle.',
+          godkendt_af_formand: false,
+        },
+      },
+      {
+        regnr: 'KK45892',
+        chauffoer: 'Bent Sørensen',
+        tlf: '31 42 53 64',
+        biltype: 'Kran-bånd',
+        er_materiel_bil: true,
+        koert_materiel: ['HAMM DV70VV (7-0078)'],
+        afregning: {
+          afregning_type: 'time',
+          koretimer: 7,
+          ventetid: 0,
+          godkendt_af_formand: false,
+        },
+      },
     ],
   },
 }
@@ -647,12 +794,14 @@ export function OrdrePlanScreen() {
                       <span className="font-inter text-xs font-semibold text-text-primary">{activeProduct.ekstraTemperaturmaalinger ? 'Ja' : 'Nej'}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="font-inter text-xs text-text-muted">Entreprisekontrol</span>
-                      {activeProduct.entreprisekontrol === 2 ? (
-                        <span className="font-inter text-xs font-semibold text-text-primary">A3, A4, MKS skal udfyldes</span>
-                      ) : (
-                        <span className="font-inter text-xs font-semibold text-text-primary">–</span>
-                      )}
+                      <span className="font-inter text-xs text-text-muted">Entreprisekontrol og temperatur</span>
+                      <span className="font-inter text-xs font-semibold text-text-primary">
+                        {activeProduct.entreprisekontrol === 2 || activeProduct.temperaturmaaling === 2
+                          ? 'Følgende skal udfyldes: A3, A4, MKS'
+                          : activeProduct.entreprisekontrol === 1 || activeProduct.temperaturmaaling === 1
+                            ? 'Følgende skal udfyldes: MKS'
+                            : '–'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1479,8 +1628,8 @@ export function OrdrePlanScreen() {
               forundersoegelseFotos={photos.filter(p => p.source === 'forundersoegelse')}
               onAddPhotos={(newPhotos) => setPhotos(prev => [...prev, ...newPhotos])}
               vognmandBekraeftelse={activeDays[0] ? vognmandBekraeftelser[activeDays[0].id] : undefined}
-              todayDay={activeDays[0]}
               vognmandMaterielBekraeftelse={vognmandMaterielBekraeftelse}
+              todayDay={activeDays[0]}
             />
           )}
 
@@ -1821,12 +1970,30 @@ function ForCheckbox({ checked, onChange }: { checked: boolean; onChange: () => 
 
 // ─── UdfoerselContent ─────────────────────────────────────────────────────────
 
-function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeftelse, todayDay, vognmandMaterielBekraeftelse }: {
+// PLAN-felt — styrer timeafregnings-flow for materiel-sektionen
+// TODO: Erstat med Supabase når klar — timeafregning-feltet kommer fra orders.plan_timeafregning
+type TimeafregningFraPlan = 'ja' | 'nej'
+
+// Materiel-enhed (anlæg fra holdpakken) — genbruger anlægsinfo fra INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE
+interface MaterielEnhed {
+  anlaegsNr: string
+  beskrivelse: string
+}
+
+// De tre anlæg fra holdpakken — data fra INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE
+// TODO: Erstat med Supabase når klar — anlæg kommer fra holdpakke knyttet til ordren
+const MATERIEL_ENHEDER: MaterielEnhed[] = [
+  { anlaegsNr: '5-0034', beskrivelse: 'HAMM HD10 VT' },
+  { anlaegsNr: '3-0112', beskrivelse: 'VÖGELE 1900-3I' },
+  { anlaegsNr: '7-0078', beskrivelse: 'HAMM DV70VV' },
+]
+
+function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeftelse, vognmandMaterielBekraeftelse, todayDay }: {
   forundersoegelseFotos: MockPhoto[]
   onAddPhotos: (p: MockPhoto[]) => void
   vognmandBekraeftelse?: VognmandBekraeftelse
-  todayDay?: DayPlan
   vognmandMaterielBekraeftelse?: VognmandMaterielBekraeftelse
+  todayDay?: DayPlan
 }) {
   const [underlaegsType, setUnderlaegsType] = useState<UnderlagType | ''>('asfalt')
   const [underlaegsAndet, setUnderlaegsAndet] = useState('')
@@ -1835,9 +2002,82 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
   const [aftaltMed, setAftaltMed] = useState('')
   const [forbehold, setForbehold] = useState('')
   const [saved, setSaved] = useState(false)
+  const [forundersoegelseOpen, setForundersoegelseOpen] = useState(false)
   const [ekstraOpen, setEkstraOpen] = useState(false)
   const [ekstraLinjer, setEkstraLinjer] = useState<EkstraLinje[]>([])
   const [ekstraSent, setEkstraSent] = useState(false)
+
+  // ── Materiel / timeafregning state ──────────────────────────────────────────
+  // TODO: Fjernes — kun til demo. I produktion kommer feltet fra PLAN
+  const [timeafregningFraPlan, setTimeafregningFraPlan] = useState<TimeafregningFraPlan>('nej')
+  // Case A (nej): samlet timer for hele holdpakken
+  const [holdpakkeTimer, setHoldpakkeTimer] = useState<number>(7.5)
+  // Case A (nej): afkrydsning per anlæg — default alle anvendt
+  const [materielAnvendt, setMaterielAnvendt] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(MATERIEL_ENHEDER.map(e => [e.anlaegsNr, true]))
+  )
+  // Case B (ja): timer per anlæg
+  const [materielTimer, setMaterielTimer] = useState<Record<string, number>>(
+    () => ({ '5-0034': 8.5, '3-0112': 7.0, '7-0078': 2.0 })
+  )
+
+  // ── Afregning state ──────────────────────────────────────────────────────────
+  // Key: reg.nr (biler) eller chauffoer-navn (materiel)
+  const [afregningOpen, setAfregningOpen] = useState<Set<string>>(new Set())
+
+  const [materielAfregningGodkendt, setMaterielAfregningGodkendt] = useState(false)
+  // Lokal kopi af afregnings-felter per chauffør-nøgle
+  const [afregningData, setAfregningData] = useState<Record<string, ChauffoerAfregning>>(() => {
+    // Initialiser fra mock — biler
+    // TODO: Erstat med Supabase når klar — afregning_type kommer fra vognmand.aftaler.chauffoerer[], timer fra chauffeur-app, tons fra plan_vejebilag-tabel
+    const initial: Record<string, ChauffoerAfregning> = {}
+    const bilerData = INITIAL_VOGNMAND_BEKRAEFTELSER['d2-1']?.biler ?? []
+    for (const bil of bilerData) {
+      if (bil.afregning) {
+        initial[bil.regnr] = {
+          chauffoer_navn: bil.chauffoer,
+          reg_nr: bil.regnr,
+          ...bil.afregning,
+        }
+      }
+    }
+    // Materiel-biler er nu en del af bilerData — ingen separat init nødvendig
+    // TODO: Erstat med Supabase når klar — afregning_type kommer fra vognmand.aftaler.chauffoerer[], timer fra chauffeur-app
+    return initial
+  })
+
+  function toggleAfregning(key: string) {
+    setAfregningOpen(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
+
+  function updateAfregningField(key: string, field: keyof ChauffoerAfregning, value: number | string | boolean | undefined) {
+    setAfregningData(prev => ({
+      ...prev,
+      [key]: { ...prev[key], [field]: value },
+    }))
+  }
+
+  function godkendAfregning(key: string) {
+    const now = new Date()
+    const tids = `${now.getDate()}. ${['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'][now.getMonth()]} · ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
+    setAfregningData(prev => ({
+      ...prev,
+      [key]: { ...prev[key], godkendt_af_formand: true, godkendt_tidspunkt: tids },
+    }))
+    setAfregningOpen(prev => { const next = new Set(prev); next.delete(key); return next })
+  }
+
+  function genaabnAfregning(key: string) {
+    setAfregningData(prev => ({
+      ...prev,
+      [key]: { ...prev[key], godkendt_af_formand: false, godkendt_tidspunkt: undefined },
+    }))
+    setAfregningOpen(prev => new Set([...prev, key]))
+  }
 
   function addEkstraLinje() {
     setEkstraLinjer(prev => [...prev, { id: `el-${Date.now()}`, type: '', beskrivelse: '', antal: 1 }])
@@ -1880,12 +2120,109 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
     e.target.value = ''
   }
 
+  const antalBiler = vognmandBekraeftelse?.biler.length ?? 0
+
   return (
     <div className="flex flex-col gap-[48px]">
+      {/* ── Status-bokse (matcher produkt-bokse i Planlægning) ───────── */}
+      <div className="inline-flex gap-xs">
+        {/* Biler bekræftelse */}
+        <div className={`flex flex-col gap-xxxs items-start min-w-[150px] px-sm py-xs rounded-xl border ${vognmandBekraeftelse ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
+          <span className="font-inter font-bold text-xs tabular-nums text-text-muted uppercase tracking-wider">
+            Biler
+          </span>
+          <span className="font-poppins font-semibold text-sm tracking-tight text-text-primary">
+            {vognmandBekraeftelse ? 'Bekræftet' : 'Afventer'}
+          </span>
+          <span className="font-inter text-xs text-text-muted">
+            {vognmandBekraeftelse ? 'Vognmand har bekræftet' : 'Vognmand ikke bekræftet'}
+          </span>
+          <span className="font-inter text-xs tabular-nums text-text-muted">
+            {antalBiler} {antalBiler === 1 ? 'bil' : 'biler'}
+          </span>
+        </div>
+        {/* Materiel transport */}
+        {(() => {
+          const materielBekraeftet = !!(vognmandMaterielBekraeftelse && vognmandMaterielBekraeftelse.items.length > 0)
+          const antalMateriel = vognmandMaterielBekraeftelse?.items.length ?? 0
+          return (
+            <div className={`flex flex-col gap-xxxs items-start min-w-[150px] px-sm py-xs rounded-xl border ${materielBekraeftet ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
+              <span className="font-inter font-bold text-xs tabular-nums text-text-muted uppercase tracking-wider">
+                Materiel transport
+              </span>
+              <span className="font-poppins font-semibold text-sm tracking-tight text-text-primary">
+                {materielBekraeftet ? 'Bekræftet' : 'Afventer'}
+              </span>
+              <span className="font-inter text-xs text-text-muted">
+                {materielBekraeftet ? 'Vognmand har bekræftet' : 'Vognmand ikke bekræftet'}
+              </span>
+              <span className="font-inter text-xs tabular-nums text-text-muted">
+                {antalMateriel} {antalMateriel === 1 ? 'enhed' : 'enheder'}
+              </span>
+            </div>
+          )
+        })()}
+        {/* Forundersøgelse */}
+        {(() => {
+          const forundersoegelseForetaget = underlaegsType && tilfredsstillende !== null && tilfredsstillende !== undefined
+          return (
+            <div className={`flex flex-col gap-xxxs items-start min-w-[150px] px-sm py-xs rounded-xl border ${forundersoegelseForetaget ? 'bg-good-bg border-good/30' : 'bg-bad-bg border-bad/30'}`}>
+              <span className={`font-inter font-bold text-xs tabular-nums uppercase tracking-wider ${forundersoegelseForetaget ? 'text-text-muted' : 'text-bad/70'}`}>
+                Forundersøgelse
+              </span>
+              <span className={`font-poppins font-semibold text-sm tracking-tight ${forundersoegelseForetaget ? 'text-text-primary' : 'text-bad'}`}>
+                {forundersoegelseForetaget ? 'Gennemført' : 'Ikke foretaget'}
+              </span>
+              <span className={`font-inter text-xs ${forundersoegelseForetaget ? 'text-text-muted' : 'text-bad/80'}`}>
+                {forundersoegelseForetaget ? 'Underlag vurderet' : 'Mangler vurdering'}
+              </span>
+              <span className={`font-inter text-xs ${forundersoegelseForetaget ? 'text-text-muted' : 'text-bad/80'}`}>
+                {forundersoegelseForetaget ? (tilfredsstillende ? 'Tilfredsstillende' : 'Ikke tilfredsstillende') : ' '}
+              </span>
+            </div>
+          )
+        })()}
+      </div>
+
       <section>
         <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Forundersøgelse</h2>
+        <div className={`w-full bg-surface border border-hairline rounded-2xl shadow-sm overflow-hidden mb-sm`}>
+          <button
+            type="button"
+            onClick={() => setForundersoegelseOpen(o => !o)}
+            className="w-full flex items-start justify-between px-md py-sm cursor-pointer hover:border-hairline-2 transition-colors"
+            aria-expanded={forundersoegelseOpen}
+          >
+            <div className="flex flex-col gap-xxxs items-start">
+              {!forundersoegelseOpen && (
+                <div className="text-xs text-text-muted font-inter">
+                  {underlaegsType ? (
+                    <>
+                      <span className="font-semibold text-text-secondary">
+                        {underlaegsType === 'asfalt' ? 'Asfalt'
+                          : underlaegsType === 'beton' ? 'Beton'
+                          : underlaegsType === 'grus' ? 'Grus'
+                          : underlaegsType === 'andet' ? (underlaegsAndet || 'Andet')
+                          : underlaegsType}
+                      </span>
+                      {' · '}
+                      {tilfredsstillende === true ? 'Tilfredsstillende' : tilfredsstillende === false ? 'Ikke tilfredsstillende' : 'Tilstand ikke vurderet'}
+                      {' · '}
+                      {forundersoegelseFotos.length} {forundersoegelseFotos.length === 1 ? 'billede' : 'billeder'}
+                      {ekstraLinjer.length > 0 && <> · {ekstraLinjer.length} ekstraarbejde</>}
+                    </>
+                  ) : (
+                    <span className="italic">Ikke udfyldt endnu</span>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-xs">
+              {forundersoegelseOpen ? <ChevronUp size={20} className="text-text-muted" /> : <ChevronDown size={20} className="text-text-muted" />}
+            </div>
+          </button>
 
-        <div className="bg-white rounded-2xl border border-hairline overflow-hidden shadow-sm">
+        {forundersoegelseOpen && <div className="border-t border-hairline">
 
           {/* ── Række 1: Underlag + Tilstand ─────────────────────── */}
           <div className="grid grid-cols-2 divide-x divide-hairline border-b border-hairline">
@@ -2169,69 +2506,207 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
             </button>
           </div>
 
+        </div>}
         </div>
       </section>
 
       {/* ── Bestilte biler ────────────────────────────────────────── */}
       {todayDay && (
         <section>
-          <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Bestilte biler</h2>
+          <div className="mb-sm">
+            <h2 className="font-poppins font-semibold text-xl text-text-primary">Bilafregning</h2>
+          </div>
 
-          <div className={[
-            'rounded-xl',
-            vognmandBekraeftelse ? 'bg-[#E7F4EE]' : 'bg-[#FEEE3215]',
-          ].join(' ')}>
-            <div className="flex items-center justify-between px-sm pt-sm pb-xs">
-              <div className="flex items-center gap-xs">
-                {vognmandBekraeftelse ? (
-                  <>
-                    <CheckCircle2 size={14} className="text-[#1F8A5B] flex-shrink-0" />
-                    <span className="font-inter text-sm font-semibold text-[#1F8A5B]">Bekræftet af vognmand</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="w-[8px] h-[8px] rounded-full bg-yellow flex-shrink-0 animate-pulse" />
-                    <span className="font-inter text-sm font-semibold text-[#8A6A00]">Afventer bekræftelse fra vognmand</span>
-                  </>
-                )}
-              </div>
-              {vognmandBekraeftelse && (
-                <span className="font-inter text-xxs text-text-muted">{vognmandBekraeftelse.bekraeftetTidspunkt}</span>
-              )}
-            </div>
-
+          <div className="rounded-xl bg-surface border border-hairline overflow-hidden">
             {vognmandBekraeftelse ? (
-              <div className="px-sm pb-sm">
-                <div className="overflow-hidden rounded-lg border border-[#1F8A5B]/15 bg-white">
+              <div className="px-sm pb-sm pt-sm">
+                <div className="overflow-hidden rounded-lg border border-hairline bg-surface">
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b border-hairline bg-[#F5F5F5]">
+                      <tr className="border-b border-hairline bg-surface-2">
                         <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Reg.nr.</th>
                         <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Chauffør</th>
                         <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Tlf.</th>
                         <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Type</th>
+                        <th className="text-right font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Afregning</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {vognmandBekraeftelse.biler.map((bil, i) => (
-                        <tr key={bil.regnr} className={i < vognmandBekraeftelse.biler.length - 1 ? 'border-b border-hairline' : ''}>
-                          <td className="font-inter text-xs font-semibold text-text-primary px-xs py-xs tabular-nums">{bil.regnr}</td>
-                          <td className="font-inter text-xs text-text-primary px-xs py-xs">{bil.chauffoer}</td>
-                          <td className="px-xs py-xs">
-                            <a href={`tel:${bil.tlf.replace(/\s/g, '')}`} className="font-inter text-xs text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
-                              <Phone size={11} />
-                              {bil.tlf}
-                            </a>
-                          </td>
-                          <td className="font-inter text-xs text-text-muted px-xs py-xs">{bil.biltype}</td>
-                        </tr>
-                      ))}
+                      {vognmandBekraeftelse.biler.map((bil, i) => {
+                        const afregKey = bil.regnr
+                        const afrData = afregningData[afregKey]
+                        const isOpen = afregningOpen.has(afregKey)
+                        const isGodkendt = afrData?.godkendt_af_formand ?? false
+                        // Materiel-biler afregnes ALTID på time — akkord ikke relevant
+                        const effectiveType: AfregningType = bil.er_materiel_bil ? 'time' : (afrData?.afregning_type ?? 'time')
+                        const manglerType = !bil.er_materiel_bil && !afrData?.afregning_type
+                        const isLast = i === vognmandBekraeftelse.biler.length - 1
+                        return (
+                          <>
+                            <tr key={bil.regnr} className={(!isLast || isOpen || isGodkendt) ? 'border-b border-hairline' : ''}>
+                              <td className="font-inter text-xs font-semibold text-text-primary px-xs py-xs tabular-nums">{bil.regnr}</td>
+                              <td className="font-inter text-xs text-text-primary px-xs py-xs">{bil.chauffoer}</td>
+                              <td className="px-xs py-xs">
+                                <a href={`tel:${bil.tlf.replace(/\s/g, '')}`} className="font-inter text-xs text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
+                                  <Phone size={11} />
+                                  {bil.tlf}
+                                </a>
+                              </td>
+                              <td className="px-xs py-xs">
+                                <div className="flex items-center gap-xxxs flex-wrap">
+                                  <span className="font-inter text-xs text-text-muted">{bil.biltype}</span>
+                                  {bil.er_materiel_bil && (
+                                    <span className="inline-flex items-center gap-xxxs bg-warn-bg text-text-secondary font-inter font-semibold text-xxs px-xs py-xxxs rounded-md uppercase tracking-wider">
+                                      Kørt materiel
+                                    </span>
+                                  )}
+                                </div>
+                                {bil.er_materiel_bil && bil.koert_materiel && bil.koert_materiel.length > 0 && (
+                                  <p className="font-inter text-xs text-text-muted italic mt-xxxs">
+                                    {bil.koert_materiel.join(', ')}
+                                  </p>
+                                )}
+                              </td>
+                              <td className="px-xs py-xs text-right">
+                                {isGodkendt ? (
+                                  <span className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-md bg-good-bg text-good font-inter font-semibold text-xs">
+                                    <CheckCircle2 size={11} className="flex-shrink-0" />
+                                    Afregning godkendt
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => toggleAfregning(afregKey)}
+                                    className="inline-flex items-center gap-xxxs bg-yellow text-deep-teal font-inter font-semibold text-xs py-xxxs px-xs rounded-md hover:opacity-90 transition-opacity"
+                                  >
+                                    {isOpen ? 'Luk' : 'Lav afregning'}
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                            {(isOpen || isGodkendt) && (
+                              <tr key={`${bil.regnr}-expand`} className={!isLast ? 'border-b border-hairline' : ''}>
+                                <td colSpan={5} className="px-xs pb-xs pt-xxxs">
+                                  <div className="bg-surface-2 rounded-lg p-sm mt-xxxs border border-hairline">
+                                    {/* Fallback-banner manglende afregningstype (asfalt-biler only) */}
+                                    {manglerType && (
+                                      <div className="mb-xs">
+                                        <span className="inline-flex items-center bg-warn-bg text-text-secondary font-inter font-medium text-xs px-sm py-xxxs rounded-full">
+                                          Afregningstype mangler fra vognmand-system — defaulter til time-afregning
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    {/* Afregnings-felter */}
+                                    <div className="flex flex-wrap gap-xs items-end">
+                                      {effectiveType === 'time' ? (
+                                        <>
+                                          <div className="flex flex-col gap-xxxs">
+                                            <label className="font-inter text-xxs text-text-muted uppercase tracking-widest">
+                                              {bil.er_materiel_bil ? 'Timer' : 'Køretimer'}
+                                            </label>
+                                            <input
+                                              type="number"
+                                              step="0.5"
+                                              value={afrData?.koretimer ?? ''}
+                                              disabled={isGodkendt}
+                                              onChange={e => updateAfregningField(afregKey, 'koretimer', parseFloat(e.target.value) || 0)}
+                                              className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-sm tabular-nums w-[120px] focus:outline-none focus:border-dark-teal disabled:opacity-60"
+                                            />
+                                          </div>
+                                          <div className="flex flex-col gap-xxxs">
+                                            <label className="font-inter text-xxs text-text-muted uppercase tracking-widest">Ventetid</label>
+                                            <input
+                                              type="number"
+                                              step="0.5"
+                                              value={afrData?.ventetid ?? ''}
+                                              disabled={isGodkendt}
+                                              onChange={e => updateAfregningField(afregKey, 'ventetid', parseFloat(e.target.value) || 0)}
+                                              className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-sm tabular-nums w-[120px] focus:outline-none focus:border-dark-teal disabled:opacity-60"
+                                            />
+                                          </div>
+                                          {/* Pause-felt kun for asfalt-biler — ikke relevant for materiel */}
+                                          {!bil.er_materiel_bil && (
+                                            <div className="flex flex-col gap-xxxs">
+                                              <label className="font-inter text-xxs text-text-muted uppercase tracking-widest">Pause</label>
+                                              <input
+                                                type="number"
+                                                step="0.5"
+                                                value={afrData?.pause ?? ''}
+                                                disabled={isGodkendt}
+                                                onChange={e => updateAfregningField(afregKey, 'pause', parseFloat(e.target.value) || 0)}
+                                                className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-sm tabular-nums w-[120px] focus:outline-none focus:border-dark-teal disabled:opacity-60"
+                                              />
+                                            </div>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className="flex flex-col gap-xxxs">
+                                            <label className="font-inter text-xxs text-text-muted uppercase tracking-widest">Tons kørt</label>
+                                            <input
+                                              type="number"
+                                              step="1"
+                                              value={afrData?.tons_koert ?? ''}
+                                              disabled={isGodkendt}
+                                              onChange={e => updateAfregningField(afregKey, 'tons_koert', parseFloat(e.target.value) || 0)}
+                                              className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-sm tabular-nums w-[120px] focus:outline-none focus:border-dark-teal disabled:opacity-60"
+                                            />
+                                          </div>
+                                          <div className="flex flex-col gap-xxxs">
+                                            <label className="font-inter text-xxs text-text-muted uppercase tracking-widest">Ventetid</label>
+                                            <input
+                                              type="number"
+                                              step="0.5"
+                                              value={afrData?.ventetid ?? ''}
+                                              disabled={isGodkendt}
+                                              onChange={e => updateAfregningField(afregKey, 'ventetid', parseFloat(e.target.value) || 0)}
+                                              className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-sm tabular-nums w-[120px] focus:outline-none focus:border-dark-teal disabled:opacity-60"
+                                            />
+                                          </div>
+                                        </>
+                                      )}
+
+                                      {isGodkendt ? (
+                                        <div className="flex flex-col gap-xxxs ml-xs">
+                                          <span className="font-inter text-xxs text-text-muted">{afrData?.godkendt_tidspunkt}</span>
+                                          <button
+                                            onClick={() => genaabnAfregning(afregKey)}
+                                            className="font-inter text-xs text-text-muted underline cursor-pointer hover:text-text-primary transition-colors"
+                                          >
+                                            Genåbn afregning
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          onClick={() => godkendAfregning(afregKey)}
+                                          className="inline-flex items-center gap-xs bg-yellow text-deep-teal font-inter font-semibold text-sm px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity self-end"
+                                        >
+                                          <CheckCircle2 size={14} />
+                                          Godkend afregning
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {/* Chauffør-kommentar læs-only */}
+                                    {afrData?.chauffoer_kommentar && (
+                                      <div className="flex items-start gap-xs bg-warn-bg p-xs rounded-md mt-sm">
+                                        <MessageSquare size={13} className="text-text-secondary flex-shrink-0 mt-[1px]" />
+                                        <span className="font-inter text-xs italic text-text-secondary">{afrData.chauffoer_kommentar}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
               </div>
             ) : (
-              <p className="font-inter text-xs text-[#8A6A00]/80 px-sm pb-sm">
+              <p className="font-inter text-xs text-text-muted px-sm pb-sm">
                 Bilbestillingen er sendt — vognmanden disponerer og bekræfter snarest.
               </p>
             )}
@@ -2239,53 +2714,166 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
         </section>
       )}
 
-      {/* ── Materiel ──────────────────────────────────────────────── */}
-      {vognmandMaterielBekraeftelse && vognmandMaterielBekraeftelse.items.length > 0 && (
-        <section>
-          <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Materiel</h2>
-
-          <div className="rounded-xl bg-[#E7F4EE]">
-            <div className="flex items-center justify-between px-sm pt-sm pb-xs">
-              <div className="flex items-center gap-xs">
-                <CheckCircle2 size={14} className="text-[#1F8A5B] flex-shrink-0" />
-                <span className="font-inter text-sm font-semibold text-[#1F8A5B]">Bekræftet af vognmand</span>
-              </div>
-              <span className="font-inter text-xxs text-text-muted">{vognmandMaterielBekraeftelse.bekraeftetTidspunkt}</span>
-            </div>
-            <div className="px-sm pb-sm">
-              <div className="overflow-hidden rounded-lg border border-[#1F8A5B]/15 bg-white">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-hairline bg-[#F5F5F5]">
-                      <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Anlæg</th>
-                      <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Beskrivelse</th>
-                      <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Transport</th>
-                      <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Chauffør</th>
-                      <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Tlf.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vognmandMaterielBekraeftelse.items.map((item, i) => (
-                      <tr key={item.resourceId} className={i < vognmandMaterielBekraeftelse.items.length - 1 ? 'border-b border-hairline' : ''}>
-                        <td className="font-inter text-xs text-text-muted px-xs py-xs tabular-nums">{item.anlaegsNr}</td>
-                        <td className="font-inter text-xs font-semibold text-text-primary px-xs py-xs">{item.beskrivelse}</td>
-                        <td className="font-inter text-xs text-text-muted px-xs py-xs">{item.transportType} · {item.regnr}</td>
-                        <td className="font-inter text-xs text-text-primary px-xs py-xs">{item.chauffoer}</td>
-                        <td className="px-xs py-xs">
-                          <a href={`tel:${item.tlf.replace(/\s/g, '')}`} className="font-inter text-xs text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
-                            <Phone size={11} />
-                            {item.tlf}
-                          </a>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+      {/* ── Materiel ─────────────────────────────────────────────── */}
+      <section>
+        <div className="flex items-center justify-between mb-sm">
+          <h2 className="font-poppins font-semibold text-xl text-text-primary">Materielafregning</h2>
+          <div className="flex items-center gap-xs">
+            {materielAfregningGodkendt && (
+              <span className="inline-flex items-center bg-good-bg text-good font-inter font-semibold text-xs px-sm py-xxxs rounded-full">
+                Afregning godkendt
+              </span>
+            )}
           </div>
-        </section>
-      )}
+        </div>
+
+        {!materielAfregningGodkendt && (
+          <div className="bg-surface rounded-2xl border border-hairline overflow-hidden shadow-sm mb-sm">
+
+            {/* TODO: Fjernes — kun til demo. I produktion kommer feltet fra PLAN */}
+            <div className="flex items-center gap-xs p-sm border-b border-hairline bg-surface-2">
+              <span className="font-inter text-xxs text-text-muted uppercase tracking-widest">Demo:</span>
+              {(['nej', 'ja'] as TimeafregningFraPlan[]).map(v => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setTimeafregningFraPlan(v)}
+                  className={[
+                    'font-inter text-xs px-xs py-xxxs rounded-full border transition-colors',
+                    timeafregningFraPlan === v
+                      ? 'bg-deep-teal text-white border-deep-teal font-semibold'
+                      : 'bg-surface text-text-secondary border-hairline hover:border-dark-teal',
+                  ].join(' ')}
+                >
+                  Timeafregning: {v === 'ja' ? 'Ja' : 'Nej'}
+                </button>
+              ))}
+            </div>
+
+            {/* Info-banner */}
+            <div className="px-sm py-xs bg-surface-2">
+              <span className="inline-flex items-center bg-warn-bg text-text-secondary font-inter font-medium text-xs px-sm py-xxxs rounded-full">
+                {timeafregningFraPlan === 'nej'
+                  ? 'Holdpakke fast pris — angiv samlede timer for hele pakken'
+                  : 'Timeafregning — angiv timer per materiel-enhed'}
+              </span>
+            </div>
+
+            {/* Case A: fast pris — samlet timer-input øverst */}
+            {timeafregningFraPlan === 'nej' && (
+              <div className="flex items-center justify-between border-b border-hairline px-sm py-xs bg-surface-2">
+                <label className="font-inter text-xxs text-text-muted uppercase tracking-widest">Anvendte timer for hele holdpakken</label>
+                <div className="flex items-center gap-xs">
+                  <input
+                    type="number"
+                    step="0.5"
+                    min={0}
+                    value={holdpakkeTimer}
+                    onChange={e => setHoldpakkeTimer(parseFloat(e.target.value) || 0)}
+                    className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-sm tabular-nums w-[120px] focus:outline-none focus:border-dark-teal"
+                  />
+                  <span className="font-inter text-xxs text-text-muted uppercase tracking-widest">timer</span>
+                </div>
+              </div>
+            )}
+
+            {/* Tabel-header */}
+            <div className="grid grid-cols-[100px_1fr_130px] border-b border-hairline bg-surface-2">
+              <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Anlæg</span>
+              <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Beskrivelse</span>
+              <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs text-right">
+                {timeafregningFraPlan === 'nej' ? 'Anvendt' : 'Timer brugt'}
+              </span>
+            </div>
+
+            {/* Rækker */}
+            {MATERIEL_ENHEDER.map((enhed, i) => {
+              const isLast = i === MATERIEL_ENHEDER.length - 1
+              return (
+                <div
+                  key={enhed.anlaegsNr}
+                  className={[
+                    'grid grid-cols-[100px_1fr_130px] items-center px-xs py-xs',
+                    !isLast ? 'border-b border-hairline' : '',
+                  ].join(' ')}
+                >
+                  <span className="font-inter text-xs font-semibold text-text-primary tabular-nums">{enhed.anlaegsNr}</span>
+                  <span className="font-inter text-xs text-text-primary">{enhed.beskrivelse}</span>
+
+                  {timeafregningFraPlan === 'nej' ? (
+                    // Case A: simpel checkbox
+                    <div className="flex justify-end">
+                      <label className="flex items-center justify-center w-[18px] h-[18px] cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={materielAnvendt[enhed.anlaegsNr] ?? true}
+                          onChange={e =>
+                            setMaterielAnvendt(prev => ({ ...prev, [enhed.anlaegsNr]: e.target.checked }))
+                          }
+                          className="sr-only"
+                          aria-label={`${enhed.beskrivelse} anvendt`}
+                        />
+                        <span className={[
+                          'w-4 h-4 rounded-sm border flex items-center justify-center',
+                          (materielAnvendt[enhed.anlaegsNr] ?? true)
+                            ? 'bg-surface border-hairline-2'
+                            : 'bg-surface border-hairline-2',
+                        ].join(' ')}>
+                          {(materielAnvendt[enhed.anlaegsNr] ?? true) && (
+                            <Check size={11} className="text-text-primary" strokeWidth={3} />
+                          )}
+                        </span>
+                      </label>
+                    </div>
+                  ) : (
+                    // Case B: timer-input per enhed
+                    <div className="flex justify-end">
+                      <input
+                        type="number"
+                        step="0.5"
+                        min={0}
+                        value={materielTimer[enhed.anlaegsNr] ?? ''}
+                        onChange={e =>
+                          setMaterielTimer(prev => ({ ...prev, [enhed.anlaegsNr]: parseFloat(e.target.value) || 0 }))
+                        }
+                        className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-sm tabular-nums w-[100px] text-right focus:outline-none focus:border-dark-teal"
+                        aria-label={`Timer for ${enhed.beskrivelse}`}
+                      />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Godkend afregning-knap */}
+            <div className="px-sm py-sm border-t border-hairline">
+              <button
+                type="button"
+                onClick={() => { setMaterielAfregningGodkendt(true) }}
+                className="bg-yellow text-deep-teal font-inter font-semibold text-sm py-xxxs px-sm rounded-lg hover:brightness-95 transition-all"
+              >
+                Godkend afregning
+              </button>
+            </div>
+
+          </div>
+        )}
+
+        {materielAfregningGodkendt && (
+          <div className="flex items-center gap-xs px-sm py-xs bg-good-bg rounded-xl border border-good/20 mb-sm">
+            <CheckCircle2 size={16} className="text-good" />
+            <span className="font-inter text-xs text-text-secondary">Afregning godkendt</span>
+            <button
+              type="button"
+              onClick={() => setMaterielAfregningGodkendt(false)}
+              className="ml-auto font-inter text-xs text-text-muted underline cursor-pointer hover:text-text-primary"
+            >
+              Genåbn afregning
+            </button>
+          </div>
+        )}
+      </section>
+
     </div>
   )
 }

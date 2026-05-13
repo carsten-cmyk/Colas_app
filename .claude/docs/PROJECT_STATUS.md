@@ -51,6 +51,16 @@
 
 ## Faerdiggjort
 
+### 2026-05-13 — Agency setup
+
+- [x] 6 specialiserede agenter i `.claude/agents/`: architect, builder, reviewer, test-writer, cleanup-agent, git-agent
+- [x] `FUNCTIONAL_FLOWS.md` oprettet med bil-tildeling flow + materiel-flow (planlagt)
+- [x] `CLAUDE.md` revideret: chauffeur-web tilføjet, vognmand live, agent-tabel, ny token-regel for prototyper
+- [x] Nye kommandoer: `/develop-screen`, `/git`, `/token-check`
+- [x] Eksisterende kommandoer opgraderet til agent-delegation
+- [x] `STARTUP.md` simplificeret — ingen manuel paste
+- [ ] `chauffeur-web` token-audit (klar til test med `/token-check`)
+
 ### 2026-05-13 — Chauffør web-prototype
 
 - [x] `apps/chauffeur-web` — Vite/React/Tailwind, identisk setup som formand/vognmand
