@@ -18,7 +18,6 @@ import {
   Camera,
   CloudRain,
   CheckCircle2,
-  AlertTriangle,
   MessageSquare,
   Check,
 } from 'lucide-react'
@@ -2125,7 +2124,9 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
   return (
     <div className="flex flex-col gap-[48px]">
       {/* ── Status-bokse (matcher produkt-bokse i Planlægning) ───────── */}
-      <div className="inline-flex gap-xs">
+      <div className="flex flex-col gap-xs">
+        <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest">Status</span>
+        <div className="inline-flex gap-xs">
         {/* Biler bekræftelse */}
         <div className={`flex flex-col gap-xxxs items-start min-w-[150px] px-sm py-xs rounded-xl border ${vognmandBekraeftelse ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
           <span className="font-inter font-bold text-xs tabular-nums text-text-muted uppercase tracking-wider">
@@ -2182,6 +2183,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
             </div>
           )
         })()}
+        </div>
       </div>
 
       <section>
