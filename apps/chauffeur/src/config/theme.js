@@ -4,6 +4,12 @@ export const theme = {
     darkTeal: '#0E4764',
     deepTeal: '#0B3950',
     lightAqua: '#A0C7D7',
+    // Neutral layer (v2 — desktop/content areas)
+    page: '#FAFAFA',
+    surface: '#FFFFFF',
+    surface2: '#F5F5F5',
+    hairline: '#E8E8E8',
+    hairline2: '#DEDEDE',
     // Status — semantic (v2)
     good: '#1F8A5B',
     goodBg: '#E7F4EE',
@@ -55,9 +61,6 @@ export const theme = {
   letterSpacing: {
     label: 0.5, // Uppercase labels
   },
-  avatarSize: {
-    contact: 64, // Cirkulært kontaktfoto i ContactCard
-  },
   cardWidth: {
     contact: 100,        // Fast bredde på ContactCard
     meetingTime: 64,     // Mødetid-kolonne i LocationCard
@@ -68,7 +71,7 @@ export const theme = {
     nameFontSize: 14,        // fontSizes.sm — outdoor minimum
     nameLineHeight: 18,      // lineHeights.name
     phoneIconSize: 12,       // standard icon størrelse
-    phoneRowMinHeight: 40,   // var 44px, -10%
+    phoneRowMinHeight: 44,   // WCAG 2.5.5 — minimum touch target
   },
   locationCard: {
     nameFontSize: 16,         // fontSizes.md

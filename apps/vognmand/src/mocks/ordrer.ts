@@ -1,5 +1,12 @@
 // TODO: Erstat med Supabase når klar
-import type { Ordre } from '@/types/vognmand'
+import type { Ordre, MaterielLinje } from '@/types/vognmand'
+
+// TODO: Erstat med Supabase — materiel-linjer hentes fra PLAN per ordre
+const MOCK_MATERIEL_O1: MaterielLinje[] = [
+  { id: 'm1', anlaegsNr: '5-0034', beskrivelse: 'HAMM HD10 VT',      transportType: 'Blokvogn',  afhentning: 'Viby Depot, 4000 Roskilde',  aflæsning: 'Søvej 6D, 4900 Nakskov' },
+  { id: 'm2', anlaegsNr: '3-0112', beskrivelse: 'VÖGELE 1900-3I',    transportType: 'Blokvogn',  afhentning: 'Viby Depot, 4000 Roskilde',  aflæsning: 'Søvej 6D, 4900 Nakskov' },
+  { id: 'm3', anlaegsNr: '7-0078', beskrivelse: 'HAMM DV70VV',       transportType: 'Kran-bånd', afhentning: 'Glostrup Depot, 2600 Glostrup', aflæsning: 'Søvej 6D, 4900 Nakskov' },
+]
 
 export const MOCK_ORDRER: Ordre[] = [
   {
@@ -21,6 +28,7 @@ export const MOCK_ORDRER: Ordre[] = [
       // Onsdag 18/3 — fuldt disponeret → grøn
       { dato: '2026-03-18', bestilteBiler: 2, disponeredeBiler: 2, ændretAfFormand: false, mødetidFabrik: '07:00', tidFabrikTilPlads: 60 },
     ],
+    materiel: MOCK_MATERIEL_O1,
     tidligereKørte: [
       {
         ordrenr: '1212343',

@@ -11,15 +11,15 @@ export interface ActionButtonProps {
 
 const variantConfig = {
   start: {
-    backgroundColor: theme.colors.success,
-    color: theme.colors.deepTeal,
+    backgroundColor: theme.colors.goodBg,
+    color: theme.colors.good,
   },
   pause: {
     backgroundColor: theme.colors.warning,
     color: theme.colors.deepTeal,
   },
   stop: {
-    backgroundColor: theme.colors.error,
+    backgroundColor: theme.colors.bad,
     color: theme.colors.white,
   },
 } as const;

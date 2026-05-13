@@ -8,9 +8,17 @@ export interface TaskCardProps {
   onPress: () => void;
 }
 
+const stateBadge: Record<string, { label: string; bg: string; text: string } | null> = {
+  active:    { label: 'Aktiv',  bg: theme.colors.goodBg,  text: theme.colors.good },
+  paused:    { label: 'Pause',  bg: theme.colors.warnBg,  text: theme.colors.textPrimary },
+  idle:      null,
+  completed: null,
+};
+
 export function TaskCard({ task, onPress }: TaskCardProps) {
   const delivery = task.locations[1];
   const pickup = task.locations[0];
+  const badge = stateBadge[task.state] ?? null;
 
   return (
     <Pressable
@@ -20,6 +28,14 @@ export function TaskCard({ task, onPress }: TaskCardProps) {
       accessibilityRole="button"
       accessibilityLabel={`Opgave: ${delivery?.name ?? task.orderNumber}`}
     >
+      {badge && (
+        <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+          <Text style={[styles.badgeText, { color: badge.text }]} maxFontSizeMultiplier={1}>
+            {badge.label}
+          </Text>
+        </View>
+      )}
+
       <Text style={styles.name} numberOfLines={2} ellipsizeMode="tail" maxFontSizeMultiplier={1}>
         {delivery?.name ?? '—'}
       </Text>
@@ -64,7 +80,17 @@ const styles = StyleSheet.create({
   },
   metaBold: {
     fontFamily: theme.fonts.interBold,
-    fontSize: theme.fontSizes.sm,
+    fontSize: theme.fontSizes.md,
     color: theme.colors.textPrimary,
+  },
+  badge: {
+    alignSelf: 'flex-start',
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing.xs,
+    paddingVertical: theme.spacing.xxs,
+  },
+  badgeText: {
+    fontFamily: theme.fonts.interBold,
+    fontSize: theme.fontSizes.xs,
   },
 });

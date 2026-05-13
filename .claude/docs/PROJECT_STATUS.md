@@ -1,87 +1,130 @@
 # Project Status — Colas Transport Apps
 
-**Last updated**: 2026-05-11
-**Current phase**: Vognmand — Gantt prototype fase 1 i gang
+**Last updated**: 2026-05-13
+**Current phase**: Chauffør web-prototype (aktiv)
 
 ---
 
-## Naeste skridt (denne session)
+## Naeste skridt (næste session)
 
-### Vognmand — Gantt prototype (aktiv)
-1. **Reviewer Gantt-prototypen** med bruger — justeringer efter feedback
-2. **Disponerings-view** (DayScreen) — bygges efter Gantt er godkendt
-3. **Navigation** fra Gantt-celle → disponerings-view (TODO-placeholders i kode)
+### Chauffør web-prototype — NÆSTE: Deploy til Netlify ⭐
+`apps/chauffeur-web` er bygget og klar. Kør: `npm run chauffeur-web:dev`
+
+**Tilbage:**
+1. Opret Netlify site `colas-chauffoer.netlify.app` — tilføj `netlify.toml` i apps/chauffeur-web
+2. Sæt `VITE_DEMO_PIN` env var i Netlify dashboard
+3. (Valgfrit) Port timereg-skærm fra `apps/chauffeur/src/prototypes/timereg/TimeRegistrationScreen.tsx`
+
+### Formand — Udførelse-mode (parkeret)
+1. **Sektion 2 i Udførelse** — Live overblik: næste bil-banner + biler-tabel + statusser (På vej/Ankommer/Læsser/Venter), Erstat-knap
+2. **Sektion 3 i Udførelse** — Afslut dag: Godkend timer / Afvigelse / Dokumentér
+
+### Materiel → Vognmand flow (klar til prototype)
+
+**Flow:**
+1. Formand planlægger afhentningssted + aflæsningssted per materiel-enhed (adresse, eller pin på kort over udførselssted)
+2. Hver materiel-enhed sendes som **separat linje** til vognmandens løsning
+3. Vognmanden disponerer ved at trække en blokvogn/transport hen over en materiel-linje — samme bil kan trækkes til flere linjer (da kapacitet er svær at vurdere)
+4. Når materiel er disponeret bekræfter vognmanden — badge og Udførelse-sektion opdateres som ved biler
+
+**UI:**
+- **Planlægning → Materiel**: Badge "Bekræftet af vognmand" / "Afventer vognmand" per materiel-enhed (samme stil som Asfalt kørsel)
+- **Udførelse**: Ny sektion "Materiel" (samme layout som "Bestilte biler") med bekræftede transport-oplysninger
+
+**Ordre-struktur — afklaret:**
+- Formand: Materiel og Asfalt kørsel forbliver separate sektioner på samme ordre — hvert får sit eget "Bekræftet af vognmand"-badge
+- Vognmand: Materiel-linjer vises som en ekstra sektion UNDER Asfalt kørsel-disponeringen på den pågældende ordre — ikke som separat ordre. Vognmanden disponerer begge dele på ét sted.
+
+**Kort/pin:** Hvis ingen pin er sat på kortet vises blot adressen. Kort-funktionalitet er en fremtidig feature.
+
+### Ideer til næste fase
+
+- **Forundersøgelse — mobil visning**: Forundersøgelse egner sig til en dedikeret mobiloptimeret side/view, så formanden kan tage sin telefon frem på pladsen, fotografere underlag og udfylde felter. Kan bygges som en responsiv webapp-rute (`/forundersoegelse/:ordreId`) med fuld-skærm kamera-adgang.
+  - **Kamera**: `<input type="file" accept="image/*" capture="environment">` — åbner bagkameraet direkte, virker i alle mobilbrowsere inkl. Safari på iOS uden native app. Kræver HTTPS (opfyldt via Netlify). Valgt frem for `getUserMedia` da live preview er overkill til dette formål.
+  - **Mikrofon**: Web Speech API (`SpeechRecognition`) virker i Chrome/Safari på mobil som webapp. Mikrofon-ikon på Forbehold og Aftalt med-felterne. Vises kun hvis `window.SpeechRecognition` / `window.webkitSpeechRecognition` er tilgængeligt.
 
 ### Formand (parkeret)
-1. **Upgrade OrdrePlanScreen prototype** — `/upgrade-prototype OrdrePlanScreen formand`
-2. **Skrive foerste tests** — BottomTabBar + TopBar komponenter
-3. **Koble Netlify til GitHub** — bruger goer dette i browseren (se nedenfor)
+- Skrive første tests — BottomTabBar + TopBar komponenter
+- Upgrade OrdrePlanScreen prototype til produktionskode
 
 ---
 
 ## Faerdiggjort
 
+### 2026-05-13 — Chauffør web-prototype
+
+- [x] `apps/chauffeur-web` — Vite/React/Tailwind, identisk setup som formand/vognmand
+- [x] PIN-login (identisk design med formand + vognmand)
+- [x] iPhone 14 Pro CSS-ramme (393×852px, Dynamic Island, home indicator, side buttons)
+- [x] SplashScreen — split layout, hero-billede, gul stribe, hilsen + start-knap
+- [x] DashboardScreen — Colas logo, billedgitter, TaskSwiper med snap-scroll
+- [x] TaskDetailScreen — bund-ark med ordre-metrics, lokationer, info/kontakt/alarm-kort, handlingsknapper
+- [x] MessagesListScreen — indbakke/arkiv tabs, samtale-kort
+- [x] ConversationScreen — chat-bobler, projekt-banner, send-input
+- [x] BottomTabBar — 5 tabs med aktiv-indikator og ulæst-badge
+- [x] State-baseret navigation (identisk med original React Native app)
+- [x] `publicDir: '../formand/public'` — deler hero-worker.png + colas-logo.png
+- [x] `npm run chauffeur-web:dev` tilføjet til rod-package.json
+- [ ] Netlify deploy (`colas-chauffoer.netlify.app`) — mangler netlify.toml
+
+### 2026-05-13 — Vognmand bekræftelse UI
+
+- [x] Grønt "Bekræftet af vognmand" badge på dag i Asfalt kørsel (Planlægning)
+- [x] Gult "Afventer vognmand" badge når kørsel er planlagt men ikke bekræftet
+- [x] Bekræftet bilbestilling-kort på Udførelse → Forundersøgelse (reg.nr, chauffør, tlf, biltype)
+- [x] "Afventer bekræftelse fra vognmand"-tilstand med pulserende gul dot
+- [x] VognmandBekraeftelse type + INITIAL_VOGNMAND_BEKRAEFTELSER mock-data
+- [x] Forudfyldte kørselordre (d2-1 + d2-2) + kørselPlanlagtIds til demo
+
+### 2026-05-12 — Formand Udførelse-mode + datafelt-dokumentation
+
+- [x] Udførelse-mode oprettet med mode-switch (Planlægning / Udførelse / Evaluering)
+- [x] Sektion 1: Forundersøgelse — underlag dropdown, tilstand Ja/Nej, årsager, forbehold, billeder
+- [x] Billeder fra Forundersøgelse synkerer til Dokumentation med "Forundersøgelse"-badge
+- [x] Ekstraarbejde — ekspanderer inline, 25 typer, linje-niveau beskrivelse + antal, sendes til projektleder
+- [x] Asfalt kørsel — km-input (km × 1 = minutter), kommentar til vognmand per dag
+- [x] DATA_FIELDS.md — komplet feltliste + formand→vognmand flow + IT-arkitekturplan
+- [x] Live på Netlify: colastransportapp.netlify.app
+
+### 2026-05-11 — Vognmand prototype FÆRDIG + live
+
+- [x] App-shell: topbar + sidebar (Aktive ordre m. badge, Ordre arkiv)
+- [x] Liste-view: ordrekort, dag-tabel, filter-tabs (Åbne/Disponeret/Alle)
+- [x] Gantt/Kalender-view: uge/14-dage/måned, navigation
+- [x] Disponerings-view: flåde-panel erstatter sidebar, drag-and-drop, præudfyld fra tidl. kørte
+- [x] Bil-profil modal: rediger bil, opret chauffør, slet bil
+- [x] Godkend-flow: bekræftelsesside + tab-navigation tilbage
+- [x] PIN-login (identisk design med formand)
+- [x] Live på Netlify: colas-vognmand.netlify.app
+
 ### 2026-05-04 — Agency setup + CI/CD + deploy
 
 - [x] CLAUDE.md omskrevet: alle 5 apps, korrekte doc-referencer, workflow-guide
-- [x] Alle slash-kommandoer oprettet i `.claude/commands/`:
-  - `/review` — korer REVIEW_SPEC med CRITICAL/RECOMMENDED/NICE-TO-HAVE output
-  - `/new-component [Navn] [app]` — scaffold komponent + story + test
-  - `/new-page [Navn] [app] [route]` — scaffold side + hook + route
-  - `/new-hook [useNavn] [app]` — scaffold data-hook + test
-  - `/audit-tokens [mappe]` — find hardcodede vaerdier
-  - `/status` — vis projekt-status
-  - `/cleanup [fil]` — fjern doed kode, flyt logik til hooks, fix tokens
-  - `/test [fil]` — skriv komponent/hook tests
-  - `/upgrade-prototype [Navn] [app]` — prototype → produktion workflow
-- [x] DESIGN_SYSTEM.md omskrevet med faktiske Colas tokens (tailwind.config.ts)
-- [x] OFFLINE_STRATEGY.md oprettet: useOnlineStatus, TanStack Query patterns, optimistic UI
-- [x] WORKFLOW.md + STARTUP.md som session-referenceguider
-- [x] README.md — professionel med arkitekturdiagram og app-tabel
-- [x] CONTRIBUTING.md — branching, commit-format, PR-workflow, quality gates
-- [x] `.github/workflows/ci.yml` — GitHub Actions: formand (typecheck+lint+test+build) + chauffeur (typecheck)
-- [x] `.github/pull_request_template.md` — PR-tjekliste
-- [x] `apps/formand/.env.example` — VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
-- [x] `apps/formand/vitest.config.ts` — jsdom, coverage 80%/70%, excluder prototypes
-- [x] `apps/formand/eslint.config.js` — TypeScript + react-hooks + jsx-a11y
-- [x] `apps/formand/.prettierrc` — semi:false, singleQuote:true
-- [x] Typer i `apps/formand/src/types/`:
-  - `order.ts` — Order, Product, DayPlan, Factory, Resource, TransportPlan, ScheduleRow, m.fl.
-  - `driver.ts` — Driver, DriverTask, TaskState, DriverStatus
-  - `documentation.ts` — HaendelsesDokumentation
-  - `jobReport.ts` — JobReportEntry
-- [x] Mock-data i `apps/formand/src/mocks/`: orders.ts + drivers.ts
-- [x] Hooks i `apps/formand/src/hooks/`: useOrders.ts + useDriverTasks.ts
-- [x] Typer spejlet i `shared/types/` (single source of truth)
-- [x] `netlify.toml` ved repo-rod — base=apps/formand, peger paa dist/
-- [x] Kode pushet til GitHub: `carsten-cmyk/Colas_app`
+- [x] Alle slash-kommandoer oprettet i `.claude/commands/`
+- [x] DESIGN_SYSTEM.md, OFFLINE_STRATEGY.md, WORKFLOW.md, STARTUP.md
+- [x] README.md, CONTRIBUTING.md, CI/CD (GitHub Actions)
+- [x] Typer, mock-data, hooks i formand-app
+- [x] netlify.toml + formand live på colastransportapp.netlify.app
 
 ### Tidligere (Chauffeur app)
 
 - [x] SplashScreen, Dashboard, BottomTabBar, TaskSwiper, TaskCard
-- [x] Beskeder-sektion (MessagesListScreen, ConversationScreen, NewMessageScreen)
-- [x] Storybook v10 sat op
-- [x] GPS test MVP (gps_test app)
+- [x] Beskeder-sektion
+- [x] Storybook v10
 
 ---
 
-## Netlify — mangler (bruger skal gore i browser)
+## Tech debt / prototype gaps
 
-For at `colastransportapp.netlify.app` viser formand-prototypen:
-1. Ga til Netlify dashboard → Sites → colastransportapp
-2. Site settings → Build & deploy → Link to Git repository
-3. Vaelg: GitHub → carsten-cmyk/Colas_app
-4. `netlify.toml` haandterer resten automatisk (base, command, publish)
-
----
-
-## Tech debt / prototype gaps (Formand)
-
+### Formand
 - [ ] `OrdrePlanScreen` er prototype — skal opgraderes til produktionskode
-- [ ] Ingen tests endnu — start med BottomTabBar + TopBar
-- [ ] Ingen Storybook stories endnu
+- [ ] Ingen tests endnu
 - [ ] Al data er mock — Supabase ikke tilkoblet
-- [ ] `.env.local` mangler (bruger skal oprette fra `.env.example`)
+
+### Vognmand
+- [ ] disponeringState.ts er module-level Set — skal erstattes med Supabase realtime
+- [ ] Bil-profil gem er kun lokalt i session — ingen persistens
+- [ ] Ingen tests
 
 ---
 
@@ -92,27 +135,3 @@ For at `colastransportapp.netlify.app` viser formand-prototypen:
 | Dev | `develop` | dev-projekt | auto-deploy ved push |
 | Staging | `staging` | staging-projekt | auto-deploy ved push |
 | Prod | `main` | prod-projekt | auto-deploy ved push |
-
-Oprettes efter moede med Colas (Colas-ejede konti).
-
----
-
-## Naestekommende
-
-- [ ] Supabase schema baseret paa datamodel (order.ts + driver.ts)
-- [ ] Autentifikation (email/password)
-- [ ] Dagsoversigt (/) — naeste skraem efter OrdrePlanScreen
-- [x] Vognmand-app (apps/vognmand/) — bootstrapped, Gantt-prototype korer paa port 5177
-
-### Vognmand — prototype (2026-05-11)
-- [x] App-shell med topbar (Colas-logo, height 52) + sidebar (280px, bg-page)
-- [x] Sidebar: Transportør-info i bunden, menu: Aktive ordre + Ordre arkiv
-- [x] Aktive ordre (liste-view): kort per ordre, dag-tabel med kolonner, Disponer-knap (grøn)
-- [x] Kalender view (Gantt): uge/14-dage/måned toggle, periode-navigation
-- [x] View-toggle på begge sider: Aktive ordre ↔ Kalender view
-- [x] Typer udvidet: mødetidFabrik, tidFabrikTilPlads, kommentar, TidligereKørtBil
-- [x] Kører på port 5177
-
-### Næste: Disponerings-view
-- [ ] Klik på "Disponer" → ordre-detalje med biltildeling per dag
-- [ ] Spec afklares med bruger

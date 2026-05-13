@@ -20,6 +20,15 @@ export interface TidligereKørt {
   biler: TidligereKørtBil[]
 }
 
+export interface MaterielLinje {
+  id: string
+  anlaegsNr: string
+  beskrivelse: string
+  transportType: string   // fx "Blokvogn" / "Kran-bånd"
+  afhentning: string      // adresse
+  aflæsning: string       // adresse
+}
+
 export interface Ordre {
   id: string
   ordrenr: string
@@ -33,4 +42,5 @@ export interface Ordre {
   endDate: string        // YYYY-MM-DD
   dage: DagDisponering[]
   tidligereKørte?: TidligereKørt[]
+  materiel?: MaterielLinje[]
 }

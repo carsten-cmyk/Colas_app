@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,49 +28,52 @@ export interface TaskSheetProps {
 export function TaskSheet({ orderNumber, onClose, children, footer, tabBar, visible }: TaskSheetProps) {
   const insets = useSafeAreaInsets();
 
+  if (!visible) return null;
+
+  // On web, Modal renders into document.body — outside the 393×852 iPhone frame container.
+  // We use an absoluteFill View instead so the overlay stays inside #root on all platforms.
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <View style={[styles.overlay, { paddingTop: insets.top + theme.spacing.xs }]}>
-        <View style={styles.sheet}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.orderNumber}>{orderNumber}</Text>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel="Luk opgave"
-              accessibilityHint="Lukker opgavevisningen og returnerer til listen"
-            >
-              <Ionicons name="close" size={16} color={theme.colors.deepTeal} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Scrollbart indhold */}
-          <ScrollView
-            style={styles.content}
-            contentContainerStyle={styles.contentContainer}
-            showsVerticalScrollIndicator={false}
+    <View style={[styles.overlay, { paddingTop: insets.top + theme.spacing.xs }]}>
+      <View style={styles.sheet}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.orderNumber}>{orderNumber}</Text>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Luk opgave"
+            accessibilityHint="Lukker opgavevisningen og returnerer til listen"
           >
-            {children}
-          </ScrollView>
-
-          {/* Fast footer — udenfor scroll, arver softAqua fra sheet */}
-          {footer}
+            <Ionicons name="close" size={20} color={theme.colors.deepTeal} />
+          </TouchableOpacity>
         </View>
 
-        {/* Tab bar — fuld bredde under sheet */}
-        {tabBar}
+        {/* Scrollbart indhold */}
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          {children}
+        </ScrollView>
+
+        {/* Fast footer — udenfor scroll, arver softAqua fra sheet */}
+        {footer}
       </View>
-    </Modal>
+
+      {/* Tab bar — fuld bredde under sheet */}
+      {tabBar}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: theme.colors.darkTeal,
     justifyContent: 'flex-end',
+    zIndex: 100,
   },
   sheet: {
     flex: 1,
@@ -88,8 +90,8 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.xxs,
   },
   orderNumber: {
-    fontFamily: theme.fonts.interMedium,
-    fontSize: theme.fontSizes.xs,
+    fontFamily: theme.fonts.poppinsMedium,
+    fontSize: theme.fontSizes.sm,
     color: theme.colors.deepTeal,
   },
   closeButton: {

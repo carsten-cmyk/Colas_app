@@ -101,6 +101,6 @@ const styles = StyleSheet.create({
   meetingValue: {
     fontFamily: theme.fonts.interBold,
     fontSize: theme.locationCard.meetingValueFontSize,
-    color: theme.colors.deepTeal,
+    color: theme.colors.textPrimary,
   },
 });

@@ -92,6 +92,17 @@ export function VognmandDisponeringsScreen() {
 
   const ordre = MOCK_ORDRER.find(o => o.id === ordreId)
 
+  // materielMap: materielId → reg — pre-populeret med blokvogn BL77331 på alle linjer
+  // TODO: Erstat med Supabase når klar
+  const [materielMap, setMaterielMap] = useState<Record<string, string>>(() => {
+    const map: Record<string, string> = {}
+    for (const m of ordre?.materiel ?? []) {
+      map[m.id] = 'BL77331'
+    }
+    return map
+  })
+  const [dragOverMaterielId, setDragOverMaterielId] = useState<string | null>(null)
+
   const [dispMap, setDispMap] = useState<Record<string, string[]>>(() => {
     if (!ordre) return {}
     const tidligereReg = ordre.tidligereKørte?.[0]?.biler.map(b => b.reg) ?? []
@@ -475,6 +486,67 @@ export function VognmandDisponeringsScreen() {
                 </div>
               </div>
 
+              {/* ── Materiel ─────────────────────────────────────────── */}
+              {ordre.materiel && ordre.materiel.length > 0 && (
+                <div className="border-t border-box-outline">
+                  <div className="px-5 py-3 bg-surface-2 border-b border-hairline">
+                    <p className="font-inter text-xs font-semibold uppercase tracking-widest text-text-muted">Materiel</p>
+                  </div>
+                  <div className="divide-y divide-hairline">
+                    {ordre.materiel.map(m => {
+                      const assignedReg = materielMap[m.id]
+                      const assignedBil = assignedReg ? biler.find(b => b.reg === assignedReg) : null
+                      const isDragOverM = dragOverMaterielId === m.id
+                      return (
+                        <div key={m.id} className="px-5 py-3 grid items-center gap-4" style={{ gridTemplateColumns: '9rem 1fr 1fr' }}>
+                          <div>
+                            <p className="font-inter text-xs font-semibold text-text-primary">{m.beskrivelse}</p>
+                            <p className="font-inter text-[10px] text-text-muted">{m.anlaegsNr} · {m.transportType}</p>
+                          </div>
+                          <div>
+                            <p className="font-inter text-[10px] text-text-muted mb-xxxs">Afhentning → Aflæsning</p>
+                            <p className="font-inter text-xs text-text-secondary leading-snug">{m.afhentning}</p>
+                            <p className="font-inter text-[10px] text-text-muted">→ {m.aflæsning}</p>
+                          </div>
+                          {/* Drop zone */}
+                          <div
+                            onDragOver={e => { e.preventDefault(); setDragOverMaterielId(m.id) }}
+                            onDragLeave={() => setDragOverMaterielId(null)}
+                            onDrop={e => {
+                              e.preventDefault()
+                              const reg = e.dataTransfer.getData('text/reg')
+                              if (reg) setMaterielMap(prev => ({ ...prev, [m.id]: reg }))
+                              setDragOverMaterielId(null)
+                            }}
+                            className={[
+                              'min-h-[36px] rounded-lg border transition-all px-2 py-1.5 flex items-center gap-2',
+                              isDragOverM
+                                ? 'border-deep-teal bg-soft-aqua/40 border-dashed'
+                                : 'border-dashed border-hairline hover:border-deep-teal/40 hover:bg-soft-aqua/20',
+                            ].join(' ')}
+                          >
+                            {assignedBil ? (
+                              <span className="inline-flex items-center gap-1 bg-surface-2 border border-hairline rounded-md px-2 py-0.5 font-inter text-[11px] font-semibold text-text-secondary">
+                                <Truck size={9} className="text-text-muted flex-shrink-0" />
+                                {assignedBil.reg}
+                                <span className="font-normal text-text-muted">· {assignedBil.chaufførNavn.split(' ')[0]}</span>
+                                <button
+                                  onClick={() => setMaterielMap(prev => { const n = { ...prev }; delete n[m.id]; return n })}
+                                  className="ml-0.5 w-3.5 h-3.5 flex items-center justify-center rounded-full text-text-muted hover:bg-bad/10 hover:text-bad transition-colors flex-shrink-0"
+                                  aria-label="Fjern transport"
+                                >×</button>
+                              </span>
+                            ) : (
+                              <span className="font-inter text-[11px] text-text-muted/60 italic">Træk transport hertil…</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Besked + Godkend */}
               <div className="px-5 py-5 border-t border-box-outline">
                 <label className="block">
@@ -490,7 +562,13 @@ export function VognmandDisponeringsScreen() {
                   />
                 </label>
                 <button
-                  onClick={handleGodkend}
+                  // TODO: I produktion skal godkendelsen sende BÅDE asfalt-biler (dispMap)
+                // OG materiel-transport (materielMap) til Supabase.
+                // Supabase-trigger opdaterer formands badges:
+                //   - Asfalt kørsel: "Bekræftet af vognmand" badge per dag
+                //   - Materiellevering: "Bekræftet af vognmand" badge per maskine
+                // Se .claude/docs/MATERIEL_FLOW.md for fuld spec.
+                onClick={handleGodkend}
                   className="mt-4 w-full font-inter font-semibold text-sm px-6 py-3.5 rounded-xl bg-good text-white hover:bg-good/90 transition-all shadow-sm"
                 >
                   Godkend disponering og bekræft kørsel til formand

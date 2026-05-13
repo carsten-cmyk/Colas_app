@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: theme.colors.error,
+    backgroundColor: theme.colors.badBg,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
   },
@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: theme.fonts.interRegular,
     fontSize: theme.fontSizes.sm,
-    color: theme.colors.white,
+    color: theme.colors.bad,
   },
   retryButton: {
     marginLeft: theme.spacing.sm,
@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
   retryLabel: {
     fontFamily: theme.fonts.interMedium,
     fontSize: theme.fontSizes.sm,
-    color: theme.colors.white,
+    color: theme.colors.bad,
     textDecorationLine: 'underline',
   },
 })

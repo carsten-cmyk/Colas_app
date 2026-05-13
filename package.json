@@ -18,6 +18,8 @@
     "formand:test": "cd apps/formand && npm test",
     "formand:lint": "cd apps/formand && npm run lint",
     "formand:typecheck": "cd apps/formand && npm run typecheck",
+    "chauffeur-web:dev": "npm --prefix apps/chauffeur-web run dev",
+    "chauffeur-web:build": "npm --prefix apps/chauffeur-web run build",
     "vognmand:dev": "cd apps/vognmand && npm run dev",
     "vognmand:storybook": "cd apps/vognmand && npm run storybook",
     "vognmand:test": "cd apps/vognmand && npm test",

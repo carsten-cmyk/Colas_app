@@ -11,7 +11,6 @@ export interface TaskActionsProps {
 }
 
 export function TaskActions({ state, onStart, onPause, onComplete }: TaskActionsProps) {
-  // TODO: NICE-TO-HAVE — ingen fallback ved uventet state-værdi — container vises tom uden feedback
   return (
     <View style={styles.container}>
       {state === 'idle' && (
@@ -29,6 +28,9 @@ export function TaskActions({ state, onStart, onPause, onComplete }: TaskActions
           <ActionButton variant="stop" label="Afslut opgave" onPress={onComplete} />
         </>
       )}
+      {state !== 'idle' && state !== 'active' && state !== 'paused' && (
+        <ActionButton variant="start" label="Start opgave" onPress={onStart} disabled={true} />
+      )}
     </View>
   );
 }
@@ -36,7 +38,7 @@ export function TaskActions({ state, onStart, onPause, onComplete }: TaskActions
 const styles = StyleSheet.create({
   container: {
     gap: theme.spacing.xs,
-    paddingHorizontal: theme.taskSwiper.sidePeek,
+    paddingHorizontal: theme.spacing.sm,
     paddingBottom: theme.spacing.md,
     paddingTop: theme.spacing.xs,
   },

@@ -44,4 +44,5 @@ export const MOCK_BILER: Bil[] = [
   { reg: 'TH11233', biltype: '7 Aks · 35 tons',     type: '6-aks', tons: 35, chaufførId: 'c4', chaufførNavn: 'Jens Andersen',    aktiv: true },
   { reg: 'MO99821', biltype: '6 Aks · 32 tons',     type: '6-aks', tons: 32, chaufførId: 'c5', chaufførNavn: 'Søren Hansen',     aktiv: true },
   { reg: 'KA45567', biltype: 'Forvogn · 18 tons',   type: '4-aks', tons: 18, chaufførId: 'c6', chaufførNavn: 'Peter Madsen',     aktiv: true },
+  { reg: 'BL77331', biltype: 'Blokvogn',            type: 'andet', tons: 0,  chaufførId: 'c1', chaufførNavn: 'Lars Pedersen',    aktiv: true },
 ]

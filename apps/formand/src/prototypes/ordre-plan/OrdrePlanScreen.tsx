@@ -4,7 +4,7 @@
  * Viser dagfordeling, materiel og transport for én ordre.
  * Må ikke importeres i produktionskode.
  */
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Phone,
@@ -50,6 +50,13 @@ interface MockProduct {
   days: DayPlan[]
   startDate?: string
   endDate?: string
+  // Felter fra PLAN — kilde: PLAN-system
+  kravTilSamlinger?: string           // fx "Klæbet" / "Ikke klæbet"
+  ekstraTemperaturmaalinger?: boolean // Ja/Nej
+  // TODO: Entreprisekontrol (1 eller 2) styrer om A3/A4 (og MKS ved 2) skal
+  // vises under Udførelse → Kvalitetssikring. Lyt på denne værdi fra PLAN
+  // og vis de relevante formularer dynamisk på Udførelse-siden.
+  entreprisekontrol?: 1 | 2
 }
 
 interface MockResource {
@@ -121,6 +128,9 @@ const INITIAL_PRODUCTS: MockProduct[] = [
     estimatedTonsPerTruck: 26,
     startDate: '2026-03-19',
     endDate: '2026-03-20',
+    kravTilSamlinger: 'Klæbet',
+    ekstraTemperaturmaalinger: true,
+    entreprisekontrol: 1,
     days: [
       { id: 'd1-1', day: 1, date: '2026-03-19', tonsPlanned: 100, cancelled: false },
       { id: 'd1-2', day: 2, date: '2026-03-20', tonsPlanned: 100, cancelled: false },
@@ -139,6 +149,9 @@ const INITIAL_PRODUCTS: MockProduct[] = [
     estimatedTonsPerTruck: 30,
     startDate: '2026-03-16',
     endDate: '2026-03-18',
+    kravTilSamlinger: 'Klæbet',
+    ekstraTemperaturmaalinger: true,
+    entreprisekontrol: 2,
     days: [
       { id: 'd2-1', day: 1, date: '2026-03-16', tonsPlanned: 250, cancelled: false },
       { id: 'd2-2', day: 2, date: '2026-03-17', tonsPlanned: 250, cancelled: false },
@@ -191,7 +204,7 @@ const INITIAL_COMMENTS: NoteComment[] = [
   },
 ]
 
-interface MockPhoto { id: string; color: string; label: string }
+interface MockPhoto { id: string; color: string; label: string; source?: string; url?: string }
 
 const INITIAL_PHOTOS: MockPhoto[] = [
   { id: 'ph1', color: 'bg-dark-teal/20',  label: 'Foto 1' },
@@ -225,6 +238,70 @@ const ORDER_MODES: { id: OrderMode; label: string; step: string }[] = [
 type UnderlagType = 'asfalt' | 'grus' | 'beton' | 'fraeset' | 'andet'
 type UnderlaegsAarsag = 'revner' | 'sporkoert' | 'krakeleret' | 'ujaevn' | 'saetninger' | 'snavs' | 'bloed' | 'graes-ukrudt'
 
+interface ConfirmedTruck {
+  regnr: string
+  chauffoer: string
+  tlf: string
+  biltype: string
+}
+
+interface VognmandBekraeftelse {
+  dayId: string
+  biler: ConfirmedTruck[]
+  bekraeftetTidspunkt: string // "DD. mmm · HH:MM"
+}
+
+interface ConfirmedMaterielItem {
+  resourceId: string
+  anlaegsNr: string
+  beskrivelse: string
+  regnr: string
+  chauffoer: string
+  tlf: string
+  transportType: string
+}
+
+interface VognmandMaterielBekraeftelse {
+  items: ConfirmedMaterielItem[]
+  bekraeftetTidspunkt: string
+}
+
+// TODO: Erstat med Supabase Realtime subscription.
+// Når vognmand godkender disponering (inkl. materiel) i VognmandDisponeringsScreen:
+//   1. Supabase opdaterer ordre-rækken med bekræftede transport-data
+//   2. Formand-app modtager via Realtime og opdaterer denne state
+//   3. Badges i Planlægning → Materiellevering skifter til grønt
+//   4. UdfoerselContent → Materiel-sektion viser bekræftede data
+// Se .claude/docs/MATERIEL_FLOW.md for fuld spec.
+const INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE: VognmandMaterielBekraeftelse = {
+  bekraeftetTidspunkt: '15. mar · 17:05',
+  items: [
+    { resourceId: 'r1', anlaegsNr: '5-0034', beskrivelse: 'HAMM HD10 VT',   regnr: 'BL77331', chauffoer: 'Lars Pedersen',  tlf: '20 30 40 50', transportType: 'Blokvogn' },
+    { resourceId: 'r2', anlaegsNr: '3-0112', beskrivelse: 'VÖGELE 1900-3I', regnr: 'BL77331', chauffoer: 'Lars Pedersen',  tlf: '20 30 40 50', transportType: 'Blokvogn' },
+    { resourceId: 'r3', anlaegsNr: '7-0078', beskrivelse: 'HAMM DV70VV',    regnr: 'BL77331', chauffoer: 'Lars Pedersen',  tlf: '20 30 40 50', transportType: 'Kran-bånd' },
+  ],
+}
+
+// Mock: dag d2-1 er bekræftet af vognmand, d2-2 afventer vognmand
+// TODO: Erstat med Supabase Realtime subscription.
+// Når vognmand godkender disponering i VognmandDisponeringsScreen:
+//   1. dispMap (Record<dato, reg[]>) sendes til Supabase
+//   2. Formand-app modtager via Realtime og opdaterer denne state
+//   3. Badges i Planlægning → Asfalt kørsel skifter per dag
+//   4. UdfoerselContent → Bestilte biler viser bekræftede biler for dagens dato
+// Se .claude/docs/MATERIEL_FLOW.md for fuld spec.
+const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
+  'd2-1': {
+    dayId: 'd2-1',
+    bekraeftetTidspunkt: '15. mar · 16:42',
+    biler: [
+      { regnr: 'AB 12 345', chauffoer: 'Morten Lund',  tlf: '22 33 44 55', biltype: '6 Aks' },
+      { regnr: 'CD 67 890', chauffoer: 'Søren Karlsen', tlf: '26 77 88 99', biltype: '6 Aks' },
+      { regnr: 'EF 11 223', chauffoer: 'Lars Holm',    tlf: '40 12 56 78', biltype: '7 Aks' },
+    ],
+  },
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export function OrdrePlanScreen() {
@@ -256,9 +333,24 @@ export function OrdrePlanScreen() {
   const [sammeAflæsning, setSammeAflæsning] = useState<Record<string, boolean | null>>({})
   const [planlagtProductIds, setPlanlagtProductIds] = useState<Set<string>>(new Set())
   const [kørselExpandedId, setKørselExpandedId] = useState<string | null>(null)
-  const [kørselPlanlagtIds, setKørselPlanlagtIds] = useState<Set<string>>(new Set())
-  const [kørselOrders, setKørselOrders] = useState<Record<string, VehicleOrder[]>>({})
+  // TODO: Erstat med Supabase — d2-1 og d2-2 er forudfyldte til demo
+  const [kørselPlanlagtIds, setKørselPlanlagtIds] = useState<Set<string>>(new Set(['d2-1', 'd2-2']))
+  // TODO: Erstat med Supabase — forudfyldte kørselordre til demo
+  const [kørselOrders, setKørselOrders] = useState<Record<string, VehicleOrder[]>>({
+    'd2-1': [
+      { id: 'vo-d21-1', type: '6 Aks', antal: 2 },
+      { id: 'vo-d21-2', type: '7 Aks', antal: 1 },
+    ],
+    'd2-2': [
+      { id: 'vo-d22-1', type: '6 Aks', antal: 2 },
+    ],
+  })
   const [kørselParams, setKørselParams] = useState<Record<string, KørselDayParams>>({})
+  const [factoryKm, setFactoryKm] = useState(36) // TODO: initialiseres fra ordre.factory.km
+  const [kørselKommentar, setKørselKommentar] = useState<Record<string, string>>({})
+  const [materielKommentar, setMaterielKommentar] = useState<Record<string, string>>({})
+  const [vognmandBekraeftelser] = useState<Record<string, VognmandBekraeftelse>>(INITIAL_VOGNMAND_BEKRAEFTELSER)
+  const [vognmandMaterielBekraeftelse] = useState<VognmandMaterielBekraeftelse>(INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE)
 
   const activeProduct = products.find(p => p.id === activeProductId)!
   const days = activeProduct.days
@@ -540,9 +632,30 @@ export function OrdrePlanScreen() {
                 </div>
               </div>
 
-              {/* Kommentar */}
-              <div className="border-t border-hairline bg-white">
+              {/* Kommentar + PLAN-krav */}
+              <div className="border-t border-hairline bg-white grid grid-cols-2 divide-x divide-hairline">
                 <CommentCell text={activeProduct.activityName} />
+                <div className="p-sm flex flex-col gap-xs">
+                  <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest">Krav til udførsel</span>
+                  <div className="flex flex-col gap-xxxs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-inter text-xs text-text-muted">Krav til samlinger</span>
+                      <span className="font-inter text-xs font-semibold text-text-primary">{activeProduct.kravTilSamlinger ?? '–'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-inter text-xs text-text-muted">Ekstra temperaturmålinger</span>
+                      <span className="font-inter text-xs font-semibold text-text-primary">{activeProduct.ekstraTemperaturmaalinger ? 'Ja' : 'Nej'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-inter text-xs text-text-muted">Entreprisekontrol</span>
+                      {activeProduct.entreprisekontrol === 2 ? (
+                        <span className="font-inter text-xs font-semibold text-text-primary">A3, A4, MKS skal udfyldes</span>
+                      ) : (
+                        <span className="font-inter text-xs font-semibold text-text-primary">–</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -704,8 +817,13 @@ export function OrdrePlanScreen() {
                   >
                     <div className="grid grid-cols-4 gap-xs">
                       {photos.map(photo => (
-                        <div key={photo.id} className={`aspect-square rounded-lg ${photo.color} flex items-center justify-center relative group border border-hairline`}>
-                          <span className="font-inter text-xxs text-text-muted">{photo.label}</span>
+                        <div key={photo.id} className={`aspect-square rounded-lg ${photo.color} flex flex-col items-center justify-center relative group border border-hairline overflow-hidden`}>
+                          <span className="font-inter text-xxs text-text-muted text-center px-xxxs leading-tight">{photo.label}</span>
+                          {photo.source === 'forundersoegelse' && (
+                            <span className="absolute bottom-0 left-0 right-0 bg-dark-teal/80 font-inter text-[9px] font-semibold text-white text-center py-[2px] leading-none">
+                              Forundersøgelse
+                            </span>
+                          )}
                           <button
                             onClick={() => setPhotos(prev => prev.filter(p => p.id !== photo.id))}
                             className="absolute top-[4px] right-[4px] w-[16px] h-[16px] bg-white/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -838,16 +956,23 @@ export function OrdrePlanScreen() {
                           <TransportBadge tag={r.transportTag} />
                         </div>
                       </div>
-                      <div className="flex items-center gap-xxxs">
+                      <div className="flex items-center gap-xs">
                         {r.status === 'planlagt' && !isExpanded ? (
                           <>
-                            <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-l-lg border border-r-0 border-hairline bg-[#E7F4EE] font-inter text-xs font-medium text-text-primary whitespace-nowrap">
-                              <span className="w-[6px] h-[6px] rounded-full bg-[#1F8A5B] flex-shrink-0" />
-                              Planlagt
-                            </span>
+                            {vognmandMaterielBekraeftelse.items.some(it => it.resourceId === r.id) ? (
+                              <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-lg bg-[#2E9E65] font-inter text-xs font-semibold text-white whitespace-nowrap">
+                                <CheckCircle2 size={11} className="flex-shrink-0" />
+                                Bekræftet af vognmand
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-lg bg-yellow/25 font-inter text-xs font-semibold text-[#8A6A00] whitespace-nowrap">
+                                <span className="w-[6px] h-[6px] rounded-full bg-yellow flex-shrink-0" />
+                                Afventer vognmand
+                              </span>
+                            )}
                             <button
                               onClick={() => setExpandedResourceId(r.id)}
-                              className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-r-lg border border-hairline font-inter text-xs font-medium text-dark-teal hover:bg-[#F5F5F5] transition-colors whitespace-nowrap"
+                              className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-lg border border-hairline font-inter text-xs font-medium text-dark-teal hover:bg-[#F5F5F5] transition-colors whitespace-nowrap"
                             >
                               <Pencil size={11} />
                               Ret
@@ -952,6 +1077,17 @@ export function OrdrePlanScreen() {
                               />
                             </div>
                           </div>
+
+                          <div className="flex flex-col gap-xxxs">
+                            <label className="font-inter text-xxs text-text-muted">Kommentar til vognmand</label>
+                            <textarea
+                              value={materielKommentar[r.id] ?? ''}
+                              onChange={e => setMaterielKommentar(prev => ({ ...prev, [r.id]: e.target.value }))}
+                              rows={2}
+                              placeholder="Særlige forhold, adgang, tidsvinduer..."
+                              className="w-full font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal transition-colors resize-none leading-relaxed"
+                            />
+                          </div>
                         </div>
 
                         <hr className="border-hairline" />
@@ -1042,6 +1178,7 @@ export function OrdrePlanScreen() {
                 {activeDays.map((day, i) => {
                   const isExpanded = kørselExpandedId === day.id
                   const isPlanlagt = kørselPlanlagtIds.has(day.id)
+                  const bekraeftelse = vognmandBekraeftelser[day.id]
                   const orders = kørselOrders[day.id] ?? []
                   const params = kørselParams[day.id] ?? DEFAULT_KØRSEL_PARAMS
                   const singleLoadCapacity = orders.reduce((sum, o) => {
@@ -1049,8 +1186,8 @@ export function OrdrePlanScreen() {
                     return sum + (vt ? vt.tons * o.antal : 0)
                   }, 0)
                   const totalTrucks = orders.reduce((s, o) => s + o.antal, 0)
-                  // Rundtid = 2× køretid + 15 min læsning + 15 min aflæsning
-                  const roundTime = activeProduct.factory.driveTimeMinutes * 2 + 30
+                  // Rundtid = 2× køretid (km × 1 min) + 15 min læsning + 15 min aflæsning
+                  const roundTime = factoryKm * 2 + 30
                   const [rsh, rsm] = (params.firstLoadTime || '07:00').split(':').map(Number)
                   const workEndMinutes = 15 * 60 + 30 // 15:30
                   const roundsPerTruck = Math.max(0, Math.floor((workEndMinutes - (rsh * 60 + rsm)) / roundTime))
@@ -1089,7 +1226,7 @@ export function OrdrePlanScreen() {
                         </div>
                         <div className="flex items-center gap-xxxs">
                           {isPlanlagt && !isExpanded ? (
-                            <div className="flex items-center gap-md flex-wrap justify-end">
+                            <div className="flex items-center gap-xs flex-wrap justify-end">
                               <span className="inline-flex items-center gap-sm px-sm py-xxxs rounded-lg bg-[#E7F4EE] font-inter text-xs font-medium text-text-primary whitespace-nowrap">
                                 <span>{orders.reduce((s, o) => s + o.antal, 0)} biler bestilt</span>
                                 <span className="text-text-muted">·</span>
@@ -1097,14 +1234,22 @@ export function OrdrePlanScreen() {
                                 <span className="text-text-muted">·</span>
                                 <span>Første læs {params.firstLoadTime}</span>
                               </span>
-                              <div className="flex">
-                                <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-l-lg border border-r-0 border-hairline bg-[#E7F4EE] font-inter text-xs font-medium text-text-primary whitespace-nowrap">
-                                  <span className="w-[6px] h-[6px] rounded-full bg-[#1F8A5B] flex-shrink-0" />
-                                  Kørsel planlagt
+                              {/* Vognmand status badge */}
+                              {bekraeftelse ? (
+                                <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-lg bg-[#2E9E65] font-inter text-xs font-semibold text-white whitespace-nowrap">
+                                  <CheckCircle2 size={11} className="flex-shrink-0" />
+                                  Bekræftet af vognmand
                                 </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-lg bg-yellow/25 font-inter text-xs font-semibold text-[#8A6A00] whitespace-nowrap">
+                                  <span className="w-[6px] h-[6px] rounded-full bg-yellow flex-shrink-0" />
+                                  Afventer vognmand
+                                </span>
+                              )}
+                              <div className="flex">
                                 <button
                                   onClick={() => setKørselExpandedId(day.id)}
-                                  className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-r-lg border border-hairline bg-white font-inter text-xs font-medium text-text-muted hover:text-text-primary transition-colors"
+                                  className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-lg border border-hairline bg-white font-inter text-xs font-medium text-text-muted hover:text-text-primary transition-colors"
                                 >
                                   <Pencil size={11} />
                                   Ret
@@ -1268,10 +1413,16 @@ export function OrdrePlanScreen() {
                           {/* Info-linje */}
                           <div className="grid grid-cols-2 gap-xs">
                             <div className="flex flex-col gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs">
-                              <span className="font-inter text-xxs text-text-muted">Estimeret køretid (en vej)</span>
-                              <span className="font-inter text-xs font-semibold text-text-primary tabular-nums">
-                                {activeProduct.factory.driveTimeMinutes} min
-                              </span>
+                              <span className="font-inter text-xxs text-text-muted">Afstand til fabrik</span>
+                              <div className="flex items-center gap-xxxs">
+                                <input
+                                  type="number"
+                                  value={factoryKm}
+                                  onChange={e => setFactoryKm(Math.max(1, parseInt(e.target.value) || 1))}
+                                  className="w-[48px] font-inter text-xs font-semibold text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                                <span className="font-inter text-xxs text-text-muted">km → {factoryKm} min</span>
+                              </div>
                             </div>
                             <div className="flex flex-col gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs">
                               <span className="font-inter text-xxs text-text-muted">Forventet sidste bil</span>
@@ -1279,14 +1430,24 @@ export function OrdrePlanScreen() {
                                 {(() => {
                                   if (!totalTrucks || !params.firstLoadTime || roundsPerTruck === 0) return '–'
                                   const [h, m] = params.firstLoadTime.split(':').map(Number)
-                                  // Sidste afgang: første læs + (N-1)×interval + (runder-1)×rundtid
-                                  // Sidste ankomst: + køretid én vej
                                   const lastDeparture = h * 60 + m + (totalTrucks - 1) * params.intervalMinutes + (roundsPerTruck - 1) * roundTime
-                                  const lastArrival = lastDeparture + activeProduct.factory.driveTimeMinutes
+                                  const lastArrival = lastDeparture + factoryKm
                                   return `${String(Math.floor(lastArrival / 60)).padStart(2, '0')}:${String(lastArrival % 60).padStart(2, '0')}`
                                 })()}
                               </span>
                             </div>
+                          </div>
+
+                          {/* Kommentar til vognmand */}
+                          <div className="flex flex-col gap-xxxs">
+                            <label className="font-inter text-xxs text-text-muted">Kommentar til vognmand</label>
+                            <textarea
+                              value={kørselKommentar[day.id] ?? ''}
+                              onChange={e => setKørselKommentar(prev => ({ ...prev, [day.id]: e.target.value }))}
+                              rows={2}
+                              placeholder="Særlige forhold, adgang, tidsvinduer..."
+                              className="w-full font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal transition-colors resize-none leading-relaxed"
+                            />
                           </div>
 
                           {/* Gem */}
@@ -1315,7 +1476,11 @@ export function OrdrePlanScreen() {
 
           {activeMode === 'udfoersel' && (
             <UdfoerselContent
+              forundersoegelseFotos={photos.filter(p => p.source === 'forundersoegelse')}
               onAddPhotos={(newPhotos) => setPhotos(prev => [...prev, ...newPhotos])}
+              vognmandBekraeftelse={activeDays[0] ? vognmandBekraeftelser[activeDays[0].id] : undefined}
+              todayDay={activeDays[0]}
+              vognmandMaterielBekraeftelse={vognmandMaterielBekraeftelse}
             />
           )}
 
@@ -1576,6 +1741,41 @@ function TransportBadge({ tag }: { tag: MockResource['transportTag'] }) {
 
 // ─── Forundersøgelse data ─────────────────────────────────────────────────────
 
+const EKSTRA_OPTIONS = [
+  'Regulering af fast rendestensrist',
+  'Regulering af fast stophane',
+  'Regulering af fast Ø 300',
+  'Regulering af fast Ø 600 dæksel',
+  'Regulering af flydende rist',
+  'Regulering af flydende stophane',
+  'Regulering af flydende Ø 300 dæksel',
+  'Regulering af flydende Ø 600 dæksel',
+  'Udskiftning af dæksel excl. brøndgods',
+  'Udskiftning af dæksel incl. brøndgods',
+  'Udskiftning af rist excl. brøndgods',
+  'Udskiftning af rist incl. brøndgods',
+  'Ø 300 flydende rendestensrist',
+  'Ø 300 overtopstykke (beton) 30 mm',
+  'Ø 300 overtopstykke (beton) 50 mm',
+  'Ø 300 overtopstykke (beton) 100 mm',
+  'Ø 325 kombinringe (plast)',
+  'Ø 475 mellemlægsskiver',
+  'Ø 600 dæksel (40t)',
+  'Ø 600 flydende karm (40t)',
+  'Ø 600 kombinringe (plast)',
+  'Ø 600 topringe (beton) h. 30 mm',
+  'Ø 600 topringe (beton) h. 50 mm',
+  'Ø 600 topringe (beton) h. 100 mm',
+  'Ø 750 mellemlægsskiver',
+]
+
+interface EkstraLinje {
+  id: string
+  type: string
+  beskrivelse: string
+  antal: number
+}
+
 const UNDERLAG_OPTIONS: { value: UnderlagType; label: string }[] = [
   { value: 'asfalt',  label: 'Asfalt'  },
   { value: 'grus',    label: 'Grus'    },
@@ -1621,28 +1821,38 @@ function ForCheckbox({ checked, onChange }: { checked: boolean; onChange: () => 
 
 // ─── UdfoerselContent ─────────────────────────────────────────────────────────
 
-function UdfoerselContent({ onAddPhotos }: { onAddPhotos: (p: MockPhoto[]) => void }) {
-  const [underlaegsTyper, setUnderlaegsTyper] = useState<Set<UnderlagType>>(new Set(['asfalt']))
+function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeftelse, todayDay, vognmandMaterielBekraeftelse }: {
+  forundersoegelseFotos: MockPhoto[]
+  onAddPhotos: (p: MockPhoto[]) => void
+  vognmandBekraeftelse?: VognmandBekraeftelse
+  todayDay?: DayPlan
+  vognmandMaterielBekraeftelse?: VognmandMaterielBekraeftelse
+}) {
+  const [underlaegsType, setUnderlaegsType] = useState<UnderlagType | ''>('asfalt')
   const [underlaegsAndet, setUnderlaegsAndet] = useState('')
   const [tilfredsstillende, setTilfredsstillende] = useState<boolean | null>(null)
   const [underlaegsAarsager, setUnderlaegsAarsager] = useState<Set<UnderlaegsAarsag>>(new Set())
   const [aftaltMed, setAftaltMed] = useState('')
-  const [forbehold, setForbehold] = useState(
-    'Bæreevnen af den eksisterende belægning der efterfølgende kan forårsage sætninger og revnedannelse i den nye asfaltbelægning.'
-  )
-  const [fotos, setFotos] = useState<MockPhoto[]>([])
+  const [forbehold, setForbehold] = useState('')
   const [saved, setSaved] = useState(false)
+  const [ekstraOpen, setEkstraOpen] = useState(false)
+  const [ekstraLinjer, setEkstraLinjer] = useState<EkstraLinje[]>([])
+  const [ekstraSent, setEkstraSent] = useState(false)
+
+  function addEkstraLinje() {
+    setEkstraLinjer(prev => [...prev, { id: `el-${Date.now()}`, type: '', beskrivelse: '', antal: 1 }])
+  }
+
+  function updateEkstraLinje(id: string, field: keyof EkstraLinje, value: string | number) {
+    setEkstraLinjer(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l))
+    setEkstraSent(false)
+  }
+
+  function removeEkstraLinje(id: string) {
+    setEkstraLinjer(prev => prev.filter(l => l.id !== id))
+  }
 
   const PHOTO_COLORS = ['bg-dark-teal/20', 'bg-yellow/20', 'bg-light-aqua/40']
-
-  function toggleUnderlag(type: UnderlagType) {
-    setUnderlaegsTyper(prev => {
-      const next = new Set(prev)
-      if (next.has(type)) next.delete(type); else next.add(type)
-      return next
-    })
-    setSaved(false)
-  }
 
   function toggleAarsag(a: UnderlaegsAarsag) {
     setUnderlaegsAarsager(prev => {
@@ -1653,14 +1863,21 @@ function UdfoerselContent({ onAddPhotos }: { onAddPhotos: (p: MockPhoto[]) => vo
     setSaved(false)
   }
 
-  function handleAddPhoto() {
-    const foto: MockPhoto = {
-      id: `fo-${Date.now()}`,
-      color: PHOTO_COLORS[fotos.length % PHOTO_COLORS.length],
-      label: `Forundersøgelse ${fotos.length + 1}`,
-    }
-    setFotos(prev => [...prev, foto])
-    onAddPhotos([foto])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
+    const newPhotos: MockPhoto[] = files.map((file, i) => ({
+      id: `fo-${Date.now()}-${i}`,
+      color: PHOTO_COLORS[(forundersoegelseFotos.length + i) % PHOTO_COLORS.length],
+      label: file.name.replace(/\.[^.]+$/, ''),
+      source: 'forundersoegelse',
+      url: URL.createObjectURL(file),
+    }))
+    onAddPhotos(newPhotos)
+    // Reset så samme fil kan vælges igen
+    e.target.value = ''
   }
 
   return (
@@ -1670,91 +1887,92 @@ function UdfoerselContent({ onAddPhotos }: { onAddPhotos: (p: MockPhoto[]) => vo
 
         <div className="bg-white rounded-2xl border border-hairline overflow-hidden shadow-sm">
 
-          {/* ── Underlag / Bund ───────────────────────────────────── */}
-          <div className="p-md border-b border-hairline">
-            <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest mb-sm">
-              Underlag / Bund
-            </p>
-            <div className="flex flex-col gap-sm">
-              {UNDERLAG_OPTIONS.map(opt => (
-                <label key={opt.value} className="flex items-center gap-sm cursor-pointer">
-                  <ForCheckbox
-                    checked={underlaegsTyper.has(opt.value)}
-                    onChange={() => toggleUnderlag(opt.value)}
-                  />
-                  <span className="font-inter text-sm text-text-primary select-none">{opt.label}</span>
-                </label>
-              ))}
-              {underlaegsTyper.has('andet') && (
+          {/* ── Række 1: Underlag + Tilstand ─────────────────────── */}
+          <div className="grid grid-cols-2 divide-x divide-hairline border-b border-hairline">
+
+            {/* Underlag dropdown */}
+            <div className="p-md">
+              <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest mb-sm">
+                Underlag / Bund
+              </p>
+              <div className="relative">
+                <select
+                  value={underlaegsType}
+                  onChange={e => { setUnderlaegsType(e.target.value as UnderlagType); setSaved(false) }}
+                  className="w-full font-inter text-sm text-text-primary bg-[#F5F5F5] border border-hairline rounded-xl px-sm py-xs pr-[32px] focus:outline-none focus:border-dark-teal focus:bg-white transition-colors appearance-none cursor-pointer"
+                >
+                  <option value="">Vælg underlag...</option>
+                  {UNDERLAG_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-xs top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+              </div>
+              {underlaegsType === 'andet' && (
                 <input
                   type="text"
                   value={underlaegsAndet}
                   onChange={e => { setUnderlaegsAndet(e.target.value); setSaved(false) }}
                   placeholder="Beskriv underlag..."
-                  className="ml-[32px] font-inter text-sm text-text-primary bg-[#F5F5F5] border border-hairline rounded-xl px-sm py-xs focus:outline-none focus:border-dark-teal focus:bg-white transition-colors"
+                  className="mt-xs w-full font-inter text-sm text-text-primary bg-[#F5F5F5] border border-hairline rounded-xl px-sm py-xs focus:outline-none focus:border-dark-teal focus:bg-white transition-colors"
                 />
               )}
             </div>
-          </div>
 
-          {/* ── Underlagets tilstand ──────────────────────────────── */}
-          <div className="p-md border-b border-hairline">
-            <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest mb-sm">
-              Underlagets tilstand
-            </p>
-            <div className="flex items-center gap-xs">
-              <span className="font-inter text-sm text-text-secondary mr-xs">Tilfredsstillende:</span>
-              {([true, false] as const).map(val => (
-                <button
-                  key={String(val)}
-                  onClick={() => { setTilfredsstillende(val); setSaved(false) }}
-                  className={[
-                    'px-sm py-[6px] rounded-xl font-inter text-sm font-semibold border-2 transition-all min-w-[64px]',
-                    tilfredsstillende === val
-                      ? val
-                        ? 'bg-[#2E9E65] border-[#2E9E65] text-white'
-                        : 'bg-bad border-bad text-white'
-                      : 'bg-white border-hairline text-text-secondary hover:border-dark-teal/40',
-                  ].join(' ')}
-                >
-                  {val ? 'Ja' : 'Nej'}
-                </button>
-              ))}
-            </div>
+            {/* Tilstand */}
+            <div className="p-md">
+              <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest mb-sm">
+                Underlagets tilstand
+              </p>
+              <div className="flex items-center gap-xs mb-xs">
+                <span className="font-inter text-sm text-text-secondary">Tilfredsstillende:</span>
+                {([true, false] as const).map(val => (
+                  <button
+                    key={String(val)}
+                    onClick={() => { setTilfredsstillende(val); setSaved(false) }}
+                    className={[
+                      'px-sm py-[5px] rounded-xl font-inter text-sm font-semibold border-2 transition-all min-w-[56px]',
+                      tilfredsstillende === val
+                        ? val
+                          ? 'bg-[#2E9E65] border-[#2E9E65] text-white'
+                          : 'bg-[#C8372D] border-[#C8372D] text-white'
+                        : 'bg-white border-hairline text-text-secondary hover:border-dark-teal/40',
+                    ].join(' ')}
+                  >
+                    {val ? 'Ja' : 'Nej'}
+                  </button>
+                ))}
+              </div>
 
-            {tilfredsstillende === false && (
-              <div className="flex flex-col gap-md pt-md mt-md border-t border-hairline">
-                <div>
-                  <p className="font-inter text-xs font-medium text-text-muted mb-sm">Angiv årsag:</p>
-                  <div className="grid grid-cols-2 gap-sm">
-                    {AARSAG_OPTIONS.map(opt => (
-                      <label key={opt.value} className="flex items-center gap-xs cursor-pointer">
-                        <ForCheckbox
-                          checked={underlaegsAarsager.has(opt.value)}
-                          onChange={() => toggleAarsag(opt.value)}
-                        />
-                        <span className="font-inter text-sm text-text-primary select-none">{opt.label}</span>
-                      </label>
-                    ))}
+              {tilfredsstillende === false && (
+                <div className="flex flex-col gap-sm pt-sm border-t border-hairline">
+                  <div>
+                    <p className="font-inter text-xxs font-medium text-text-muted mb-xs">Årsag:</p>
+                    <div className="grid grid-cols-2 gap-xs">
+                      {AARSAG_OPTIONS.map(opt => (
+                        <label key={opt.value} className="flex items-center gap-xs cursor-pointer">
+                          <ForCheckbox
+                            checked={underlaegsAarsager.has(opt.value)}
+                            onChange={() => toggleAarsag(opt.value)}
+                          />
+                          <span className="font-inter text-xs text-text-primary select-none">{opt.label}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest mb-xs">
-                    Aftalt med
-                  </p>
                   <input
                     type="text"
                     value={aftaltMed}
                     onChange={e => { setAftaltMed(e.target.value); setSaved(false) }}
-                    placeholder="Navn / firma..."
+                    placeholder="Aftalt med (navn / firma)..."
                     className="w-full font-inter text-sm text-text-primary bg-[#F5F5F5] border border-hairline rounded-xl px-sm py-xs focus:outline-none focus:border-dark-teal focus:bg-white transition-colors"
                   />
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
-          {/* ── Forbehold ─────────────────────────────────────────── */}
+          {/* ── Række 2: Forbehold (fuld bredde) ─────────────────── */}
           <div className="p-md border-b border-hairline">
             <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest mb-sm">
               Forbehold
@@ -1763,55 +1981,180 @@ function UdfoerselContent({ onAddPhotos }: { onAddPhotos: (p: MockPhoto[]) => vo
               value={forbehold}
               onChange={e => { setForbehold(e.target.value); setSaved(false) }}
               rows={3}
-              placeholder="Beskriv forbehold for ordren..."
-              className="w-full font-inter text-sm text-text-primary bg-[#F5F5F5] border border-hairline rounded-xl px-sm py-xs focus:outline-none focus:border-dark-teal focus:bg-white transition-colors resize-none leading-relaxed"
+              placeholder="Beskriv evt. forbehold for ordren..."
+              className="w-full font-inter text-sm text-text-primary bg-[#F5F5F5] border border-hairline rounded-xl px-sm py-xs focus:outline-none focus:border-dark-teal focus:bg-white transition-colors resize-none leading-relaxed mb-xs"
             />
+            <div className="flex gap-xs bg-[#F5F9FA] border border-dark-teal/15 rounded-xl px-sm py-xs">
+              <span className="font-inter text-xxs font-semibold text-dark-teal uppercase tracking-widest flex-shrink-0 mt-[1px]">Eks.</span>
+              <p className="font-inter text-xs text-text-muted leading-relaxed italic">
+                Bæreevnen af den eksisterende belægning der efterfølgende kan forårsage sætninger og revnedannelse i den nye asfaltbelægning.
+              </p>
+            </div>
           </div>
 
-          {/* ── Billeder ──────────────────────────────────────────── */}
+          {/* ── Række 3: Billeder (fuld bredde) ───────────────────── */}
           <div className="p-md border-b border-hairline">
             <div className="flex items-center justify-between mb-sm">
               <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest">Billeder</p>
-              {fotos.length > 0 && (
-                <span className="inline-flex items-center gap-xxxs font-inter text-xs text-[#1F8A5B]">
-                  <CheckCircle2 size={12} />
-                  {fotos.length} billede{fotos.length !== 1 ? 'r' : ''} tilføjet til Dokumentation
-                </span>
-              )}
             </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleFileChange}
+            />
             <div className="flex flex-wrap gap-xs">
-              {fotos.map(foto => (
+              {forundersoegelseFotos.map(foto => (
                 <div
                   key={foto.id}
-                  className={`w-[88px] h-[88px] rounded-xl ${foto.color} border border-hairline flex flex-col items-center justify-center gap-xxxs`}
+                  className="w-[76px] h-[76px] rounded-xl border border-hairline overflow-hidden flex-shrink-0"
                 >
-                  <Camera size={16} className="text-text-muted" />
-                  <span className="font-inter text-xxs text-text-muted text-center px-xxxs leading-tight">{foto.label}</span>
+                  {foto.url ? (
+                    <img src={foto.url} alt={foto.label} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className={`w-full h-full ${foto.color} flex flex-col items-center justify-center gap-xxxs`}>
+                      <Camera size={14} className="text-text-muted" />
+                      <span className="font-inter text-xxs text-text-muted text-center px-xxxs leading-tight">{foto.label}</span>
+                    </div>
+                  )}
                 </div>
               ))}
               <div
-                onClick={handleAddPhoto}
+                onClick={() => fileInputRef.current?.click()}
                 role="button"
                 aria-label="Tilføj billede"
-                className="w-[88px] h-[88px] rounded-xl border-2 border-dashed border-hairline-2 flex flex-col items-center justify-center gap-xxxs cursor-pointer hover:border-dark-teal hover:bg-[#F5F9FA] transition-colors group"
+                className="w-[76px] h-[76px] rounded-xl border-2 border-dashed border-hairline-2 flex flex-col items-center justify-center gap-xxxs cursor-pointer hover:border-dark-teal hover:bg-[#F5F9FA] transition-colors group flex-shrink-0"
               >
-                <Plus size={20} className="text-text-muted group-hover:text-dark-teal transition-colors" />
+                <Plus size={18} className="text-text-muted group-hover:text-dark-teal transition-colors" />
                 <span className="font-inter text-xxs text-text-muted group-hover:text-dark-teal transition-colors leading-tight text-center">
-                  Tilføj billede
+                  Tilføj
                 </span>
               </div>
             </div>
           </div>
 
+          {/* ── Ekstraarbejde (ekspanderer) ───────────────────────── */}
+          {ekstraOpen && (
+            <div className="p-md flex flex-col gap-sm">
+              <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest">
+                Ekstraarbejde
+              </p>
+
+              {ekstraLinjer.length === 0 && (
+                <p className="font-inter text-xs text-text-muted italic">Ingen linjer endnu — tilføj nedenfor.</p>
+              )}
+
+              {ekstraLinjer.map((linje, i) => (
+                <div key={linje.id} className="grid gap-xs items-start" style={{ gridTemplateColumns: '1fr 1fr 72px 28px' }}>
+                  {/* Type dropdown */}
+                  <div className="relative">
+                    <select
+                      value={linje.type}
+                      onChange={e => updateEkstraLinje(linje.id, 'type', e.target.value)}
+                      className="w-full font-inter text-xs text-text-primary bg-[#F5F5F5] border border-hairline rounded-lg px-xs py-xs pr-[24px] focus:outline-none focus:border-dark-teal focus:bg-white transition-colors appearance-none cursor-pointer"
+                    >
+                      <option value="">Vælg type...</option>
+                      {EKSTRA_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={12} className="absolute right-xs top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                  </div>
+
+                  {/* Beskrivelse */}
+                  <input
+                    type="text"
+                    value={linje.beskrivelse}
+                    onChange={e => updateEkstraLinje(linje.id, 'beskrivelse', e.target.value)}
+                    placeholder={`Beskrivelse linje ${i + 1}...`}
+                    className="font-inter text-xs text-text-primary bg-[#F5F5F5] border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal focus:bg-white transition-colors"
+                  />
+
+                  {/* Antal */}
+                  <div className="flex items-center border border-hairline rounded-lg overflow-hidden bg-white">
+                    <button
+                      onClick={() => updateEkstraLinje(linje.id, 'antal', Math.max(1, linje.antal - 1))}
+                      className="px-xs py-xs font-inter text-sm text-text-muted hover:bg-[#F5F5F5] transition-colors leading-none"
+                    >−</button>
+                    <span className="flex-1 text-center font-inter text-xs font-semibold text-text-primary tabular-nums">{linje.antal}</span>
+                    <button
+                      onClick={() => updateEkstraLinje(linje.id, 'antal', linje.antal + 1)}
+                      className="px-xs py-xs font-inter text-sm text-text-muted hover:bg-[#F5F5F5] transition-colors leading-none"
+                    >+</button>
+                  </div>
+
+                  {/* Fjern */}
+                  <button
+                    onClick={() => removeEkstraLinje(linje.id)}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg text-text-muted hover:text-[#C8372D] hover:bg-[#FBECEA] transition-colors mt-[2px]"
+                    aria-label="Fjern linje"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              ))}
+
+              <button
+                onClick={addEkstraLinje}
+                className="inline-flex items-center gap-xs font-inter text-xs font-medium text-dark-teal border border-dashed border-dark-teal/40 rounded-lg px-sm py-xs hover:bg-[#F5F9FA] transition-colors self-start"
+              >
+                <Plus size={13} />
+                Tilføj linje
+              </button>
+
+              <div className="flex items-center justify-between pt-xs mt-xs">
+                {ekstraSent ? (
+                  <div className="flex items-center gap-xs bg-[#E7F4EE] border border-[#1F8A5B]/20 rounded-xl px-sm py-xs">
+                    <CheckCircle2 size={14} className="text-[#1F8A5B] flex-shrink-0" />
+                    <div>
+                      <p className="font-inter text-xs font-semibold text-[#1F8A5B]">Sendt til projektleder</p>
+                      <p className="font-inter text-xxs text-[#1F8A5B]/70">Henrik Thor · {ekstraLinjer.length} linje{ekstraLinjer.length !== 1 ? 'r' : ''}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="font-inter text-xs text-text-muted">
+                    Sendes som mail til projektleder ved gem
+                  </p>
+                )}
+                <div className="flex items-center gap-xs">
+                  <button
+                    onClick={() => { setEkstraLinjer([]); setEkstraSent(false); setEkstraOpen(false) }}
+                    className="font-inter text-sm text-text-muted hover:text-text-primary px-xs py-xs transition-colors"
+                  >
+                    Fortryd
+                  </button>
+                  <button
+                    onClick={() => { if (ekstraLinjer.length > 0) setEkstraSent(true) }}
+                    disabled={ekstraLinjer.length === 0}
+                    className={[
+                      'inline-flex items-center gap-xs font-inter text-sm font-semibold px-md py-xs rounded-xl transition-all active:scale-[0.98]',
+                      ekstraSent
+                        ? 'bg-[#E7F4EE] text-[#1F8A5B] border border-[#1F8A5B]/20 cursor-default'
+                        : ekstraLinjer.length === 0
+                          ? 'bg-[#F5F5F5] text-text-muted cursor-not-allowed'
+                          : 'bg-[#2E9E65] text-white hover:bg-[#1F8A5B]',
+                    ].join(' ')}
+                  >
+                    {ekstraSent ? <><CheckCircle2 size={14} className="mr-xxxs" />Gemt</> : 'Gem ekstraarbejde'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── Footer ────────────────────────────────────────────── */}
           <div className="p-md flex items-center justify-between gap-sm">
-            <button
-              className="inline-flex items-center gap-xs font-inter text-sm font-semibold text-white bg-[#2E9E65] px-md py-xs rounded-xl hover:bg-[#1F8A5B] active:scale-[0.98] transition-all"
-              aria-label="Tilføj ekstraarbejde"
-            >
-              <Plus size={16} />
-              Tilføj ekstraarbejde
-            </button>
+            {!ekstraOpen && (
+              <button
+                onClick={() => { setEkstraOpen(true); if (ekstraLinjer.length === 0) addEkstraLinje() }}
+                className="inline-flex items-center gap-xs font-inter text-sm font-semibold px-md py-xs rounded-xl active:scale-[0.98] transition-all text-white bg-[#2E9E65] hover:bg-[#1F8A5B]"
+              >
+                <Plus size={16} />
+                Tilføj ekstraarbejde
+              </button>
+            )}
 
             <button
               onClick={() => setSaved(true)}
@@ -1828,6 +2171,121 @@ function UdfoerselContent({ onAddPhotos }: { onAddPhotos: (p: MockPhoto[]) => vo
 
         </div>
       </section>
+
+      {/* ── Bestilte biler ────────────────────────────────────────── */}
+      {todayDay && (
+        <section>
+          <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Bestilte biler</h2>
+
+          <div className={[
+            'rounded-xl',
+            vognmandBekraeftelse ? 'bg-[#E7F4EE]' : 'bg-[#FEEE3215]',
+          ].join(' ')}>
+            <div className="flex items-center justify-between px-sm pt-sm pb-xs">
+              <div className="flex items-center gap-xs">
+                {vognmandBekraeftelse ? (
+                  <>
+                    <CheckCircle2 size={14} className="text-[#1F8A5B] flex-shrink-0" />
+                    <span className="font-inter text-sm font-semibold text-[#1F8A5B]">Bekræftet af vognmand</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-[8px] h-[8px] rounded-full bg-yellow flex-shrink-0 animate-pulse" />
+                    <span className="font-inter text-sm font-semibold text-[#8A6A00]">Afventer bekræftelse fra vognmand</span>
+                  </>
+                )}
+              </div>
+              {vognmandBekraeftelse && (
+                <span className="font-inter text-xxs text-text-muted">{vognmandBekraeftelse.bekraeftetTidspunkt}</span>
+              )}
+            </div>
+
+            {vognmandBekraeftelse ? (
+              <div className="px-sm pb-sm">
+                <div className="overflow-hidden rounded-lg border border-[#1F8A5B]/15 bg-white">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-hairline bg-[#F5F5F5]">
+                        <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Reg.nr.</th>
+                        <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Chauffør</th>
+                        <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Tlf.</th>
+                        <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vognmandBekraeftelse.biler.map((bil, i) => (
+                        <tr key={bil.regnr} className={i < vognmandBekraeftelse.biler.length - 1 ? 'border-b border-hairline' : ''}>
+                          <td className="font-inter text-xs font-semibold text-text-primary px-xs py-xs tabular-nums">{bil.regnr}</td>
+                          <td className="font-inter text-xs text-text-primary px-xs py-xs">{bil.chauffoer}</td>
+                          <td className="px-xs py-xs">
+                            <a href={`tel:${bil.tlf.replace(/\s/g, '')}`} className="font-inter text-xs text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
+                              <Phone size={11} />
+                              {bil.tlf}
+                            </a>
+                          </td>
+                          <td className="font-inter text-xs text-text-muted px-xs py-xs">{bil.biltype}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <p className="font-inter text-xs text-[#8A6A00]/80 px-sm pb-sm">
+                Bilbestillingen er sendt — vognmanden disponerer og bekræfter snarest.
+              </p>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ── Materiel ──────────────────────────────────────────────── */}
+      {vognmandMaterielBekraeftelse && vognmandMaterielBekraeftelse.items.length > 0 && (
+        <section>
+          <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Materiel</h2>
+
+          <div className="rounded-xl bg-[#E7F4EE]">
+            <div className="flex items-center justify-between px-sm pt-sm pb-xs">
+              <div className="flex items-center gap-xs">
+                <CheckCircle2 size={14} className="text-[#1F8A5B] flex-shrink-0" />
+                <span className="font-inter text-sm font-semibold text-[#1F8A5B]">Bekræftet af vognmand</span>
+              </div>
+              <span className="font-inter text-xxs text-text-muted">{vognmandMaterielBekraeftelse.bekraeftetTidspunkt}</span>
+            </div>
+            <div className="px-sm pb-sm">
+              <div className="overflow-hidden rounded-lg border border-[#1F8A5B]/15 bg-white">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-hairline bg-[#F5F5F5]">
+                      <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Anlæg</th>
+                      <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Beskrivelse</th>
+                      <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Transport</th>
+                      <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Chauffør</th>
+                      <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Tlf.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vognmandMaterielBekraeftelse.items.map((item, i) => (
+                      <tr key={item.resourceId} className={i < vognmandMaterielBekraeftelse.items.length - 1 ? 'border-b border-hairline' : ''}>
+                        <td className="font-inter text-xs text-text-muted px-xs py-xs tabular-nums">{item.anlaegsNr}</td>
+                        <td className="font-inter text-xs font-semibold text-text-primary px-xs py-xs">{item.beskrivelse}</td>
+                        <td className="font-inter text-xs text-text-muted px-xs py-xs">{item.transportType} · {item.regnr}</td>
+                        <td className="font-inter text-xs text-text-primary px-xs py-xs">{item.chauffoer}</td>
+                        <td className="px-xs py-xs">
+                          <a href={`tel:${item.tlf.replace(/\s/g, '')}`} className="font-inter text-xs text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
+                            <Phone size={11} />
+                            {item.tlf}
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   )
 }

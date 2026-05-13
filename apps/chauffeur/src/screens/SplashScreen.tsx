@@ -5,11 +5,8 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Dimensions,
 } from 'react-native';
 import { theme } from '@/config/theme';
-
-const { width, height } = Dimensions.get('window');
 
 export interface SplashScreenProps {
   onStart: () => void;
@@ -18,16 +15,16 @@ export interface SplashScreenProps {
 export function SplashScreen({ onStart }: SplashScreenProps) {
   return (
     <View style={styles.container}>
-      {/* Venstre — arbejderbillede */}
+      {/* Venstre — arbejderbillede (flex: 3, ~60%) */}
       <View style={styles.imageSection}>
         <Image
           source={require('../../assets/hero-worker.png')}
           style={styles.workerImage}
-          resizeMode="contain"
+          resizeMode="cover"
         />
       </View>
 
-      {/* Højre — gul stribe */}
+      {/* Højre — gul stribe (flex: 2, ~40%) */}
       <View style={styles.yellowStrip}>
         {/* Logo — absolut top-højre */}
         <Image
@@ -74,41 +71,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     flexDirection: 'row',
+    overflow: 'hidden',
   },
 
-  // Venstre — billede (75% bredde, forskudt 15% til venstre)
+  // Venstre — billede (flex: 3, ~60%, overlap ind i højre side via negative margin)
   imageSection: {
-    width: width * 0.75,
-    height: height,
-    marginLeft: width * -0.15,
-    alignItems: 'flex-end',
-    justifyContent: 'flex-end',
-  },
-  workerImage: {
-    width: width * 0.65,
-    height: height,
-  },
-
-  // Højre — gul stribe (40% bredde)
-  yellowStrip: {
-    width: width * 0.4,
-    height: height,
-    backgroundColor: theme.colors.yellow,
-    paddingVertical: theme.spacing.lg,
-    paddingLeft: theme.spacing.sm,
-    paddingRight: 0,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
+    flex: 3,
+    marginLeft: '-15%' as any,
     overflow: 'visible',
   },
+  workerImage: {
+    width: '100%',
+    height: '100%',
+  },
 
-  // Logo — absolut top-højre, naturlig størrelse
+  // Højre — gul stribe (flex: 2, ~40%)
+  yellowStrip: {
+    flex: 2,
+    backgroundColor: theme.colors.yellow,
+    paddingLeft: theme.spacing.sm,
+    paddingRight: 0,
+    overflow: 'hidden',
+  },
+
+  // Logo — absolut top-højre, skalerer med containerens højde
   logo: {
     position: 'absolute',
     top: 0,
     right: 0,
     width: 99,
-    height: 624,
+    height: '73%',
   },
 
   // Vejr + tekst + knap — absolut 50px fra bunden

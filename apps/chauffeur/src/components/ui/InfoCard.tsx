@@ -10,9 +10,9 @@ export interface InfoCardProps {
 }
 
 const variantMap = {
-  danger:  { bg: theme.colors.error,   text: theme.colors.white },
+  danger:  { bg: theme.colors.badBg,   text: theme.colors.bad },
   info:    { bg: theme.colors.white,   text: theme.colors.textPrimary },
-  warning: { bg: theme.colors.warning, text: theme.colors.textPrimary },
+  warning: { bg: theme.colors.warnBg,  text: theme.colors.textPrimary },
 };
 
 export function InfoCard({ title, message, variant }: InfoCardProps) {

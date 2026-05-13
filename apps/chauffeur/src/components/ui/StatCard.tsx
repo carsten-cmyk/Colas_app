@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: theme.fonts.interRegular,
     fontSize: theme.statCard.labelFontSize,
-    color: theme.colors.deepTeal,
+    color: theme.colors.textMuted,
     marginBottom: theme.spacing.xxs,
     textTransform: 'uppercase',
     letterSpacing: theme.letterSpacing.label,
@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.poppinsSemiBold,
     fontSize: theme.statCard.valueFontSize,
     lineHeight: theme.statCard.valueLineHeight,
-    color: theme.colors.deepTeal,
+    color: theme.colors.textPrimary,
     textAlign: 'center',
   },
 });
