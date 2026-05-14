@@ -94,7 +94,7 @@
 - [x] Ekstraarbejde — ekspanderer inline, 25 typer, linje-niveau beskrivelse + antal, sendes til projektleder
 - [x] Asfalt kørsel — km-input (km × 1 = minutter), kommentar til vognmand per dag
 - [x] DATA_FIELDS.md — komplet feltliste + formand→vognmand flow + IT-arkitekturplan
-- [x] Live på Netlify: colastransportapp.netlify.app
+- [x] Live på Netlify: formandsapp.netlify.app
 
 ### 2026-05-11 — Vognmand prototype FÆRDIG + live
 
@@ -114,7 +114,7 @@
 - [x] DESIGN_SYSTEM.md, OFFLINE_STRATEGY.md, WORKFLOW.md, STARTUP.md
 - [x] README.md, CONTRIBUTING.md, CI/CD (GitHub Actions)
 - [x] Typer, mock-data, hooks i formand-app
-- [x] netlify.toml + formand live på colastransportapp.netlify.app
+- [x] netlify.toml + formand live på formandsapp.netlify.app
 
 ### Tidligere (Chauffeur app)
 
