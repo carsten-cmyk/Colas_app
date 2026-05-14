@@ -302,9 +302,9 @@ Opdateres manuelt når forretningsregler beskrives der ikke fremgår af kode.
 
 ### Afregningstype-styring
 **Hvor markeres time vs. akkord?**
-Afregningstypen `time|akkord` kommer fra **vognmandens chauffør-aftale** (vognmand-systemet) og flyder med chaufføren ind på ordren via `confirmed_vehicles[].afregning_type`. **Antagelse i v1:** Vognmand leverer typen — ingen manuel formand-override i UI.
+Afregningstypen `time|akkord` sættes på **AFTALEN mellem Colas og den enkelte vognmand** (ikke pr. bil). Standard: time-afregning. Andre typer (tons-afregning, turaftale) konfigureres i vognmand-aftalen og arves automatisk af alle biler vognmanden disponerer til ordren.
 
-**Fallback:** Hvis vognmand-systemet IKKE leverer typen, falder vi tilbage til `time` og viser et **gult warning-banner** i `BilAfregningExpander`. INGEN manuel dropdown i v1 — formand kan ikke override.
+Afregningstypen flyder ind på ordren via `confirmed_vehicles[].afregning_type`. **Antagelse i v1:** Vognmand leverer typen — ingen manuel formand-override i UI.
 
 **Datafelt at tilføje:** `confirmed_vehicles[].afregning_type: 'time' | 'akkord' | null`
 
@@ -401,6 +401,141 @@ Afregningstypen `time|akkord` kommer fra **vognmandens chauffør-aftale** (vognm
 - **PLAN modtager data retur:** underlag-vurdering, årsager, aftalt-med, forbehold, billeder, ekstraarbejde-linjer
 - **Projektleder notificeres** hvis der er tilføjet ekstraarbejde-linjer (notifikations-mekanisme TBD — email/in-app/SMS)
 **Skriver til:** `orders.forundersoegelse.afsluttet = true`, trigger `sync_to_plan` + `notify_projektleder`
+
+---
+
+## Flow 7: Dagens overblik — fremdrift & faktisk udlagt
+
+**Status:** Planlagt (denne iteration). UI under bygning i Udførelse → `DagsoverblikSection`.
+**Trigger:** Formand åbner Udførelse-mode på en ordre.
+**Involverede apps:** formand (læs/skriv), PLAN (læs)
+
+### Trin 1 — Statisk dagsinfo læses fra ordre + recept
+**App:** formand
+**Komponent:** `DagsoverblikSection` → Rad 1 (4 × `OrdreInfoCard`)
+**Viser:** Areal i dag, Produkt (recept-navn + kode), Tykkelse, Tons i dag
+**Beregning:**
+- `arealIDag = (tonsIDag × 1000) / (kg_per_m2 fra recept)`
+- `tonsIDag` er formandents angivne tons pr. dag (set under Planlægning)
+**Læser:** `orders.dailyPlan[].tonsPerDag`, `orders.produkter[].tykkelse`, `recepter[receptkode]` (navn, densitet, kg/m²)
+
+### Trin 2 — Fremdrift opdateres løbende fra vejesedler
+**App:** formand
+**Komponent:** `DagsoverblikSection` → Rad 2 (`FremdriftCard` × 3)
+**Beregning:**
+- `tonsAnkommet = SUM(plan_vejebilag.tons WHERE ordrenummer = current AND dato = today AND status='ankommet')`
+- `forventetUdlagtM2 = (tonsAnkommet × 1000) / kg_per_m2_fra_recept`
+- Begge progressbars: `value / dagsmål × 100`
+**Læser:** `plan_vejebilag` (filter på dato + ordrenummer), `recepter`
+**Note:** Vejesedler kommer fra PLAN med ~10 min forsinkelse — fremdrift er ikke real-time.
+
+### Trin 3 — Formand registrerer faktisk udlagt
+**App:** formand
+**Komponent:** `DagsoverblikSection` → `FremdriftInputRow`
+**Handling:** Formand indtaster `faktiskM2` + `faktiskTons` og trykker "Gem". Typisk ved dagens afslutning, men kan opdateres løbende.
+**Beregning (faktisk tykkelse, mm):**
+```
+tykkelse_mm = tons × 1_000_000 / (m² × densitet_kg_per_m3)
+```
+hvor `densitet_kg_per_m3` er heltal fra `recepter[receptkode].densitet` (fx 2400 for SMA 11S).
+**Skriver til:** `dagsoverblik_registreringer` (én række per ordre per dato — overskrives ved hver gem)
+
+### Trin 4 — Afvigelses-farve på "Faktisk udlagt"
+**App:** formand
+**Komponent:** `FremdriftCard` (variant=`faktisk-udlagt`)
+**Forretningsregel:**
+- `afvigelse = faktisk_m2 − forventet_udlagt_m2`
+- Vis afvigelse KUN hvis `afvigelse !== 0`
+- Symmetrisk farve baseret på fortegn:
+  - `afvigelse > 0` → `+X m²` i `text-good` (grøn)
+  - `afvigelse < 0` → `−X m²` i `text-bad` (rød) — minus-tegn er U+2212
+- Ingen absolut-værdi tærskler — fortegnet alene styrer farven
+
+### Trin 5 — Data flyder retur til PLAN (planlagt)
+**App:** formand → PLAN
+**Status:** Ikke bygget endnu
+**Skriver til PLAN:** `dagsoverblik_registreringer.faktisk_m2`, `dagsoverblik_registreringer.faktisk_tons` mirrors retur til PLAN ved dagens afslutning — bruges til entreprisekontrol og slutafregning.
+
+---
+
+## Flow 8: Vejesedler — PLAN → Formand visning
+
+**Status:** Planlagt (denne iteration). UI under bygning i Udførelse → `VejesedlerTable`.
+**Trigger:** Formand åbner Udførelse-mode. Tabel renderes med alle læs for dagens ordre.
+**Involverede apps:** PLAN (kilde), vognmandsmodul (disponering), chauffør-app (GPS), formand (visning + registrering)
+
+### Trin 1 — Vejesedler hentes fra PLAN
+**App:** formand
+**Komponent:** `VejesedlerTable` → henter via hook (TBD: `useDagensVejesedler(ordreId, dato)`)
+**Læser:** `plan_vejebilag` WHERE `ordrenummer = current AND dato = today`
+**Note:** PLAN har ~10 min forsinkelse — viser ikke real-time. Hooket skal poll'e eller bruge Supabase realtime når koblet.
+
+### Trin 2 — Status afgøres af GPS + afhentet-flag
+**Datakilde:** chauffør-app (GPS) + vognmandsmodul (disponering)
+**Forretningsregel:**
+- `status='ankommet'` ⇔ vejeseddel modtaget i Colas (har `vejeseddelNr` + `tons`)
+- `status='undervejs'` ⇔ bil har forladt fabrik (`afgang_fabrik` sat) men `vejeseddelNr=null`
+- `status='paa-vej-til-fabrik'` ⇔ bil er disponeret men ikke afhentet endnu (`afgang_fabrik=null` OG `ankomst_fabrik=null`)
+**Note:** `status` er eksplicit på `Vejeseddel`-typen — hooken sætter det baseret på data, men UI-komponenter læser KUN `status`-feltet (single source of truth).
+
+### Trin 3 — Sortering i tabel
+**Komponent:** `VejesedlerTable`
+**Sortering:**
+1. Ankomne — DESC på `modtagetTidspunkt` (nyeste øverst)
+2. Undervejs — ASC på `etaMinutter` (kortest ETA øverst)
+3. På vej til fabrik — original rækkefølge
+
+### Trin 4 — Per-række delegation
+**Komponent:** `VejeseddelRow` (delegerer baseret på `status`)
+- `ankommet` → `<TemperaturBadge>` + `<UdlaeggerDropdown>` (aktiv)
+- `undervejs` → `<EtaBadge variant="eta">` + `<UdlaeggerDropdown disabled>`
+- `paa-vej-til-fabrik` → `<EtaBadge variant="paa-vej-til-fabrik">` + `<UdlaeggerDropdown disabled>`
+
+### Trin 5 — ETA beregnes løbende
+**App:** chauffør-app → formand (formidlet via PLAN/server)
+**Beregning (v1):** `etaMinutter = afstand_km × 1 min/km`
+**Datakilde:** GPS-position fra chauffør-app til ordrens udførselssted
+**Note:** Simpel formel i v1; kan udvides med maps-API (køretid baseret på trafik) senere.
+
+### Trin 6 — Udlægger-valg
+**App:** formand
+**Komponent:** `UdlaeggerDropdown` (i `VejeseddelRow`)
+**Filtrering:** Materiel-listen på ordren filtreres til poster med `materielNr.startsWith('9-')` (udlægger-konventionen)
+**Handling:** Formand vælger udlægger per læs — bruges til at korrelere hvilken udlægger der lagde hvilken last
+**Skriver til:** `plan_vejebilag.valgt_udlaegger_materielnr` (nyt felt) eller separat `vejeseddel_udlaegger`-mapping (afgør ved Supabase-koblingen)
+
+---
+
+## Flow 9: Temperatur — Formand → PLAN (write-back)
+
+**Status:** Planlagt (denne iteration). Forretningskritisk: dette er ét af de få flows hvor Colas skriver retur til PLAN.
+**Trigger:** Formand registrerer eller ændrer temperatur på en ankommen vejeseddel.
+**Involverede apps:** formand (skrivning), PLAN (modtager update)
+
+### Trin 1 — Formand indtaster temperatur
+**App:** formand
+**Komponent:** `TemperaturBadge` (i `VejeseddelRow` på ankomne læs)
+**Handling:** Inputfelt vises hvis `temperatur === null`. Formand indtaster i °C. Gem ved Enter eller blur.
+
+### Trin 2 — Validering mod minimumstemperatur
+**Komponent:** `TemperaturBadge`
+**Forretningsregel:**
+- `temperatur >= minTemperatur` → grøn `OK`-pill
+- `temperatur < minTemperatur` → gul `Lav`-pill (advarsel — formand ser at læsset er køligere end aftalt)
+**Datakilde for minTemperatur:** Ordre/dag-niveau (formand indtaster minimumstemperatur for ordren) ELLER `recepter[receptkode].minTemperatur` som fallback.
+
+### Trin 3 — Temperatur skrives RETUR til PLAN
+**App:** formand → PLAN
+**Datafelt:** `plan_vejebilag.temperatur` (på den oprindelige vejebilag-række — IKKE en ny tabel)
+**Vigtigt:** Dette er den modsatte retning af det normale PLAN→Colas-flow. PLAN er single source of truth for vejebilag-data; temperaturen tilføjes som ekstra felt på den eksisterende række.
+**Note:** Andre vejebilag-felter (`tons`, `regnr`, `chauffoer_tlf`, `tidspunkt`, `vejebilag_nr`) skrives IKKE af Colas — kun `temperatur`.
+
+### Trin 4 — Live UI-opdatering
+**Komponent:** `TemperaturBadge`
+**Handling:** Efter gem skifter komponenten fra input-tilstand til registreret-tilstand (værdi + pill). Klik på værdien åbner input igen til redigering — formand kan opdatere fri.
+
+### Trin 5 — Fase 2 (ikke i MVP)
+**Forretningsønske:** Temperaturregistrering flyttes til chauffør-app så formanden kan stå i marken. UI-mønstret i `TemperaturBadge` skal designes med tanke på dette — datafeltet (`plan_vejebilag.temperatur`) er det samme uanset hvem der skriver.
 
 ---
 
@@ -515,14 +650,61 @@ plan_vejebilag                                // PLAN — registreres af fabrik/
   ├── tidspunkt: datetime                    // præcist tidspunkt for vejebilag
   ├── fabrik_id: string
   ├── silo_id: string
-  ├── produkt: string                        // asfalttype
+  ├── produkt: string                        // asfalttype (receptkode — fx "82101H")
   ├── tons: number                           // last-vægt (udvejet - indvejet)
-  └── vejebilag_nr: string                   // reference fra fabrik-system
+  ├── vejebilag_nr: string                   // reference fra fabrik-system
+  ├── temperatur: number | null              // °C — SKRIVES RETUR FRA COLAS (Flow 9). null = ikke registreret endnu
+  └── valgt_udlaegger_materielnr: string | null // fx "9-0009" — formand vælger i UdlaeggerDropdown (Flow 8 Trin 6)
 // JOIN-regel for akkord-afregning:
 //   SELECT regnr, SUM(tons) AS tons_dag
 //   FROM plan_vejebilag
 //   WHERE regnr = :regnr AND dato = :dato AND ordrenummer = :ordrenummer
 //   GROUP BY regnr
+// WRITE-BACK: Colas skriver KUN `temperatur` og `valgt_udlaegger_materielnr` retur til PLAN.
+//   Alle øvrige felter er read-only fra Colas' side — PLAN/fabrik-system er kilden.
+
+recepter                                      // PLAN — produktkatalog
+  ├── kode: string                           // fx "82101H"
+  ├── navn: string                           // fx "SMA 11S"
+  ├── densitet: number                       // kg/m³ — heltal (fx 2400 for SMA 11S)
+  ├── kg_per_m2: number                      // brugt til beregning af m² ↔ tons
+  └── min_temperatur: number                 // °C — fallback hvis ordre/dag ikke har egen min
+// BRUGES TIL:
+//   - tonsIDag → arealIDag via kg_per_m2
+//   - tonsAnkommet → forventet_udlagt_m2 via kg_per_m2
+//   - faktisk tykkelse-beregning via densitet (Flow 7 Trin 3)
+//   - TemperaturBadge OK/Lav-grænse via min_temperatur
+
+vejeseddel                                    // afledt view i Colas (kombination af plan_vejebilag + status)
+  ├── id: string                             // = plan_vejebilag.id når vejebilag findes, ellers temp-id
+  ├── vejeseddel_nr: string | null           // = plan_vejebilag.vejebilag_nr, null hvis ikke modtaget endnu
+  ├── regnr: string
+  ├── chauffoer_navn: string                 // opslag fra vognmandsmodul
+  ├── receptkode: string | null              // = plan_vejebilag.produkt
+  ├── fabrik_id: string | null
+  ├── fabrik_navn: string | null             // opslag fra fabriksstamdata
+  ├── tons: number | null                    // = plan_vejebilag.tons
+  ├── modtaget_tidspunkt: datetime | null    // = plan_vejebilag.tidspunkt
+  ├── status: 'ankommet' | 'undervejs' | 'paa-vej-til-fabrik'  // KANONISK — sat af hook
+  ├── temperatur: number | null              // = plan_vejebilag.temperatur
+  ├── valgt_udlaegger_materielnr: string | null // = plan_vejebilag.valgt_udlaegger_materielnr
+  └── eta_minutter: number | null            // beregnet fra GPS-position (chauffør-app)
+// STATUS-AFLEDNING:
+//   ankommet           ⇔ vejeseddel_nr != null OG tons != null
+//   undervejs          ⇔ afgang_fabrik != null OG vejeseddel_nr == null
+//   paa-vej-til-fabrik ⇔ afgang_fabrik == null OG ankomst_fabrik == null
+
+dagsoverblik_registreringer                   // Colas — formands manuelle registrering af faktisk udlagt
+  ├── id: string
+  ├── ordrenummer: string
+  ├── dato: date
+  ├── faktisk_m2: number                     // formand indtaster i FremdriftInputRow
+  ├── faktisk_tons: number                   // formand indtaster i FremdriftInputRow
+  ├── faktisk_tykkelse_mm: number            // beregnet: tons × 1_000_000 / (m² × densitet)
+  ├── gemt_tidspunkt: datetime               // sidst gemt
+  └── gemt_af: string                        // formand-navn
+// ÉN række per (ordrenummer, dato) — overskrives ved hver gem.
+// MIRRORS RETUR TIL PLAN ved dagens afslutning (Flow 7 Trin 5 — ikke bygget endnu).
 
 afregninger                                   // fra Colas til vognmand
   ├── periode: month
@@ -560,3 +742,9 @@ afregninger                                   // fra Colas til vognmand
 - **Forundersøgelse-felter kommer fra PLAN** — Underlag-typer, årsager og ekstraarbejde-typer er IKKE fri-tekst; de er prædefinerede lister fra PLAN. Kun "Aftalt med", "Forbehold" og kommentar-felterne på ekstraarbejde er fri-tekst
 - **Forundersøgelse-billeder synker til Dokumentation** — Billeder uploadet i Forundersøgelse vises også automatisk under Dokumentation (Planlægning) med badge/tag "Forundersøgelse" så kilden er tydelig
 - **Ekstraarbejde trigger notifikation til projektleder** — Hvis formand tilføjer ekstraarbejde-linjer, SKAL projektleder notificeres ved afslutning af Forundersøgelse (notifikations-mekanisme TBD). Ekstraarbejde påvirker økonomi og kræver godkendelse
+- **Vejeseddel-status er kanonisk** — Status (`'ankommet' | 'undervejs' | 'paa-vej-til-fabrik'`) er et eksplicit felt på `Vejeseddel`-typen. Hooken sætter feltet baseret på GPS + afhentet-flag, men UI-komponenter (`VejeseddelRow`, `VejesedlerTable`) læser KUN `status`-feltet og delegerer på det — ingen kombination af flags i komponenter
+- **Densitet er kg/m³ som heltal** — `recepter.densitet` er altid heltal (fx 2400 for SMA 11S). Faktisk tykkelse beregnes som `tons × 1_000_000 / (m² × densitet)` og giver tykkelse i mm. Vigtigt at densiteten ikke forveksles med kg/m² (som bruges til areal-beregning fra tons)
+- **Afvigelses-farve er symmetrisk på fortegn** — I `FremdriftCard` (variant=`faktisk-udlagt`): `+X m²` → grøn (`text-good`), `−X m²` → rød (`text-bad`). Ingen tærskel-baseret farveskift; KUN fortegnet styrer farven. Afvigelse vises kun hvis `!== 0`. Minus-tegn er U+2212 (`−`)
+- **Temperatur skrives RETUR til PLAN** — Det normale flow er PLAN → Colas, men `plan_vejebilag.temperatur` er en undtagelse: Colas (formand) er kilden, PLAN er destinationen. Datafeltet sidder på den oprindelige vejebilag-række — IKKE i en ny tabel. Når temperaturmåling i fase 2 flyttes til chauffør-app, ændrer datafeltet sig ikke, kun hvem der skriver
+- **Udlægger-konvention** — Udlæggere identificeres på materielnummer-prefix `9-` (fx `9-0009 VÖGELE 1900-3I`). `UdlaeggerDropdown` filtrerer materiel-listen på dette prefix. Andre materielnumre (fx `7-` tromler) er ikke udlæggere
+- **Dagsoverblik-registrering er en enkelt række per ordre/dato** — `dagsoverblik_registreringer` har én række per `(ordrenummer, dato)`. Hver "Gem" overskriver tidligere værdier; ingen historik gemmes i v1 (kan tilføjes ved Supabase-koblingen via en separat `dagsoverblik_historik`-tabel hvis nødvendigt)

@@ -183,3 +183,79 @@ export interface NoteComment {
   text: string
   // TODO: Erstat med Supabase når klar
 }
+
+// ─── Recepter ─────────────────────────────────────────────────────────────────
+
+/** Asfalt-recept fra PLAN — produktkatalog */
+export interface Recept {
+  /** Receptkode — fx "82101H" */
+  kode: string
+  /** Receptnavn — fx "SMA 11S" */
+  navn: string
+  /** kg asfalt per m² — bruges til m² ↔ tons-beregning: m² = tons × 1000 / kg_per_m2 */
+  kg_per_m2: number
+  /** Densitet i kg/m³ (heltal) — bruges til faktisk tykkelse-beregning: mm = tons × 1_000_000 / (m² × densitet) */
+  densitet: number
+  /** Minimumstemperatur i °C — under denne grænse vises "Lav"-badge på vejeseddel */
+  min_temperatur: number
+}
+
+// ─── Vejesedler ───────────────────────────────────────────────────────────────
+
+/** Eksplicit status på et læs — sat af hook baseret på GPS + afhentet-flag. KANONISK: UI læser kun dette felt */
+export type VejeseddelStatus = 'ankommet' | 'undervejs' | 'paa-vej-til-fabrik'
+
+/**
+ * Afledt view der kombinerer plan_vejebilag (PLAN) + status fra chauffør-app GPS.
+ * Status-afledning:
+ *   ankommet           ⇔ vejeseddelNr !== null OG tons !== null
+ *   undervejs          ⇔ afgang_fabrik sat men vejeseddelNr === null
+ *   paa-vej-til-fabrik ⇔ bil disponeret, ingen GPS-afgang endnu
+ */
+export interface Vejeseddel {
+  /** Unik id — = plan_vejebilag.id når vejebilag findes, ellers temp-id */
+  id: string
+  /** Ordrenummer vejeseddelen tilhører — bruges til filtrering */
+  ordrenummer: string
+  /** Eksplicit status — KANONISK felt som UI delegerer på */
+  status: VejeseddelStatus
+  /** Vejeseddelnummer fra PLAN — null hvis vejebilag ikke er modtaget endnu */
+  vejeseddelNr: string | null
+  /** Bilens registreringsnummer */
+  regnr: string
+  /** Chauffør-navn fra vognmandsmodul */
+  chauffoerNavn: string
+  /** Receptkode fra vejeseddel (= plan_vejebilag.produkt) — null hvis vejebilag ikke modtaget */
+  receptkode: string | null
+  /** Fabrik-id — opslås mod fabriksstamdata */
+  fabrikId: string
+  /** Fabriksnavn — præ-løst af hook fra fabrikId */
+  fabrikNavn: string | null
+  /** Tons fra vejeseddel — null hvis vejebilag ikke modtaget */
+  tons: number | null
+  /** Tidspunkt vejeseddel blev modtaget i Colas (= plan_vejebilag.tidspunkt) — bruges til sortering "nyeste øverst" */
+  modtagetTidspunkt: string | null
+  /** Registreret temperatur i °C — null = afventer manuel registrering af formand */
+  temperatur: number | null
+  /** Valgt udlægger materielnr (fx "9-0009") — null hvis ikke valgt endnu */
+  valgtUdlaeggerMaterielNr: string | null
+  /** ETA i minutter til udførselssted — kun relevant ved status='undervejs' */
+  etaMinutter: number | null
+}
+
+// ─── Dagsoverblik ─────────────────────────────────────────────────────────────
+
+/**
+ * Formands manuelle registrering af faktisk udlagt for én dag på én ordre.
+ * Én registrering per (ordrenummer, dato) — overskrives ved hver gem.
+ */
+export interface DagsoverblikRegistrering {
+  /** ISO yyyy-mm-dd — hvilken dag registreringen gælder */
+  dato: string
+  /** Faktisk udlagt areal i m² — null hvis ikke registreret endnu */
+  faktiskM2: number | null
+  /** Faktisk udlagt tons — null hvis ikke registreret endnu */
+  faktiskTons: number | null
+  /** Tidspunkt for seneste gem (ISO 8601) — null hvis ikke gemt endnu */
+  gemtTidspunkt: string | null
+}

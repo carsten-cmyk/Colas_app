@@ -24,6 +24,15 @@ import {
 import { TopBar } from '@/components/layout/TopBar'
 import { BottomTabBar } from '@/components/layout/BottomTabBar'
 import type { TabName } from '@/types/navigation'
+import { OrdreInfoCard } from '@/components/ui/OrdreInfoCard'
+import { FremdriftCard } from '@/components/ui/FremdriftCard'
+import { FremdriftInputRow } from '@/components/ui/FremdriftInputRow'
+import { VejesedlerTable } from '@/components/ui/VejesedlerTable'
+import { useRecept } from '@/hooks/useRecept'
+import { useVejesedler } from '@/hooks/useVejesedler'
+import { useDagsoverblik } from '@/hooks/useDagsoverblik'
+import { INITIAL_RECEPTER } from '@/mocks/recepter'
+import { INITIAL_UDLAEGGERE } from '@/mocks/udlaeggere'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -904,9 +913,7 @@ export function OrdrePlanScreen() {
 
           {/* ── Dokumentation ───────────────────────────────────── */}
           <section>
-            <div className="flex items-end justify-between pb-sm border-b border-hairline mb-lg">
-              <h2 className="font-poppins font-semibold text-xl text-text-primary">Dokumentation</h2>
-            </div>
+            <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Dokumentation</h2>
 
             <div className="bg-white border border-hairline rounded-xl overflow-hidden">
               {/* Toggle-header */}
@@ -1075,9 +1082,7 @@ export function OrdrePlanScreen() {
 
           {/* ── Materiel ─────────────────────────────────────────── */}
           <section>
-            <div className="flex items-end justify-between pb-sm border-b border-hairline mb-lg">
-              <h2 className="font-poppins font-semibold text-xl text-text-primary">Materiellevering</h2>
-            </div>
+            <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Materiellevering</h2>
 
             {/* Maskiner */}
             <div className="bg-white border border-hairline rounded-xl overflow-hidden mb-sm">
@@ -1319,9 +1324,7 @@ export function OrdrePlanScreen() {
 
             {/* Kørsel */}
             <div className="mt-lg">
-              <div className="flex items-end justify-between pb-sm border-b border-hairline mb-lg">
-                <h2 className="font-poppins font-semibold text-xl text-text-primary">Asfalt kørsel</h2>
-              </div>
+              <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Asfalt kørsel</h2>
               <div className="bg-white border border-hairline rounded-xl overflow-hidden">
                 {activeDays.map((day, i) => {
                   const isExpanded = kørselExpandedId === day.id
@@ -1994,6 +1997,23 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
   vognmandMaterielBekraeftelse?: VognmandMaterielBekraeftelse
   todayDay?: DayPlan
 }) {
+  // ── Dagsdata — hardcoded for demo, TODO: hent fra ordre-objekt når Supabase klar ───
+  const DEMO_ORDRE_ID = '260423891'
+  const DEMO_DATO = new Date().toISOString().slice(0, 10)
+  const DEMO_AREAL_I_DAG = 1339      // m² — TODO: beregn fra dagplan-tons × 1000/kg_per_m2
+  const DEMO_TONS_I_DAG = 251        // t   — TODO: hent fra dagplan
+  const DEMO_TYKKELSE = 45           // mm  — TODO: hent fra ordre.planlaegning.tykkelse
+  const DEMO_ORDRE_TOTAL_AREAL = 4017 // m² — TODO: hent fra ordre
+  const DEMO_ORDRE_TOTAL_TONS = 752   // t  — TODO: hent fra ordre
+
+  const { recept } = useRecept('82101H') // SMA 11S — TODO: Erstat med Supabase når klar
+  const { vejesedler } = useVejesedler(DEMO_ORDRE_ID, DEMO_DATO)
+  const { tonsAnkommet, forventetUdlagtM2, faktiskRegistrering, gemFaktisk } = useDagsoverblik(
+    DEMO_ORDRE_ID,
+    DEMO_DATO,
+    recept
+  )
+
   const [underlaegsType, setUnderlaegsType] = useState<UnderlagType | ''>('asfalt')
   const [underlaegsAndet, setUnderlaegsAndet] = useState('')
   const [tilfredsstillende, setTilfredsstillende] = useState<boolean | null>(null)
@@ -2044,6 +2064,8 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
     // TODO: Erstat med Supabase når klar — afregning_type kommer fra vognmand.aftaler.chauffoerer[], timer fra chauffeur-app
     return initial
   })
+
+  const [visUdlaegningInput, setVisUdlaegningInput] = useState(false)
 
   function toggleAfregning(key: string) {
     setAfregningOpen(prev => {
@@ -2123,67 +2145,94 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
 
   return (
     <div className="flex flex-col gap-[48px]">
-      {/* ── Status-bokse (matcher produkt-bokse i Planlægning) ───────── */}
+      {/* ── Dagens overblik — status-bokse ───────────────────────────── */}
       <div className="flex flex-col gap-xs">
-        <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest">Status</span>
-        <div className="inline-flex gap-xs">
-        {/* Biler bekræftelse */}
-        <div className={`flex flex-col gap-xxxs items-start min-w-[150px] px-sm py-xs rounded-xl border ${vognmandBekraeftelse ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
-          <span className="font-inter font-bold text-xs tabular-nums text-text-muted uppercase tracking-wider">
-            Biler
-          </span>
-          <span className="font-poppins font-semibold text-sm tracking-tight text-text-primary">
-            {vognmandBekraeftelse ? 'Bekræftet' : 'Afventer'}
-          </span>
-          <span className="font-inter text-xs text-text-muted">
-            {vognmandBekraeftelse ? 'Vognmand har bekræftet' : 'Vognmand ikke bekræftet'}
-          </span>
-          <span className="font-inter text-xs tabular-nums text-text-muted">
-            {antalBiler} {antalBiler === 1 ? 'bil' : 'biler'}
-          </span>
-        </div>
-        {/* Materiel transport */}
+        <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Dagens overblik</h2>
+        {/* Alle 7 bokse i ét fælles grid — samme bredde og højde via auto-rows-fr */}
         {(() => {
-          const materielBekraeftet = !!(vognmandMaterielBekraeftelse && vognmandMaterielBekraeftelse.items.length > 0)
-          const antalMateriel = vognmandMaterielBekraeftelse?.items.length ?? 0
+          const fmtTal = (n: number, max = 0) =>
+            new Intl.NumberFormat('da-DK', { maximumFractionDigits: max }).format(n)
+          const materielBekraeftet2 = !!(vognmandMaterielBekraeftelse && vognmandMaterielBekraeftelse.items.length > 0)
+          const antalMateriel2 = vognmandMaterielBekraeftelse?.items.length ?? 0
+          const forundersoegelseForetaget2 = underlaegsType && tilfredsstillende !== null && tilfredsstillende !== undefined
           return (
-            <div className={`flex flex-col gap-xxxs items-start min-w-[150px] px-sm py-xs rounded-xl border ${materielBekraeftet ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
-              <span className="font-inter font-bold text-xs tabular-nums text-text-muted uppercase tracking-wider">
-                Materiel transport
-              </span>
-              <span className="font-poppins font-semibold text-sm tracking-tight text-text-primary">
-                {materielBekraeftet ? 'Bekræftet' : 'Afventer'}
-              </span>
-              <span className="font-inter text-xs text-text-muted">
-                {materielBekraeftet ? 'Vognmand har bekræftet' : 'Vognmand ikke bekræftet'}
-              </span>
-              <span className="font-inter text-xs tabular-nums text-text-muted">
-                {antalMateriel} {antalMateriel === 1 ? 'enhed' : 'enheder'}
-              </span>
+            <div className="grid grid-cols-3 xl:grid-cols-7 gap-xs auto-rows-fr">
+              {/* Biler */}
+              <div className={`flex flex-col gap-xxxs items-start min-w-0 w-full h-full p-sm rounded-xl border ${vognmandBekraeftelse ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
+                <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">
+                  Biler
+                </span>
+                <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
+                  {antalBiler}
+                </span>
+                <span className="font-inter text-xs text-text-muted">
+                  {vognmandBekraeftelse ? 'Bekræftet af vognmand' : 'Afventer bekræftelse'}
+                </span>
+              </div>
+              {/* Materiel transport */}
+              <div className={`flex flex-col gap-xxxs items-start min-w-0 w-full h-full p-sm rounded-xl border ${materielBekraeftet2 ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
+                <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">
+                  Materiel transport
+                </span>
+                <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
+                  {antalMateriel2}
+                </span>
+                <span className="font-inter text-xs text-text-muted">
+                  {materielBekraeftet2 ? 'Bekræftet af vognmand' : 'Afventer bekræftelse'}
+                </span>
+              </div>
+              {/* Forundersøgelse */}
+              <div className={`flex flex-col gap-xxxs items-start min-w-0 w-full h-full p-sm rounded-xl border ${forundersoegelseForetaget2 ? 'bg-good-bg border-good/30' : 'bg-bad-bg border-bad/30'}`}>
+                <span className={`font-inter text-xxs font-medium tracking-widest uppercase ${forundersoegelseForetaget2 ? 'text-text-muted' : 'text-bad/70'}`}>
+                  Forundersøgelse
+                </span>
+                <span className={`font-poppins font-semibold text-xl tabular-nums ${forundersoegelseForetaget2 ? 'text-text-primary' : 'text-bad'}`}>
+                  {forundersoegelseForetaget2 ? 'OK' : '–'}
+                </span>
+                <span className={`font-inter text-xs ${forundersoegelseForetaget2 ? 'text-text-muted' : 'text-bad/80'}`}>
+                  {forundersoegelseForetaget2 ? (tilfredsstillende ? 'Tilfredsstillende' : 'Ikke tilfredsstillende') : 'Mangler vurdering'}
+                </span>
+              </div>
+              {/* 4 OrdreInfoCards — kun når recept er klar */}
+              {recept && (
+                <>
+                  <OrdreInfoCard
+                    label="AREAL I DAG"
+                    value={fmtTal(DEMO_AREAL_I_DAG)}
+                    unit="m²"
+                    subtekst={`á ${fmtTal(DEMO_ORDRE_TOTAL_AREAL)} m²`}
+                  />
+                  <OrdreInfoCard
+                    label="PRODUKT"
+                    value={recept.navn}
+                    subtekst={recept.kode}
+                  />
+                  <OrdreInfoCard
+                    label="TYKKELSE"
+                    value={fmtTal(DEMO_TYKKELSE)}
+                    unit="mm"
+                  />
+                  <OrdreInfoCard
+                    label="TONS I DAG"
+                    value={fmtTal(DEMO_TONS_I_DAG)}
+                    unit="t"
+                    subtekst={`á ${fmtTal(DEMO_ORDRE_TOTAL_TONS)} t`}
+                  />
+                </>
+              )}
             </div>
           )
         })()}
-        {/* Forundersøgelse */}
-        {(() => {
-          const forundersoegelseForetaget = underlaegsType && tilfredsstillende !== null && tilfredsstillende !== undefined
-          return (
-            <div className={`flex flex-col gap-xxxs items-start min-w-[150px] px-sm py-xs rounded-xl border ${forundersoegelseForetaget ? 'bg-good-bg border-good/30' : 'bg-bad-bg border-bad/30'}`}>
-              <span className={`font-inter font-bold text-xs tabular-nums uppercase tracking-wider ${forundersoegelseForetaget ? 'text-text-muted' : 'text-bad/70'}`}>
-                Forundersøgelse
-              </span>
-              <span className={`font-poppins font-semibold text-sm tracking-tight ${forundersoegelseForetaget ? 'text-text-primary' : 'text-bad'}`}>
-                {forundersoegelseForetaget ? 'Gennemført' : 'Ikke foretaget'}
+        {/* REPLACED: old 2-row layout (inline-flex + DagsoverblikSection) replaced by unified grid above.
+              <span>dead_code_placeholder–'}
               </span>
               <span className={`font-inter text-xs ${forundersoegelseForetaget ? 'text-text-muted' : 'text-bad/80'}`}>
-                {forundersoegelseForetaget ? 'Underlag vurderet' : 'Mangler vurdering'}
+                {forundersoegelseForetaget ? (tilfredsstillende ? 'Tilfredsstillende' : 'Ikke tilfredsstillende') : 'Mangler vurdering'}
               </span>
-              <span className={`font-inter text-xs ${forundersoegelseForetaget ? 'text-text-muted' : 'text-bad/80'}`}>
+              {/* NOTE:
                 {forundersoegelseForetaget ? (tilfredsstillende ? 'Tilfredsstillende' : 'Ikke tilfredsstillende') : ' '}
               </span>
-            </div>
-          )
-        })()}
-        </div>
+        */}
       </div>
 
       <section>
@@ -2512,6 +2561,94 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
         </div>
       </section>
 
+      {/* ── Udlægning ────────────────────────────────────────────── */}
+      {recept && (() => {
+        const tonsProgress = DEMO_TONS_I_DAG > 0 ? Math.round((tonsAnkommet / DEMO_TONS_I_DAG) * 100) : 0
+        const forventetProgress = DEMO_AREAL_I_DAG > 0 ? Math.round((forventetUdlagtM2 / DEMO_AREAL_I_DAG) * 100) : 0
+        const faktiskUdlagtM2 = faktiskRegistrering?.faktiskM2 ?? null
+        const faktiskProgress = faktiskUdlagtM2 !== null && DEMO_AREAL_I_DAG > 0 ? Math.round((faktiskUdlagtM2 / DEMO_AREAL_I_DAG) * 100) : 0
+        const afvigelse = faktiskUdlagtM2 !== null ? Math.round(faktiskUdlagtM2 - forventetUdlagtM2) : undefined
+        const faktiskVariant: 'good' | 'warn' | 'bad' = afvigelse !== undefined && afvigelse < 0 ? 'bad' : 'good'
+        const fmtTal = (n: number, d = 0) => new Intl.NumberFormat('da-DK', { maximumFractionDigits: d }).format(n)
+        return (
+          <section>
+            <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Udlægning</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-xs">
+              <FremdriftCard
+                variant="tons-ankommet"
+                label="TONS ANKOMMET"
+                value={fmtTal(tonsAnkommet, 1)}
+                unit=""
+                subtekst={`á ${fmtTal(DEMO_TONS_I_DAG)} t dagens plan`}
+                progress={tonsProgress}
+                progressVariant="good"
+              />
+              <FremdriftCard
+                variant="forventet-udlagt"
+                label="FORVENTET M2 UDLAGT"
+                value={fmtTal(forventetUdlagtM2)}
+                unit=""
+                subtekst="beregnet fra tons × kg/m²"
+                progress={forventetProgress}
+                progressVariant="good"
+              />
+              <FremdriftCard
+                variant="faktisk-udlagt"
+                label="FAKTISK M2 UDLAGT"
+                value={faktiskUdlagtM2 !== null ? fmtTal(faktiskUdlagtM2) : '–'}
+                unit=""
+                subtekst={
+                  faktiskRegistrering?.gemtTidspunkt
+                    ? `senest gemt ${faktiskRegistrering.gemtTidspunkt}`
+                    : 'ikke registreret endnu'
+                }
+                progress={faktiskProgress}
+                progressVariant={faktiskVariant}
+                afvigelse={afvigelse}
+              />
+            </div>
+            <div className="mt-xs">
+              {!visUdlaegningInput ? (
+                <button
+                  type="button"
+                  onClick={() => setVisUdlaegningInput(true)}
+                  className="bg-surface border border-hairline text-text-primary font-inter font-semibold text-sm px-sm py-xs rounded-lg min-h-[44px]"
+                >
+                  Registrer udlægning
+                </button>
+              ) : (
+                <FremdriftInputRow
+                  densitet={recept.densitet}
+                  planTykkelse={DEMO_TYKKELSE}
+                  initial={
+                    faktiskRegistrering
+                      ? { faktiskM2: faktiskRegistrering.faktiskM2!, faktiskTons: faktiskRegistrering.faktiskTons! }
+                      : undefined
+                  }
+                  onSave={({ faktiskM2, faktiskTons }) => {
+                    gemFaktisk(faktiskM2, faktiskTons)
+                    setVisUdlaegningInput(false)
+                  }}
+                />
+              )}
+            </div>
+          </section>
+        )
+      })()}
+
+      {/* ── Vejesedler og indkomne tons ──────────────────────────── */}
+      <section>
+        <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Vejesedler og indkomne tons</h2>
+        <VejesedlerTable
+          vejesedler={vejesedler}
+          recepter={INITIAL_RECEPTER}
+          minTemperatur={recept?.min_temperatur ?? 140}
+          udlaeggerliste={INITIAL_UDLAEGGERE}
+          onTemperatur={(_id, _temp) => { /* TODO: skriv retur til PLAN */ }}
+          onUdlaegger={(_id, _materielNr) => { /* TODO: opdater vejeseddel */ }}
+        />
+      </section>
+
       {/* ── Bestilte biler ────────────────────────────────────────── */}
       {todayDay && (
         <section>
@@ -2519,17 +2656,16 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
             <h2 className="font-poppins font-semibold text-xl text-text-primary">Bilafregning</h2>
           </div>
 
-          <div className="rounded-xl bg-surface border border-hairline overflow-hidden">
-            {vognmandBekraeftelse ? (
-              <div className="px-sm pb-sm pt-sm">
-                <div className="overflow-hidden rounded-lg border border-hairline bg-surface">
-                  <table className="w-full">
+          {vognmandBekraeftelse ? (
+            <div className="overflow-hidden rounded-lg border border-hairline bg-surface">
+              <table className="w-full">
                     <thead>
                       <tr className="border-b border-hairline bg-surface-2">
                         <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Reg.nr.</th>
                         <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Chauffør</th>
                         <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Tlf.</th>
-                        <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Type</th>
+                        <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Biltype</th>
+                        <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Kategori</th>
                         <th className="text-right font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Afregning</th>
                       </tr>
                     </thead>
@@ -2541,35 +2677,29 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                         const isGodkendt = afrData?.godkendt_af_formand ?? false
                         // Materiel-biler afregnes ALTID på time — akkord ikke relevant
                         const effectiveType: AfregningType = bil.er_materiel_bil ? 'time' : (afrData?.afregning_type ?? 'time')
-                        const manglerType = !bil.er_materiel_bil && !afrData?.afregning_type
                         const isLast = i === vognmandBekraeftelse.biler.length - 1
                         return (
                           <>
                             <tr key={bil.regnr} className={(!isLast || isOpen || isGodkendt) ? 'border-b border-hairline' : ''}>
-                              <td className="font-inter text-xs font-semibold text-text-primary px-xs py-xs tabular-nums">{bil.regnr}</td>
-                              <td className="font-inter text-xs text-text-primary px-xs py-xs">{bil.chauffoer}</td>
-                              <td className="px-xs py-xs">
+                              <td className="align-middle font-inter text-xs font-semibold text-text-primary px-xs py-xs tabular-nums">{bil.regnr}</td>
+                              <td className="align-middle font-inter text-xs text-text-primary px-xs py-xs">{bil.chauffoer}</td>
+                              <td className="align-middle px-xs py-xs">
                                 <a href={`tel:${bil.tlf.replace(/\s/g, '')}`} className="font-inter text-xs text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
                                   <Phone size={11} />
                                   {bil.tlf}
                                 </a>
                               </td>
-                              <td className="px-xs py-xs">
-                                <div className="flex items-center gap-xxxs flex-wrap">
-                                  <span className="font-inter text-xs text-text-muted">{bil.biltype}</span>
-                                  {bil.er_materiel_bil && (
-                                    <span className="inline-flex items-center gap-xxxs bg-warn-bg text-text-secondary font-inter font-semibold text-xxs px-xs py-xxxs rounded-md uppercase tracking-wider">
-                                      Kørt materiel
-                                    </span>
-                                  )}
-                                </div>
-                                {bil.er_materiel_bil && bil.koert_materiel && bil.koert_materiel.length > 0 && (
-                                  <p className="font-inter text-xs text-text-muted italic mt-xxxs">
-                                    {bil.koert_materiel.join(', ')}
-                                  </p>
+                              <td className="align-middle px-xs py-xs">
+                                <span className="font-inter text-xs text-text-muted">{bil.biltype}</span>
+                              </td>
+                              <td className="align-middle px-xs py-xs">
+                                {bil.er_materiel_bil && (
+                                  <span className="inline-flex items-center gap-xxxs bg-warn-bg text-text-secondary font-inter font-semibold text-xxs px-xs py-xxxs rounded-md uppercase tracking-wider">
+                                    Kørt materiel
+                                  </span>
                                 )}
                               </td>
-                              <td className="px-xs py-xs text-right">
+                              <td className="align-middle px-xs py-xs text-right">
                                 {isGodkendt ? (
                                   <span className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-md bg-good-bg text-good font-inter font-semibold text-xs">
                                     <CheckCircle2 size={11} className="flex-shrink-0" />
@@ -2587,17 +2717,8 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                             </tr>
                             {(isOpen || isGodkendt) && (
                               <tr key={`${bil.regnr}-expand`} className={!isLast ? 'border-b border-hairline' : ''}>
-                                <td colSpan={5} className="px-xs pb-xs pt-xxxs">
+                                <td colSpan={6} className="px-xs pb-xs pt-xxxs">
                                   <div className="bg-surface-2 rounded-lg p-sm mt-xxxs border border-hairline">
-                                    {/* Fallback-banner manglende afregningstype (asfalt-biler only) */}
-                                    {manglerType && (
-                                      <div className="mb-xs">
-                                        <span className="inline-flex items-center bg-warn-bg text-text-secondary font-inter font-medium text-xs px-sm py-xxxs rounded-full">
-                                          Afregningstype mangler fra vognmand-system — defaulter til time-afregning
-                                        </span>
-                                      </div>
-                                    )}
-
                                     {/* Afregnings-felter */}
                                     <div className="flex flex-wrap gap-xs items-end">
                                       {effectiveType === 'time' ? (
@@ -2705,157 +2826,152 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                       })}
                     </tbody>
                   </table>
-                </div>
-              </div>
-            ) : (
-              <p className="font-inter text-xs text-text-muted px-sm pb-sm">
-                Bilbestillingen er sendt — vognmanden disponerer og bekræfter snarest.
-              </p>
-            )}
-          </div>
+            </div>
+          ) : (
+            <p className="font-inter text-xs text-text-muted px-sm pb-sm">
+              Bilbestillingen er sendt — vognmanden disponerer og bekræfter snarest.
+            </p>
+          )}
         </section>
       )}
 
       {/* ── Materiel ─────────────────────────────────────────────── */}
       <section>
-        <div className="flex items-center justify-between mb-sm">
-          <h2 className="font-poppins font-semibold text-xl text-text-primary">Materielafregning</h2>
+        <div className="flex flex-wrap items-center justify-between gap-sm mb-sm">
           <div className="flex items-center gap-xs">
+            <h2 className="font-poppins font-semibold text-xl text-text-primary">Materielafregning</h2>
             {materielAfregningGodkendt && (
               <span className="inline-flex items-center bg-good-bg text-good font-inter font-semibold text-xs px-sm py-xxxs rounded-full">
                 Afregning godkendt
               </span>
             )}
+            {/* TODO: Fjernes — kun til demo. I produktion kommer feltet fra PLAN */}
+            <span className="font-inter text-xxs text-text-muted uppercase tracking-widest">Demo:</span>
+            {(['nej', 'ja'] as TimeafregningFraPlan[]).map(v => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setTimeafregningFraPlan(v)}
+                className={[
+                  'font-inter text-xs px-xs py-xxxs rounded-full border transition-colors',
+                  timeafregningFraPlan === v
+                    ? 'bg-deep-teal text-white border-deep-teal font-semibold'
+                    : 'bg-surface text-text-secondary border-hairline hover:border-dark-teal',
+                ].join(' ')}
+              >
+                Timeafregning: {v === 'ja' ? 'Ja' : 'Nej'}
+              </button>
+            ))}
           </div>
         </div>
 
         {!materielAfregningGodkendt && (
-          <div className="bg-surface rounded-2xl border border-hairline overflow-hidden shadow-sm mb-sm">
-
-            {/* TODO: Fjernes — kun til demo. I produktion kommer feltet fra PLAN */}
-            <div className="flex items-center gap-xs p-sm border-b border-hairline bg-surface-2">
-              <span className="font-inter text-xxs text-text-muted uppercase tracking-widest">Demo:</span>
-              {(['nej', 'ja'] as TimeafregningFraPlan[]).map(v => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setTimeafregningFraPlan(v)}
-                  className={[
-                    'font-inter text-xs px-xs py-xxxs rounded-full border transition-colors',
-                    timeafregningFraPlan === v
-                      ? 'bg-deep-teal text-white border-deep-teal font-semibold'
-                      : 'bg-surface text-text-secondary border-hairline hover:border-dark-teal',
-                  ].join(' ')}
-                >
-                  Timeafregning: {v === 'ja' ? 'Ja' : 'Nej'}
-                </button>
-              ))}
-            </div>
-
-            {/* Info-banner */}
-            <div className="px-sm py-xs bg-surface-2">
-              <span className="inline-flex items-center bg-warn-bg text-text-secondary font-inter font-medium text-xs px-sm py-xxxs rounded-full">
-                {timeafregningFraPlan === 'nej'
-                  ? 'Holdpakke fast pris — angiv samlede timer for hele pakken'
-                  : 'Timeafregning — angiv timer per materiel-enhed'}
-              </span>
-            </div>
-
-            {/* Case A: fast pris — samlet timer-input øverst */}
-            {timeafregningFraPlan === 'nej' && (
-              <div className="flex items-center justify-between border-b border-hairline px-sm py-xs bg-surface-2">
-                <label className="font-inter text-xxs text-text-muted uppercase tracking-widest">Anvendte timer for hele holdpakken</label>
-                <div className="flex items-center gap-xs">
-                  <input
-                    type="number"
-                    step="0.5"
-                    min={0}
-                    value={holdpakkeTimer}
-                    onChange={e => setHoldpakkeTimer(parseFloat(e.target.value) || 0)}
-                    className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-sm tabular-nums w-[120px] focus:outline-none focus:border-dark-teal"
-                  />
-                  <span className="font-inter text-xxs text-text-muted uppercase tracking-widest">timer</span>
-                </div>
-              </div>
-            )}
-
-            {/* Tabel-header */}
-            <div className="grid grid-cols-[100px_1fr_130px] border-b border-hairline bg-surface-2">
-              <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Anlæg</span>
-              <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Beskrivelse</span>
-              <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs text-right">
-                {timeafregningFraPlan === 'nej' ? 'Anvendt' : 'Timer brugt'}
-              </span>
-            </div>
-
-            {/* Rækker */}
-            {MATERIEL_ENHEDER.map((enhed, i) => {
-              const isLast = i === MATERIEL_ENHEDER.length - 1
-              return (
-                <div
-                  key={enhed.anlaegsNr}
-                  className={[
-                    'grid grid-cols-[100px_1fr_130px] items-center px-xs py-xs',
-                    !isLast ? 'border-b border-hairline' : '',
-                  ].join(' ')}
-                >
-                  <span className="font-inter text-xs font-semibold text-text-primary tabular-nums">{enhed.anlaegsNr}</span>
-                  <span className="font-inter text-xs text-text-primary">{enhed.beskrivelse}</span>
-
-                  {timeafregningFraPlan === 'nej' ? (
-                    // Case A: simpel checkbox
-                    <div className="flex justify-end">
-                      <label className="flex items-center justify-center w-[18px] h-[18px] cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={materielAnvendt[enhed.anlaegsNr] ?? true}
-                          onChange={e =>
-                            setMaterielAnvendt(prev => ({ ...prev, [enhed.anlaegsNr]: e.target.checked }))
-                          }
-                          className="sr-only"
-                          aria-label={`${enhed.beskrivelse} anvendt`}
-                        />
-                        <span className={[
-                          'w-4 h-4 rounded-sm border flex items-center justify-center',
-                          (materielAnvendt[enhed.anlaegsNr] ?? true)
-                            ? 'bg-surface border-hairline-2'
-                            : 'bg-surface border-hairline-2',
-                        ].join(' ')}>
-                          {(materielAnvendt[enhed.anlaegsNr] ?? true) && (
-                            <Check size={11} className="text-text-primary" strokeWidth={3} />
+          <div className="overflow-hidden rounded-lg border border-hairline bg-surface mb-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-hairline bg-surface-2">
+                    <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Anlæg</th>
+                    <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">Beskrivelse</th>
+                    <th className="text-right font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs">
+                      {timeafregningFraPlan === 'nej' ? 'Anvendt' : 'Timer brugt'}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {MATERIEL_ENHEDER.map((enhed, i) => {
+                    const isLast = i === MATERIEL_ENHEDER.length - 1
+                    return (
+                      <tr
+                        key={enhed.anlaegsNr}
+                        className={!isLast ? 'border-b border-hairline' : ''}
+                      >
+                        <td className="align-middle font-inter text-xs font-semibold text-text-primary tabular-nums px-xs py-xs">{enhed.anlaegsNr}</td>
+                        <td className="align-middle font-inter text-xs text-text-primary px-xs py-xs">{enhed.beskrivelse}</td>
+                        <td className="align-middle px-xs py-xs text-right">
+                          {timeafregningFraPlan === 'nej' ? (
+                            // Case A: simpel checkbox
+                            <div className="flex justify-end">
+                              <label className="flex items-center justify-center w-[18px] h-[18px] cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={materielAnvendt[enhed.anlaegsNr] ?? true}
+                                  onChange={e =>
+                                    setMaterielAnvendt(prev => ({ ...prev, [enhed.anlaegsNr]: e.target.checked }))
+                                  }
+                                  className="sr-only"
+                                  aria-label={`${enhed.beskrivelse} anvendt`}
+                                />
+                                <span className={[
+                                  'w-4 h-4 rounded-sm border flex items-center justify-center',
+                                  (materielAnvendt[enhed.anlaegsNr] ?? true)
+                                    ? 'bg-surface border-hairline-2'
+                                    : 'bg-surface border-hairline-2',
+                                ].join(' ')}>
+                                  {(materielAnvendt[enhed.anlaegsNr] ?? true) && (
+                                    <Check size={11} className="text-text-primary" strokeWidth={3} />
+                                  )}
+                                </span>
+                              </label>
+                            </div>
+                          ) : (
+                            // Case B: timer-input per enhed
+                            <div className="flex justify-end">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={materielTimer[enhed.anlaegsNr] ?? ''}
+                                onChange={e =>
+                                  setMaterielTimer(prev => ({ ...prev, [enhed.anlaegsNr]: parseFloat(e.target.value) || 0 }))
+                                }
+                                className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-xs tabular-nums w-[100px] text-right focus:outline-none focus:border-dark-teal"
+                                aria-label={`Timer for ${enhed.beskrivelse}`}
+                              />
+                            </div>
                           )}
-                        </span>
-                      </label>
-                    </div>
-                  ) : (
-                    // Case B: timer-input per enhed
-                    <div className="flex justify-end">
-                      <input
-                        type="number"
-                        step="0.5"
-                        min={0}
-                        value={materielTimer[enhed.anlaegsNr] ?? ''}
-                        onChange={e =>
-                          setMaterielTimer(prev => ({ ...prev, [enhed.anlaegsNr]: parseFloat(e.target.value) || 0 }))
-                        }
-                        className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-sm tabular-nums w-[100px] text-right focus:outline-none focus:border-dark-teal"
-                        aria-label={`Timer for ${enhed.beskrivelse}`}
-                      />
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-
-            {/* Godkend afregning-knap */}
-            <div className="px-sm py-sm border-t border-hairline">
-              <button
-                type="button"
-                onClick={() => { setMaterielAfregningGodkendt(true) }}
-                className="bg-yellow text-deep-teal font-inter font-semibold text-sm py-xxxs px-sm rounded-lg hover:brightness-95 transition-all"
-              >
-                Godkend afregning
-              </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  <tr className="border-t border-hairline">
+                    <td colSpan={3} className="px-sm py-xs">
+                      <div className="flex flex-wrap items-start justify-between gap-sm">
+                        <div className="flex flex-col gap-xs">
+                          {timeafregningFraPlan === 'nej' && (
+                            <div className="flex items-center gap-xs">
+                              <label className="font-inter text-xxs text-text-muted uppercase tracking-widest whitespace-nowrap">Anvendte timer for hele holdpakken</label>
+                              <div className="flex items-center gap-xs">
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={holdpakkeTimer}
+                                  onChange={e => setHoldpakkeTimer(parseFloat(e.target.value) || 0)}
+                                  className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-xs tabular-nums w-[120px] focus:outline-none focus:border-dark-teal"
+                                />
+                                <span className="font-inter text-xxs text-text-muted uppercase tracking-widest">timer</span>
+                              </div>
+                            </div>
+                          )}
+                          <span className="inline-flex items-center bg-warn-bg text-text-secondary font-inter font-medium text-xs px-sm py-xxxs rounded-full whitespace-nowrap">
+                            {timeafregningFraPlan === 'nej'
+                              ? 'Holdpakke fast pris — angiv samlede timer for hele pakken'
+                              : 'Timeafregning — angiv timer per materiel-enhed'}
+                          </span>
+                        </div>
+                        {!materielAfregningGodkendt && (
+                          <button
+                            type="button"
+                            onClick={() => { setMaterielAfregningGodkendt(true) }}
+                            className="min-h-[44px] shrink-0 ml-auto bg-yellow text-deep-teal font-inter font-semibold text-sm py-xxxs px-sm rounded-lg hover:brightness-95 transition-all"
+                          >
+                            Godkend afregning
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
 
           </div>
