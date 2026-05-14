@@ -25,29 +25,57 @@ Når du modtager en skærm eller feature, skal du:
    - Hvilke interaktioner sker?
    - Hvilke eksisterende komponenter kan genbruges?
 
-3. **Identificér nye komponenter**:
+3. **Visual Pattern Inventory** (OBLIGATORISK før SPECs skrives):
+
+   Når den nye feature integrerer i en EKSISTERENDE skærm, skal du systematisk dokumentere de visuelle mønstre der allerede findes der. Nye komponenter SKAL matche disse mønstre — ikke opfinde egen stil.
+
+   For hver af følgende element-typer i target-skærmen, find ÉT konkret eksempel og notér PRÆCISE Tailwind-klasser med fil + linjenummer:
+
+   | Element-type | Hvad skal noteres |
+   |---|---|
+   | Sektion-overskrift (`<h2>`) | font-family, font-size, weight, color, margin (fx `font-poppins font-semibold text-xl text-text-primary mb-sm`) |
+   | Status-/info-boks (kort/badge) | bg, border, radius, padding, label-stil, value-stil, subtext-stil |
+   | Tabel-wrapper | overflow, border, radius, bg (fx `overflow-hidden rounded-lg border border-hairline bg-surface`) |
+   | Tabel-header (`<th>`) | font, size, weight, casing, color, padding |
+   | Tabel-celle (`<td>`) | font, size, padding, line-height |
+   | Inputfelt | font-size, padding, border, focus-ring |
+   | Knap (primary/secondary) | bg, text, padding, radius, min-height |
+   | Badge/pille | bg, text, padding, radius, font-size |
+
+   Output skrives som "Visual Pattern Reference"-blok i hver SPEC-fil:
+   ```markdown
+   ## Visual Pattern Reference
+   - **Sektion-overskrift**: matcher `OrdrePlanScreen.tsx:2150` — `font-poppins font-semibold text-xl text-text-primary mb-sm`
+   - **Boks-wrapper**: matcher status-boks `OrdrePlanScreen.tsx:2156` — `min-w-0 w-full h-full p-sm rounded-xl border border-hairline bg-surface`
+   - **Tabel-wrapper**: matcher Bilafregning `OrdrePlanScreen.tsx:2665` — `overflow-hidden rounded-lg border border-hairline bg-surface`
+   ```
+
+   Hvis ingen eksisterende pattern findes (helt ny skærm), brug `DESIGN_SYSTEM.md`-eksempler og notér det eksplicit.
+
+4. **Identificér nye komponenter**:
    - Tjek `apps/[app]/src/components/` for eksisterende — genbyg aldrig
    - List kun komponenter der mangler
    - Angiv type: `ui/` (atomar), `screens/[screen]/` (screen-specifik), `layout/`
 
-4. **Bestem build-rækkefølge** (altid bottom-up):
+5. **Bestem build-rækkefølge** (altid bottom-up):
    - Leaf-komponenter (ingen dependencies) → sammensat → screen
    - Angiv hvilke komponenter der kan bygges parallelt
 
-5. **Identificér cross-app flows**:
+6. **Identificér cross-app flows**:
    - Skriver denne skærm data som andre apps læser?
    - Læser den data som andre apps skriver?
    - Opdater `.claude/docs/FUNCTIONAL_FLOWS.md` hvis nye flows identificeres
 
-6. **Skriv SPEC.md per ny komponent** til `Docs/[App]/[KomponentNavn]_SPEC.md`:
+7. **Skriv SPEC.md per ny komponent** til `Docs/[App]/[KomponentNavn]_SPEC.md`:
    - Hvad komponenten gør (én sætning)
    - Props interface (navn, type, required/optional, beskrivelse)
    - Visuelle states (default, loading, error, edge cases)
    - Data den skal bruge (mock-kilde eller Supabase-tabel)
+   - **Visual Pattern Reference**-blok (se trin 3) — konkrete fil:linje-referencer + præcise Tailwind-klasser nye komponent SKAL matche
    - Hvilke tokens der bruges (farver, spacing — ingen hardcoded værdier)
    - Hvilke eksisterende komponenter den bruger
 
-7. **Præsenter plan for godkendelse**:
+8. **Præsenter plan for godkendelse**:
 
 ```
 ## Plan: [Screen navn] — [App]

@@ -139,6 +139,36 @@ Brug denne checkliste for hvert komponent. Flag ALLE issues med filsti + linjenu
 - Story dækker: default state, alle props-varianter, edge cases (tom liste, lang tekst, manglende billede)
 - Stories bruger CSF3 format med `satisfies Meta<typeof Component>`
 
+### 10. VISUAL CONSISTENCY (cross-screen pattern match)
+
+Ny komponent skal visuelt matche eksisterende elementer på samme skærm. Hver afvigelse er teknisk gæld der senere kræver et /bg-fix.
+
+**Hvis SPEC indeholder en "Visual Pattern Reference"-blok:**
+- Åbn de filer der refereres, og sammenlign linje for linje
+- Flag som CRITICAL hvis font-family afviger fra reference
+- Flag som CRITICAL hvis font-size afviger fra reference
+- Flag som RECOMMENDED hvis padding/border/radius afviger fra reference
+- Flag som RECOMMENDED hvis label-stil eller value-stil afviger
+
+**Hvis SPEC ikke har Visual Pattern Reference (men skærmen har eksisterende similar komponenter):**
+- Find selv de eksisterende patterns i target-skærmen
+- Flag som RECOMMENDED hvis nye komponent ikke matcher dem
+- Notér i review at SPEC manglede pattern-reference (architect-feedback)
+
+**Specifikke konsistens-tjek:**
+| Element | Tjek mod |
+|---|---|
+| Sektion-overskrift | Andre `<h2>` på samme skærm — samme font, size, weight, margin |
+| Boks/kort | Andre status-bokse/kort på skærmen — samme bg, border, radius, padding |
+| Tabel-wrapper | Andre tabeller på skærmen (fx Bilafregning) — samme wrapper-struktur |
+| Tabel-header/celler | Andre tabel-headers/celler — samme font, size, padding, casing |
+| Inputfelter | Andre inputs på skærmen — samme font-size, padding, border, focus-stil |
+| Knapper | Andre knapper med samme rolle (primary/secondary) — samme stil |
+| Badges/piller | Andre badges — samme padding, radius (pill vs rounded), font-size |
+
+**Rød flag-pattern:**
+Hvis en ny komponent introducerer en stil-variant der ikke eksisterer andre steder på skærmen (fx `text-2xl` mens alle andre værdier er `text-xl`), er det næsten altid en fejl. Flag som RECOMMENDED med spørgsmål: "Er denne stil-variant bevidst og dokumenteret i SPEC?"
+
 ---
 
 ## Del 3: Efter review

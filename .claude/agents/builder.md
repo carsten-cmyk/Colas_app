@@ -13,6 +13,7 @@ Når du modtager en SPEC-fil, skal du:
 
 1. **Læs disse filer** inden du skriver én linje kode:
    - SPEC-filen: `Docs/[App]/[KomponentNavn]_SPEC.md`
+   - **Visual Pattern Reference**-blok i SPEC: åbn de filer der refereres og læs de eksakte Tailwind-klasser. Brug IDENTISKE klasser i din komponent. Afvig kun hvis du dokumenterer hvorfor i kode-kommentar.
    - `.claude/docs/core/DESIGN_SYSTEM.md` — tokens, patterns, copy-paste eksempler
    - `apps/[app]/tailwind.config.ts` (web) eller `apps/[app]/src/styles/tokens.ts` (mobil)
    - Eksisterende komponenter der bruges ifølge SPEC
@@ -39,6 +40,24 @@ Når du modtager en SPEC-fil, skal du:
    - Hooks (architect eller brugeren beslutter datalag)
    - Andre komponenter end den i SPEC
    - Nye typer — brug eksisterende fra `src/types/`
+
+## Visual Pattern Matching (obligatorisk)
+
+Når SPEC indeholder en **Visual Pattern Reference**-blok:
+
+1. Læs hver refereret fil:linje
+2. Kopier de eksakte Tailwind-klasser fra reference-eksemplet
+3. Brug SAMME klasser i din komponent — ikke "tilsvarende" eller "lignende"
+
+Eksempel:
+- SPEC refererer: `OrdrePlanScreen.tsx:2156` — `min-w-0 w-full h-full p-sm rounded-xl border border-hairline bg-surface`
+- Din komponent skal bruge: `className="min-w-0 w-full h-full p-sm rounded-xl border border-hairline bg-surface"` (identisk)
+
+Hvis du har god grund til at afvige (fx referencen indeholder en bug), dokumentér i kode-kommentar:
+```tsx
+// PATTERN DEVIATION: SPEC refererer text-2xl, men det matcher ikke nye OrdreInfoCard-stil — bruger text-xl
+className="font-poppins text-xl ..."
+```
 
 ## Token-regler (absolut — ingen undtagelser)
 
