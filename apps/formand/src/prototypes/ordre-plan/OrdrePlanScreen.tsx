@@ -1115,7 +1115,7 @@ export function OrdrePlanScreen() {
                             {vognmandMaterielBekraeftelse.items.some(it => it.resourceId === r.id) ? (
                               <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-lg bg-[#2E9E65] font-inter text-xs font-semibold text-white whitespace-nowrap">
                                 <CheckCircle2 size={11} className="flex-shrink-0" />
-                                Bekræftet af vognmand
+                                Bekræftet vognmand
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-lg bg-yellow/25 font-inter text-xs font-semibold text-[#8A6A00] whitespace-nowrap">
@@ -1389,7 +1389,7 @@ export function OrdrePlanScreen() {
                               {bekraeftelse ? (
                                 <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-lg bg-[#2E9E65] font-inter text-xs font-semibold text-white whitespace-nowrap">
                                   <CheckCircle2 size={11} className="flex-shrink-0" />
-                                  Bekræftet af vognmand
+                                  Bekræftet vognmand
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-lg bg-yellow/25 font-inter text-xs font-semibold text-[#8A6A00] whitespace-nowrap">
@@ -1636,8 +1636,110 @@ export function OrdrePlanScreen() {
           )}
 
           {activeMode === 'evaluering' && (
-            <div className="flex items-center justify-center min-h-[400px]">
-              <p className="font-inter text-sm text-text-muted">Evaluering tilgængelig når ordren er afsluttet — kommer i næste sprint</p>
+            <div className="p-sm">
+              <section>
+                <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Evalueringsområder</h2>
+                <p className="text-sm text-text-secondary mb-sm">
+                  Forslag til evalueringsområder — til diskussion. Hvert område kan bygges ud med data, visualiseringer og insights baseret på hvad der giver mest værdi for formanden og kunden.
+                </p>
+                <div className="overflow-hidden rounded-lg border border-hairline bg-surface">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-hairline">
+                          <th className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs text-left w-[160px]">Område</th>
+                          <th className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs text-left">Beskrivelse</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="border-b border-hairline">
+                          <td className="px-xs py-xs text-xs align-middle font-semibold text-text-primary">Merarbejde</td>
+                          <td className="px-xs py-xs text-xs align-middle text-text-secondary">Antal poster, status (godkendt/afventer/afvist), per type-fordeling, estimeret kr-impact. Hvor formanden sikrer DB og rentabilitet på sagen.</td>
+                        </tr>
+                        <tr className="border-b border-hairline">
+                          <td className="px-xs py-xs text-xs align-middle font-semibold text-text-primary">Tons + dagsfordeling</td>
+                          <td className="px-xs py-xs text-xs align-middle text-text-secondary">Faktisk vs planlagt totalt og pr. dag. Vurdering af om morgen-tons matchede planen — kunne hele ordren have været bestilt om morgenen?</td>
+                        </tr>
+                        <tr className="border-b border-hairline">
+                          <td className="px-xs py-xs text-xs align-middle font-semibold text-text-primary">Temperatur-kvalitet</td>
+                          <td className="px-xs py-xs text-xs align-middle text-text-secondary">Andel læs over min-temp, spredning (min/max/median), tendens over dagen, evt. opdelt pr. vognmand for at spotte transport-issues.</td>
+                        </tr>
+                        <tr className="border-b border-hairline">
+                          <td className="px-xs py-xs text-xs align-middle font-semibold text-text-primary">Timer chauffør/hold</td>
+                          <td className="px-xs py-xs text-xs align-middle text-text-secondary">Estimerede vs faktisk forbrugte timer for chauffører og hold. Afvigelses-procenter med farve-indikatorer.</td>
+                        </tr>
+                        <tr className="border-b border-hairline">
+                          <td className="px-xs py-xs text-xs align-middle font-semibold text-text-primary">Materiel-afregning vs faktisk</td>
+                          <td className="px-xs py-xs text-xs align-middle text-text-secondary">Angivet timer pr. materiel-enhed (Materielafregning) sammenholdt med planlagte timer fra Planlægning. Over/underforbrug.</td>
+                        </tr>
+                        <tr>
+                          <td className="px-xs py-xs text-xs align-middle font-semibold text-text-primary">Forundersøgelse-data</td>
+                          <td className="px-xs py-xs text-xs align-middle text-text-secondary">Eksisterer allerede — fotos af underlag, valgt underlag-type, forbehold, "Aftalt med"-noter. Inkluderet her som reference.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+
+              {/* ── Diskussionsboks: Returlæs ─────────────────────────────────── */}
+              <section className="mt-lg">
+                <div className="rounded-lg border border-hairline bg-warn-bg p-sm">
+                  <div className="flex items-center gap-xs mb-xs">
+                    <span className="inline-flex items-center justify-center w-[24px] h-[24px] rounded-full bg-yellow text-deep-teal font-poppins font-bold text-xs">R</span>
+                    <h2 className="font-poppins font-semibold text-xl text-text-primary">Returlæs — til afklaring med kunde</h2>
+                  </div>
+
+                  <p className="text-sm text-text-secondary mb-sm">
+                    Vognmandens chauffører kan ifølge aftale tage <strong>returlæs</strong> når de kører tomme fra
+                    udførselsstedet — fx hente et læs grus fra en grusgrav til fabrikken. Opgaven oprettes af
+                    fabrikken og afregnes uden for Colas-ordren. Den skal være synlig for alle roller, men kun
+                    chaufføren udfører den — formand og vognmand kan ikke disponere på den.
+                  </p>
+
+                  <h3 className="font-poppins font-semibold text-sm text-text-primary mt-sm mb-xxs">Forslag til datamodel</h3>
+                  <p className="text-xs text-text-secondary mb-sm">
+                    <strong>Returopgave</strong> som selvstændig entitet — sidestillet med Læs, ikke en del af Ordren.
+                    Ejes af fabrikken, tildeles vognmand+chauffør, lever på chaufførens tidslinje. Holder ordrens
+                    regnskab rent og giver én samlet kilde til "chaufførens disponible tid".
+                  </p>
+
+                  <h3 className="font-poppins font-semibold text-sm text-text-primary mb-xxs">Hvad ser hver rolle?</h3>
+                  <div className="grid grid-cols-3 gap-xs mb-sm">
+                    <div className="rounded-md border border-hairline bg-surface p-xs">
+                      <p className="font-poppins font-semibold text-xs text-text-primary mb-xxxs">Formand</p>
+                      <p className="text-xxs text-text-secondary">
+                        Lille <span className="inline-flex items-center justify-center w-[16px] h-[16px] rounded-full bg-yellow text-deep-teal font-bold text-[10px] align-middle">R</span> på
+                        chaufførens "på vej til fabrik"-pille. Signal om at chauffør er optaget — ingen detaljer, ingen disponering.
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-hairline bg-surface p-xs">
+                      <p className="font-poppins font-semibold text-xs text-text-primary mb-xxxs">Vognmand</p>
+                      <p className="text-xxs text-text-secondary">
+                        Tidsblok i disponerings-Gantt med bestiller + sats. Read-only på selve opgaven, men ser
+                        økonomi (det er hans forretning). Evt. mulighed for at afvise før chauffør får tilbud.
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-hairline bg-surface p-xs">
+                      <p className="font-poppins font-semibold text-xs text-text-primary mb-xxxs">Chauffør</p>
+                      <p className="text-xxs text-text-secondary">
+                        Fuld task på telefonen med distinct styling (stiplet kant + R-ikon). Accept/afvis, derefter
+                        normal workflow: ankomst grusgrav → læsset → afleveret.
+                      </p>
+                    </div>
+                  </div>
+
+                  <h3 className="font-poppins font-semibold text-sm text-text-primary mb-xxs">Åbne spørgsmål til kunden</h3>
+                  <ol className="text-xs text-text-secondary list-decimal pl-md space-y-xxxs">
+                    <li><strong>Accept-flow:</strong> Skal chauffør acceptere hver returopgave aktivt, eller har vognmand stående aftale så de bare dukker op?</li>
+                    <li><strong>Konflikt:</strong> Hvad sker hvis returlæs forsinker næste ordre? Kan formand kontakte chauffør? Kan returlæs "trumfes"?</li>
+                    <li><strong>Genplanlægning:</strong> Hvis formand flytter en ordre 30 min, hvem flytter den planlagte returopgave?</li>
+                    <li><strong>Annullering:</strong> Kan fabrikken trække returlæs tilbage? Med hvilket varsel? Hvem får besked?</li>
+                    <li><strong>Synlighed af økonomi:</strong> Skal vognmand kunne se sats per returlæs, eller kun aggregeret periodevis?</li>
+                    <li><strong>Matching:</strong> Skubber fabrikken returlæs til en konkret chauffør, eller broadcaster systemet til alle ledige i nærheden?</li>
+                  </ol>
+                </div>
+              </section>
             </div>
           )}
 
@@ -2158,38 +2260,44 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
           return (
             <div className="grid grid-cols-3 xl:grid-cols-7 gap-xs auto-rows-fr">
               {/* Biler */}
-              <div className={`flex flex-col gap-xxxs items-start min-w-0 w-full h-full p-sm rounded-xl border ${vognmandBekraeftelse ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
+              <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${vognmandBekraeftelse ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
                 <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">
                   Biler
                 </span>
-                <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
-                  {antalBiler}
-                </span>
-                <span className="font-inter text-xs text-text-muted">
-                  {vognmandBekraeftelse ? 'Bekræftet af vognmand' : 'Afventer bekræftelse'}
+                <div className="flex-1 flex items-end pb-xxxs">
+                  <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
+                    {antalBiler}
+                  </span>
+                </div>
+                <span className="font-inter text-xs text-text-muted min-h-[1em]">
+                  {vognmandBekraeftelse ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
                 </span>
               </div>
               {/* Materiel transport */}
-              <div className={`flex flex-col gap-xxxs items-start min-w-0 w-full h-full p-sm rounded-xl border ${materielBekraeftet2 ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
+              <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${materielBekraeftet2 ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
                 <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">
                   Materiel transport
                 </span>
-                <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
-                  {antalMateriel2}
-                </span>
-                <span className="font-inter text-xs text-text-muted">
-                  {materielBekraeftet2 ? 'Bekræftet af vognmand' : 'Afventer bekræftelse'}
+                <div className="flex-1 flex items-end pb-xxxs">
+                  <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
+                    {antalMateriel2}
+                  </span>
+                </div>
+                <span className="font-inter text-xs text-text-muted min-h-[1em]">
+                  {materielBekraeftet2 ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
                 </span>
               </div>
               {/* Forundersøgelse */}
-              <div className={`flex flex-col gap-xxxs items-start min-w-0 w-full h-full p-sm rounded-xl border ${forundersoegelseForetaget2 ? 'bg-good-bg border-good/30' : 'bg-bad-bg border-bad/30'}`}>
+              <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${forundersoegelseForetaget2 ? 'bg-good-bg border-good/30' : 'bg-bad-bg border-bad/30'}`}>
                 <span className={`font-inter text-xxs font-medium tracking-widest uppercase ${forundersoegelseForetaget2 ? 'text-text-muted' : 'text-bad/70'}`}>
                   Forundersøgelse
                 </span>
-                <span className={`font-poppins font-semibold text-xl tabular-nums ${forundersoegelseForetaget2 ? 'text-text-primary' : 'text-bad'}`}>
-                  {forundersoegelseForetaget2 ? 'OK' : '–'}
-                </span>
-                <span className={`font-inter text-xs ${forundersoegelseForetaget2 ? 'text-text-muted' : 'text-bad/80'}`}>
+                <div className="flex-1 flex items-end pb-xxxs">
+                  <span className={`font-poppins font-semibold text-xl tabular-nums ${forundersoegelseForetaget2 ? 'text-text-primary' : 'text-bad'}`}>
+                    {forundersoegelseForetaget2 ? 'OK' : '–'}
+                  </span>
+                </div>
+                <span className={`font-inter text-xs min-h-[1em] ${forundersoegelseForetaget2 ? 'text-text-muted' : 'text-bad/80'}`}>
                   {forundersoegelseForetaget2 ? (tilfredsstillende ? 'Tilfredsstillende' : 'Ikke tilfredsstillende') : 'Mangler vurdering'}
                 </span>
               </div>
@@ -2215,7 +2323,6 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                   <OrdreInfoCard
                     label="TONS I DAG"
                     value={fmtTal(DEMO_TONS_I_DAG)}
-                    unit="t"
                     subtekst={`á ${fmtTal(DEMO_ORDRE_TOTAL_TONS)} t`}
                   />
                 </>
@@ -2269,14 +2376,25 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
               )}
             </div>
             <div className="flex items-center gap-xs">
+              {!forundersoegelseOpen && (
+                underlaegsType && tilfredsstillende !== null && tilfredsstillende !== undefined ? (
+                  <span className="inline-flex items-center px-sm py-xxxs rounded-full text-xxs font-medium bg-good-bg text-good border border-good/30">
+                    Vurderet
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-sm py-xxxs rounded-full text-xxs font-medium bg-bad-bg text-bad border border-bad/30">
+                    Mangler vurdering
+                  </span>
+                )
+              )}
               {forundersoegelseOpen ? <ChevronUp size={20} className="text-text-muted" /> : <ChevronDown size={20} className="text-text-muted" />}
             </div>
           </button>
 
-        {forundersoegelseOpen && <div className="border-t border-hairline">
+        {forundersoegelseOpen && <div className="flex flex-col gap-sm p-md pt-sm">
 
           {/* ── Række 1: Underlag + Tilstand ─────────────────────── */}
-          <div className="grid grid-cols-2 divide-x divide-hairline border-b border-hairline">
+          <div className="grid grid-cols-2 divide-x divide-hairline rounded-xl border border-hairline overflow-hidden">
 
             {/* Underlag dropdown */}
             <div className="p-md">
@@ -2333,7 +2451,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
               </div>
 
               {tilfredsstillende === false && (
-                <div className="flex flex-col gap-sm pt-sm border-t border-hairline">
+                <div className="flex flex-col gap-sm pt-sm">
                   <div>
                     <p className="font-inter text-xxs font-medium text-text-muted mb-xs">Årsag:</p>
                     <div className="grid grid-cols-2 gap-xs">
@@ -2361,7 +2479,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
           </div>
 
           {/* ── Række 2: Forbehold (fuld bredde) ─────────────────── */}
-          <div className="p-md border-b border-hairline">
+          <div>
             <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest mb-sm">
               Forbehold
             </p>
@@ -2381,7 +2499,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
           </div>
 
           {/* ── Række 3: Billeder (fuld bredde) ───────────────────── */}
-          <div className="p-md border-b border-hairline">
+          <div>
             <div className="flex items-center justify-between mb-sm">
               <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest">Billeder</p>
             </div>
@@ -2425,7 +2543,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
 
           {/* ── Ekstraarbejde (ekspanderer) ───────────────────────── */}
           {ekstraOpen && (
-            <div className="p-md flex flex-col gap-sm">
+            <div className="flex flex-col gap-sm">
               <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest">
                 Ekstraarbejde
               </p>
@@ -2533,7 +2651,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
           )}
 
           {/* ── Footer ────────────────────────────────────────────── */}
-          <div className="p-md flex items-center justify-between gap-sm">
+          <div className="flex items-center justify-between gap-sm">
             {!ekstraOpen && (
               <button
                 onClick={() => { setEkstraOpen(true); if (ekstraLinjer.length === 0) addEkstraLinje() }}
@@ -2609,13 +2727,15 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
             </div>
             <div className="mt-xs">
               {!visUdlaegningInput ? (
-                <button
-                  type="button"
-                  onClick={() => setVisUdlaegningInput(true)}
-                  className="bg-surface border border-hairline text-text-primary font-inter font-semibold text-sm px-sm py-xs rounded-lg min-h-[44px]"
-                >
-                  Registrer udlægning
-                </button>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setVisUdlaegningInput(true)}
+                    className="bg-yellow text-deep-teal font-inter font-semibold text-sm px-sm py-xs rounded-lg min-h-[44px] hover:brightness-95 transition-all"
+                  >
+                    Registrer udlægning
+                  </button>
+                </div>
               ) : (
                 <FremdriftInputRow
                   densitet={recept.densitet}

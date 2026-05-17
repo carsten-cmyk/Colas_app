@@ -497,6 +497,26 @@ hvor `densitet_kg_per_m3` er heltal fra `recepter[receptkode].densitet` (fx 2400
 **Datakilde:** GPS-position fra chauffør-app til ordrens udførselssted
 **Note:** Simpel formel i v1; kan udvides med maps-API (køretid baseret på trafik) senere.
 
+### Trin 5a — Forsinkelse-detektion + conditional formatting på EtaBadge
+**App:** formand
+**Komponent:** `EtaBadge` (i `VejeseddelRow` på undervejs-læs)
+**Datafelter på `Vejeseddel`:**
+- `forventetEtaMinutter` — original ETA tildelt ved disponering (snapshot)
+- `etaMinutter` — live opdateret ETA fra chauffør-app GPS
+
+**Forretningsregel — farve-tærskler:**
+| Overskridelse | Status | Visning |
+|---|---|---|
+| ≤ 25% (eta indenfor 1.25× forventet) | Neutral | `bg-surface-2 text-text-secondary` (grå pille) |
+| 25–50% (eta 1.25–1.5× forventet) | Warn | `bg-warn-bg text-text-primary` (gul pille) |
+| > 50% (eta > 1.5× forventet) | Bad | `bg-bad-bg text-bad` (rød pille) |
+
+**Beregning:** `overskridelse = (etaMinutter − forventetEtaMinutter) / forventetEtaMinutter`
+
+**Hvorfor TREND og ikke INSTANT speed:** GPS-noise (stoplys, kø, stop) ville give falske positive ved instant-speed-tærskel som "< 1 min/km". Trend mod forventet ETA er robust mod kortvarige stop og fanger reel forsinkelse pålideligt.
+
+**Fallback:** Hvis `forventetEtaMinutter === null` (legacy data eller ikke-snapshot), vises neutral grå.
+
 ### Trin 6 — Udlægger-valg
 **App:** formand
 **Komponent:** `UdlaeggerDropdown` (i `VejeseddelRow`)
@@ -536,6 +556,24 @@ hvor `densitet_kg_per_m3` er heltal fra `recepter[receptkode].densitet` (fx 2400
 
 ### Trin 5 — Fase 2 (ikke i MVP)
 **Forretningsønske:** Temperaturregistrering flyttes til chauffør-app så formanden kan stå i marken. UI-mønstret i `TemperaturBadge` skal designes med tanke på dette — datafeltet (`plan_vejebilag.temperatur`) er det samme uanset hvem der skriver.
+
+---
+
+## Flow 10: Returlæs — Fabrik → Vognmand → Chauffør (UNDER AFKLARING)
+
+**Status:** Diskussion pågår med kunde. Detaljer + åbne spørgsmål i `.claude/docs/discussions/returlaes.md`.
+
+**Kerne-koncept:** Fabrik kan oprette en **returopgave** og tildele den til en vognmands-chauffør der kører tomt fra et udførselssted. Opgaven er udenfor Colas-ordren og afregnes af fabrikken. Sidestillet entitet med `Læs` — IKKE en del af `Ordre`.
+
+**Per-rolle (foreløbig):**
+- **Formand:** Lille `R`-mærke på chaufførens "på vej til fabrik"-pille i Gantt. Ingen disponering.
+- **Vognmand:** Tidsblok i disponerings-Gantt med bestiller + sats. Read-only på selve opgaven.
+- **Chauffør:** Fuld task på telefonen (stiplet kant + R-ikon). Accept/afvis + udfør.
+- **Fabrik:** Opretter + tildeler (fabrik-app — senere fase).
+
+**Synliggør i chaufførens disponible tid:** `Læs ∪ Returopgaver` — ikke kun Læs.
+
+**Trin udfyldes når kunde har svaret på de 10 åbne spørgsmål** (accept-flow, konflikthåndtering, økonomi-synlighed, matching-mekanisme, m.fl. — se diskussionsdokumentet).
 
 ---
 
@@ -747,4 +785,5 @@ afregninger                                   // fra Colas til vognmand
 - **Afvigelses-farve er symmetrisk på fortegn** — I `FremdriftCard` (variant=`faktisk-udlagt`): `+X m²` → grøn (`text-good`), `−X m²` → rød (`text-bad`). Ingen tærskel-baseret farveskift; KUN fortegnet styrer farven. Afvigelse vises kun hvis `!== 0`. Minus-tegn er U+2212 (`−`)
 - **Temperatur skrives RETUR til PLAN** — Det normale flow er PLAN → Colas, men `plan_vejebilag.temperatur` er en undtagelse: Colas (formand) er kilden, PLAN er destinationen. Datafeltet sidder på den oprindelige vejebilag-række — IKKE i en ny tabel. Når temperaturmåling i fase 2 flyttes til chauffør-app, ændrer datafeltet sig ikke, kun hvem der skriver
 - **Udlægger-konvention** — Udlæggere identificeres på materielnummer-prefix `9-` (fx `9-0009 VÖGELE 1900-3I`). `UdlaeggerDropdown` filtrerer materiel-listen på dette prefix. Andre materielnumre (fx `7-` tromler) er ikke udlæggere
+- **ETA-forsinkelse er TREND-baseret, ikke instant speed** — `EtaBadge` farve-formattering baseres på `(etaMinutter − forventetEtaMinutter) / forventetEtaMinutter`. Tærskler: ≤25% = neutral (grå), 25–50% = warn (gul), >50% = bad (rød). Det fanger reel forsinkelse pålideligt og undgår falske positive fra GPS-noise (stoplys, kortvarige stop). Se Flow 8 Trin 5a for detaljer
 - **Dagsoverblik-registrering er en enkelt række per ordre/dato** — `dagsoverblik_registreringer` har én række per `(ordrenummer, dato)`. Hver "Gem" overskriver tidligere værdier; ingen historik gemmes i v1 (kan tilføjes ved Supabase-koblingen via en separat `dagsoverblik_historik`-tabel hvis nødvendigt)

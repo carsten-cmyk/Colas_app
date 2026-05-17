@@ -62,3 +62,6 @@ apps/*/.env.*.local
 
 # Storybook
 debug-storybook.log
+
+# Personal workshop notes
+Transport_Løsning/
