@@ -51,6 +51,7 @@ function StatusKolonne({
         <EtaBadge
           variant="eta"
           etaMinutter={vejeseddel.etaMinutter ?? undefined}
+          forventetEtaMinutter={vejeseddel.forventetEtaMinutter ?? undefined}
         />
       )
     case 'paa-vej-til-fabrik':

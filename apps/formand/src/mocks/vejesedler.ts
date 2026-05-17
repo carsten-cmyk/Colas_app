@@ -8,8 +8,13 @@ import type { Vejeseddel } from '@/types/order'
  * Demo-data til Vejesedler-tabellen på ordrenummer '260423891'.
  * Fordelt på alle tre statusser:
  *   - 3 ankomne: 2 med temperatur registreret (1 OK, 1 Lav), 1 afventer registrering
- *   - 2 undervejs: ETA henholdsvis 18 og 34 minutter
+ *   - 3 undervejs: ETA med neutral/warn/bad forsinkelse-status
  *   - 2 på vej til fabrik: disponeret, ikke afhentet endnu
+ *
+ * Forsinkelse-status (EtaBadge):
+ *   neutral: etaMinutter=18, forventetEtaMinutter=18 (0% overskridelse)
+ *   warn:    etaMinutter=24, forventetEtaMinutter=18 (~33% overskridelse)
+ *   bad:     etaMinutter=35, forventetEtaMinutter=18 (~94% overskridelse)
  *
  * Sortering i tabellen håndteres af VejesedlerTable-komponenten:
  *   1. ankommet (DESC modtagetTidspunkt) → 2. undervejs (ASC etaMinutter) → 3. paa-vej-til-fabrik
@@ -33,6 +38,7 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     temperatur: 168,
     valgtUdlaeggerMaterielNr: '9-0009',
     etaMinutter: null,
+    forventetEtaMinutter: null,
   },
   {
     // Ankommet — temperatur registreret, Lav (148°C < 140°C er OK, men 148 > 140 — skift til 132 for Lav-badge)
@@ -51,6 +57,7 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     temperatur: 132,
     valgtUdlaeggerMaterielNr: '9-0024',
     etaMinutter: null,
+    forventetEtaMinutter: null,
   },
   {
     // Ankommet — temperatur IKKE registreret endnu (afventer formand)
@@ -68,12 +75,13 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     temperatur: null,
     valgtUdlaeggerMaterielNr: null,
     etaMinutter: null,
+    forventetEtaMinutter: null,
   },
 
   // ── Undervejs ──────────────────────────────────────────────────────────────
 
   {
-    // Undervejs — ETA 18 minutter (bil kørt fra fabrik, vejebilag ikke modtaget endnu)
+    // Undervejs — ETA neutral: 18 min = forventet 18 min (0% overskridelse)
     id: 'v-004',
     ordrenummer: '260423891',
     status: 'undervejs',
@@ -88,9 +96,10 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     temperatur: null,
     valgtUdlaeggerMaterielNr: null,
     etaMinutter: 18,
+    forventetEtaMinutter: 18,
   },
   {
-    // Undervejs — ETA 34 minutter
+    // Undervejs — ETA warn: 24 min vs forventet 18 min (~33% overskridelse, 25-50% grænse)
     id: 'v-005',
     ordrenummer: '260423891',
     status: 'undervejs',
@@ -104,7 +113,26 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     modtagetTidspunkt: null,
     temperatur: null,
     valgtUdlaeggerMaterielNr: null,
-    etaMinutter: 34,
+    etaMinutter: 24,
+    forventetEtaMinutter: 18,
+  },
+  {
+    // Undervejs — ETA bad: 35 min vs forventet 18 min (~94% overskridelse, over 50% grænse)
+    id: 'v-008',
+    ordrenummer: '260423891',
+    status: 'undervejs',
+    vejeseddelNr: null,
+    regnr: 'GV 12 445',
+    chauffoerNavn: 'Henrik Dahl',
+    receptkode: null,
+    fabrikId: 'fab-001',
+    fabrikNavn: 'PROD A EAST KØGE PH',
+    tons: null,
+    modtagetTidspunkt: null,
+    temperatur: null,
+    valgtUdlaeggerMaterielNr: null,
+    etaMinutter: 35,
+    forventetEtaMinutter: 18,
   },
 
   // ── På vej til fabrik ──────────────────────────────────────────────────────
@@ -125,6 +153,7 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     temperatur: null,
     valgtUdlaeggerMaterielNr: null,
     etaMinutter: null,
+    forventetEtaMinutter: null,
   },
   {
     // På vej til fabrik — second truck disponeret
@@ -142,5 +171,6 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     temperatur: null,
     valgtUdlaeggerMaterielNr: null,
     etaMinutter: null,
+    forventetEtaMinutter: null,
   },
 ]

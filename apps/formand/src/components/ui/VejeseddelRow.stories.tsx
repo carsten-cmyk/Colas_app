@@ -58,6 +58,7 @@ const BASE_VEJESEDDEL: Vejeseddel = {
   temperatur: 168,
   valgtUdlaeggerMaterielNr: '9-0009',
   etaMinutter: null,
+  forventetEtaMinutter: null,
 }
 
 const noop = () => {}

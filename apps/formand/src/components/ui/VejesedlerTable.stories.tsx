@@ -58,7 +58,7 @@ export const LangTabel: Story = {
       ...INITIAL_VEJESEDLER,
       // Ekstra ankomne
       {
-        id: 'v-008',
+        id: 'v-009',
         ordrenummer: '260423891',
         status: 'ankommet',
         vejeseddelNr: '25-1006-D',
@@ -72,9 +72,10 @@ export const LangTabel: Story = {
         temperatur: 155,
         valgtUdlaeggerMaterielNr: '9-0041',
         etaMinutter: null,
+        forventetEtaMinutter: null,
       } satisfies Vejeseddel,
       {
-        id: 'v-009',
+        id: 'v-010',
         ordrenummer: '260423891',
         status: 'ankommet',
         vejeseddelNr: '25-1007-E',
@@ -88,10 +89,11 @@ export const LangTabel: Story = {
         temperatur: 128,
         valgtUdlaeggerMaterielNr: '9-0009',
         etaMinutter: null,
+        forventetEtaMinutter: null,
       } satisfies Vejeseddel,
       // Ekstra undervejs
       {
-        id: 'v-010',
+        id: 'v-011',
         ordrenummer: '260423891',
         status: 'undervejs',
         vejeseddelNr: null,
@@ -105,10 +107,11 @@ export const LangTabel: Story = {
         temperatur: null,
         valgtUdlaeggerMaterielNr: null,
         etaMinutter: 8,
+        forventetEtaMinutter: 10,
       } satisfies Vejeseddel,
       // Ekstra på vej til fabrik
       {
-        id: 'v-011',
+        id: 'v-012',
         ordrenummer: '260423891',
         status: 'paa-vej-til-fabrik',
         vejeseddelNr: null,
@@ -122,6 +125,7 @@ export const LangTabel: Story = {
         temperatur: null,
         valgtUdlaeggerMaterielNr: null,
         etaMinutter: null,
+        forventetEtaMinutter: null,
       } satisfies Vejeseddel,
     ],
   },

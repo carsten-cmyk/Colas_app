@@ -241,6 +241,8 @@ export interface Vejeseddel {
   valgtUdlaeggerMaterielNr: string | null
   /** ETA i minutter til udførselssted — kun relevant ved status='undervejs' */
   etaMinutter: number | null
+  /** Forventet ETA i minutter tildelt ved disponering — bruges til forsinkelse-beregning i EtaBadge */
+  forventetEtaMinutter: number | null
 }
 
 // ─── Dagsoverblik ─────────────────────────────────────────────────────────────

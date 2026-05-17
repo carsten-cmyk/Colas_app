@@ -59,3 +59,30 @@ export const PaaVejTilFabrikMedIgnoreretMinutter: Story = {
     etaMinutter: 99,
   },
 }
+
+/** ETA neutral — indenfor 25% af forventet (18 min vs forventet 18 min) */
+export const EtaNeutralMedForventet: Story = {
+  args: {
+    variant: 'eta',
+    etaMinutter: 18,
+    forventetEtaMinutter: 18,
+  },
+}
+
+/** ETA warn — 25-50% over forventet (25 min vs forventet 20 min = 25% overskridelse) */
+export const EtaForsinketWarn: Story = {
+  args: {
+    variant: 'eta',
+    etaMinutter: 25,
+    forventetEtaMinutter: 20,
+  },
+}
+
+/** ETA bad — over 50% over forventet (35 min vs forventet 20 min = 75% overskridelse) */
+export const EtaForsinketBad: Story = {
+  args: {
+    variant: 'eta',
+    etaMinutter: 35,
+    forventetEtaMinutter: 20,
+  },
+}

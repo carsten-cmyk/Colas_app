@@ -22,32 +22,32 @@ export function OrdreInfoCard({ label, value, unit, subtekst, ariaLabel }: Ordre
 
   return (
     <div
-      className="flex flex-col gap-xxxs items-start min-w-0 w-full h-full p-sm rounded-xl border border-hairline bg-surface"
+      className="flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border border-hairline bg-surface"
       aria-label={computedAriaLabel}
     >
-      {/* Label */}
+      {/* Label — altid øverst */}
       <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">
         {label}
       </span>
 
-      {/* Value + valgfri enhed */}
-      <div className="flex items-baseline gap-xxs">
-        <span className="font-poppins text-xl font-semibold text-text-primary tabular-nums">
-          {value}
-        </span>
-        {unit !== undefined && (
-          <span className="font-inter text-xs text-text-muted">
-            {unit}
+      {/* Value + valgfri enhed — fylder resterende plads, alignet mod bunden */}
+      <div className="flex-1 flex items-end pb-xxxs">
+        <div className="flex items-baseline gap-xxs">
+          <span className="font-poppins text-xl font-semibold text-text-primary tabular-nums">
+            {value}
           </span>
-        )}
+          {unit !== undefined && unit !== '' && (
+            <span className="font-inter text-xs text-text-muted">
+              {unit}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Valgfri undertekst */}
-      {subtekst !== undefined && (
-        <span className="font-inter text-xs text-text-muted">
-          {subtekst}
-        </span>
-      )}
+      {/* Undertekst — altid renderet (tom streng giver konsistent højde) */}
+      <span className="font-inter text-xs text-text-muted min-h-[1em]">
+        {subtekst ?? ''}
+      </span>
     </div>
   )
 }
