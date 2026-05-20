@@ -178,10 +178,36 @@ export interface Task {
 
 ---
 
-## 7. Ikke i scope (denne version)
+## 7. Offline-håndtering — KRAV (tilføjet 2026-05-19)
+
+Chauffører kører ofte i områder med dårlig eller ingen mobildækning — fabrikker, motorveje, byggepladser, tunneller. App'en skal være fuldt brugbar uden netforbindelse i kortere perioder (typisk minutter, sjældent timer).
+
+### Krav
+
+- **Læs:** Dagens opgaver, ruteoplysninger, lokations- og kontaktdata skal være tilgængelige offline — hentes så snart appen åbnes morgen med signal.
+- **Skriv:** Alle markeringer (ankommet fabrik, læsset, undervejs, ankommet plads, færdig) skal kunne registreres lokalt og **automatisk synkroniseres** når forbindelsen er tilbage. Chaufføren skal ikke vente.
+- **GPS-timestamps:** Skal stadig logges lokalt selv uden net, så ankomst-/afgangstider er korrekte når de synkroniseres.
+- **Status-indikator:** Tydelig offline-bjælke + "X handlinger venter på sync" når der er pending writes.
+- **Foto/signatur (når implementeret):** Skal kunne tages offline og uploades automatisk når forbindelsen er tilbage.
+
+### Hvad SKAL fungere offline
+
+| Funktion | Læs | Skriv (køes til sync) |
+|---|---|---|
+| Dagens opgaver | ✅ (cached morgen) | – |
+| Adresse + kontaktinfo | ✅ | – |
+| Ankomst/afgang-markeringer | – | ✅ |
+| GPS-timestamps | – | ✅ |
+| Læsset/færdig-status | – | ✅ |
+| Vejekort-scan (når implementeret) | – | ✅ |
+
+Se [`Docs/OFFLINE_STRATEGI.md`](../OFFLINE_STRATEGI.md) for teknisk approach.
+
+---
+
+## 8. Ikke i scope (denne version)
 
 - Afslutnings-flow (kvittering, signatur, foto)
-- Offline-håndtering
 - Push notifikationer
 - Kort/GPS-visning
 - Redigering af opgave
@@ -189,7 +215,7 @@ export interface Task {
 
 ---
 
-## 8. Gode idéer — ikke implementeret (AnkommetFabrikScreen)
+## 9. Gode idéer — ikke implementeret (AnkommetFabrikScreen)
 
 Forslag fra `ux-design-reviewer` (2026-05-13) som er parkeret til senere overvejelse. Skal ikke bygges nu, men beholdes så de ikke går tabt.
 

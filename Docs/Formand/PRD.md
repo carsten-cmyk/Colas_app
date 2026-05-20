@@ -356,11 +356,36 @@ export interface MaterielTransport {
 
 ---
 
-## 12. Ikke i scope (v1)
+## 12. Offline-support — KRAV (tilføjet 2026-05-19)
+
+Formanden arbejder ofte ude på pladser hvor mobilforbindelse er ustabil eller helt fraværende. Det er **ikke acceptabelt** at appen bliver ubrugelig ved netafbrud.
+
+### Krav
+
+- **Læs:** Sidst hentede data skal være tilgængelige offline. Visning skal tydeligt vise at data er cached og hvornår de sidst blev opdateret.
+- **Skriv:** Indtastninger (faktisk udlagt m², temperatur-registrering, fremdrift, godkendelse osv.) skal kunne gemmes lokalt og **automatisk synkroniseres** når forbindelsen er tilbage.
+- **Konflikt-håndtering:** Hvis serveren har nyere data ved sync, vises en konflikt-prompt — formanden vælger hvilken version der gælder.
+- **Status-indikator:** Tydelig `OfflineBanner` øverst når offline. "Synkroniserer..." og "Synkroniseret" feedback når forbindelsen vender tilbage.
+
+### Hvad SKAL fungere offline
+
+| Funktion | Læs | Skriv (køes til sync) |
+|---|---|---|
+| Dagens ordre + ordreoverblik | ✅ | – |
+| Vejesedler-liste | ✅ (cached) | – |
+| Temperatur-registrering | – | ✅ |
+| Faktisk udlagt m² / tons | – | ✅ |
+| Forundersøgelse-svar | ✅ | ✅ |
+| Godkendelse/afregning | – | ✅ |
+
+Se [`Docs/OFFLINE_STRATEGI.md`](../OFFLINE_STRATEGI.md) for teknisk approach.
+
+---
+
+## 13. Ikke i scope (v1)
 
 - Live GPS-tracking på kort
 - Push-notifikationer
 - Integration med PLAN-systemet (manuel overgang)
 - Brugeradministration / login
-- Offline-support
 - Vognmand-integration (ordrebestilling)

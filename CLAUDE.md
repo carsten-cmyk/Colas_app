@@ -32,10 +32,13 @@ Colas/
 2. `Docs/Formand/CONTEXT.md` — forretningskontekst, PLAN-systemet, nøglepersoner
 3. `.claude/docs/FUNCTIONAL_FLOWS.md` — cross-app komponent-flows
 4. `.claude/docs/core/DESIGN_SYSTEM.md` — tokens og patterns
+5. `.claude/docs/WORKFLOW_PROTOTYPE_TIL_PRODUKTION.md` — fra prototype til produktion, vertical slices, quality gates
 
 Tilføj ved specifik app:
 - Formand/Vognmand: `Docs/Formand/PRD.md` + `Docs/Formand/REVIEW_SPEC.md`
 - Chauffeur app: `Docs/Chauffør/PRD.md` + `Docs/Chauffør/REVIEW_SPEC_1.md`
+
+**Ved start af ny produktions-sektion** (efter prototype-godkendelse): Architect kopierer `.claude/docs/SECTION_KICKOFF_TEMPLATE.md` til `Docs/[App]/KICKOFF_[Sektion].md` og udfylder før SPEC-decomposition.
 
 ---
 
