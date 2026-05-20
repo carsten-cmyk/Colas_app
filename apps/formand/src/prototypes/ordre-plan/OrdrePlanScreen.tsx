@@ -19,7 +19,6 @@ import {
   CloudRain,
   CheckCircle2,
   MessageSquare,
-  Check,
 } from 'lucide-react'
 import { TopBar } from '@/components/layout/TopBar'
 import { BottomTabBar } from '@/components/layout/BottomTabBar'
@@ -240,6 +239,10 @@ function formatShortDate(dateStr: string) {
   const d = new Date(dateStr + 'T00:00:00')
   return `${d.getDate()}/${d.getMonth() + 1}`
 }
+
+// Frozen "today" for prototype — bruger mock-dato svarende til produkternes range
+// TODO (produktion): Erstat med new Date() og tilpas INITIAL_PRODUCTS til rigtige datoer
+const TODAY = new Date('2026-03-17T00:00:00')
 
 
 
@@ -585,6 +588,10 @@ export function OrdrePlanScreen() {
             <h1 className="font-poppins font-semibold text-xl text-text-primary leading-tight">
               Søvej 6D<br />4900 Nakskov
             </h1>
+            {/* TODO (produktion): Jobnummer + projektnavn kommer fra PLAN-systemet (én plan kan have flere ordrer). */}
+            <span className="font-inter text-xs text-text-primary mt-xxxs block">
+              Jobnummer 52. VD Kibæk Vammen
+            </span>
             <span className="font-inter text-xs text-text-muted mt-xxxs block">
               Ordrenummer: 1212343
             </span>
@@ -910,6 +917,304 @@ export function OrdrePlanScreen() {
               </div>
             </div>
           </section>
+
+            {/* Kørsel */}
+            <div className="mt-lg">
+              <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Asfalt kørsel</h2>
+              <div className="bg-white border border-hairline rounded-xl overflow-hidden">
+                {activeDays.map((day, i) => {
+                  const isExpanded = kørselExpandedId === day.id
+                  const isPlanlagt = kørselPlanlagtIds.has(day.id)
+                  const bekraeftelse = vognmandBekraeftelser[day.id]
+                  const orders = kørselOrders[day.id] ?? []
+                  const params = kørselParams[day.id] ?? DEFAULT_KØRSEL_PARAMS
+                  const singleLoadCapacity = orders.reduce((sum, o) => {
+                    const vt = VEHICLE_TYPES.find(v => v.label === o.type)
+                    return sum + (vt ? vt.tons * o.antal : 0)
+                  }, 0)
+                  const totalTrucks = orders.reduce((s, o) => s + o.antal, 0)
+                  // Rundtid = 2× køretid (km × 1 min) + 15 min læsning + 15 min aflæsning
+                  const roundTime = factoryKm * 2 + 30
+                  const [rsh, rsm] = (params.firstLoadTime || '07:00').split(':').map(Number)
+                  const workEndMinutes = 15 * 60 + 30 // 15:30
+                  const roundsPerTruck = Math.max(0, Math.floor((workEndMinutes - (rsh * 60 + rsm)) / roundTime))
+
+                  // Total dagkapacitet = enkeltlæs × runder
+                  const totalCapacity = singleLoadCapacity * (roundsPerTruck || 1)
+                  const capacityOk = totalCapacity >= day.tonsPlanned
+
+                  function updateOrder(id: string, field: 'type' | 'antal' | 'foersteLaes', value: string | number | boolean) {
+                    setKørselOrders(prev => ({
+                      ...prev,
+                      [day.id]: (prev[day.id] ?? []).map(o => o.id === id ? { ...o, [field]: value } : o),
+                    }))
+                  }
+                  function removeOrder(id: string) {
+                    setKørselOrders(prev => ({ ...prev, [day.id]: (prev[day.id] ?? []).filter(o => o.id !== id) }))
+                  }
+                  function addOrder() {
+                    const newOrder: VehicleOrder = { id: `vo-${Date.now()}`, type: VEHICLE_TYPES[0].label, antal: 1 }
+                    setKørselOrders(prev => ({ ...prev, [day.id]: [...(prev[day.id] ?? []), newOrder] }))
+                  }
+                  function updateParam<K extends keyof KørselDayParams>(key: K, value: KørselDayParams[K]) {
+                    setKørselParams(prev => ({ ...prev, [day.id]: { ...(prev[day.id] ?? DEFAULT_KØRSEL_PARAMS), [key]: value } }))
+                  }
+
+                  return (
+                    <div key={day.id} className={i < activeDays.length - 1 || isExpanded ? 'border-b border-hairline' : ''}>
+                      {/* Hoved-række */}
+                      <div className={`grid items-center gap-md px-sm py-sm transition-colors ${!isExpanded ? 'hover:bg-[#F5F5F5]' : ''}`}
+                        style={{ gridTemplateColumns: '1fr auto' }}>
+                        <div>
+                          <p className="font-inter text-sm font-medium text-text-primary">
+                            {formatWeekday(day.date)} · {formatShortDate(day.date)}
+                          </p>
+                          <p className="font-inter text-xs text-text-muted">{day.tonsPlanned} tons</p>
+                        </div>
+                        <div className="flex items-center gap-xxxs">
+                          {isPlanlagt && !isExpanded ? (
+                            <div className="flex items-center gap-xs flex-wrap justify-end">
+                              <span className="inline-flex items-center gap-sm px-sm py-xxxs rounded-lg bg-[#E7F4EE] font-inter text-xs font-medium text-text-primary whitespace-nowrap">
+                                <span>{orders.reduce((s, o) => s + o.antal, 0)} biler bestilt</span>
+                                <span className="text-text-muted">·</span>
+                                <span>Interval {params.intervalMinutes} min</span>
+                                <span className="text-text-muted">·</span>
+                                <span>Første læs {params.firstLoadTime}</span>
+                              </span>
+                              {/* Vognmand status badge */}
+                              {bekraeftelse ? (
+                                <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-lg bg-[#2E9E65] font-inter text-xs font-semibold text-white whitespace-nowrap">
+                                  <CheckCircle2 size={11} className="flex-shrink-0" />
+                                  Bekræftet vognmand
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-lg bg-yellow/25 font-inter text-xs font-semibold text-[#8A6A00] whitespace-nowrap">
+                                  <span className="w-[6px] h-[6px] rounded-full bg-yellow flex-shrink-0" />
+                                  Afventer vognmand
+                                </span>
+                              )}
+                              <div className="flex">
+                                <button
+                                  onClick={() => setKørselExpandedId(day.id)}
+                                  className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-lg border border-hairline bg-white font-inter text-xs font-medium text-text-muted hover:text-text-primary transition-colors"
+                                >
+                                  <Pencil size={11} />
+                                  Ret
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                if (isExpanded) {
+                                  setKørselPlanlagtIds(prev => new Set([...prev, day.id]))
+                                  setKørselExpandedId(null)
+                                } else {
+                                  setKørselExpandedId(day.id)
+                                  if ((kørselOrders[day.id] ?? []).length === 0) {
+                                    setKørselOrders(prev => ({
+                                      ...prev,
+                                      [day.id]: [{ id: `vo-${Date.now()}`, type: '', antal: 1 }],
+                                    }))
+                                  }
+                                }
+                              }}
+                              className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap"
+                            >
+                              {isExpanded ? 'Gem kørsel' : 'Planlæg kørsel'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expand */}
+                      {isExpanded && (
+                        <div className="mx-sm mb-lg rounded-xl border border-dark-teal/20 bg-[#F5F9FA] shadow-sm flex flex-col gap-sm p-sm">
+
+                          {/* Biler */}
+                          <div>
+                            <p className="font-inter text-xs font-semibold text-text-primary mb-xs">Biler</p>
+                            <div className="flex flex-col gap-xs">
+                              {orders.map(o => {
+                                const vt = VEHICLE_TYPES.find(v => v.label === o.type)
+                                return (
+                                  <div key={o.id} className="flex flex-col gap-xxxs">
+                                    <div className="flex items-center gap-xs">
+                                      <select
+                                        value={o.type}
+                                        onChange={e => updateOrder(o.id, 'type', e.target.value)}
+                                        className="flex-1 font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
+                                      >
+                                        <option value="">Vælg biltype</option>
+                                        {VEHICLE_TYPES.map(v => (
+                                          <option key={v.label} value={v.label}>{v.label} · {v.tons} tons</option>
+                                        ))}
+                                      </select>
+                                      <div className="flex items-center border border-hairline rounded-lg overflow-hidden bg-white">
+                                        <button
+                                          onClick={() => updateOrder(o.id, 'antal', Math.max(1, o.antal - 1))}
+                                          className="px-xs py-xs font-inter text-sm text-text-muted hover:bg-[#F5F5F5] transition-colors"
+                                        >−</button>
+                                        <span className="px-xs font-inter text-xs font-semibold text-text-primary w-[28px] text-center">{o.antal}</span>
+                                        <button
+                                          onClick={() => updateOrder(o.id, 'antal', o.antal + 1)}
+                                          className="px-xs py-xs font-inter text-sm text-text-muted hover:bg-[#F5F5F5] transition-colors"
+                                        >+</button>
+                                      </div>
+                                      <span className="font-inter text-xs text-text-muted w-[70px] text-right tabular-nums whitespace-nowrap">
+                                        {vt ? vt.tons * o.antal : 0} Tons
+                                      </span>
+                                      <button onClick={() => removeOrder(o.id)} className="text-text-muted hover:text-bad transition-colors">
+                                        <X size={14} />
+                                      </button>
+                                    </div>
+                                    {o.type === 'Grab' && (
+                                      <label className="inline-flex items-center gap-xxxs cursor-pointer ml-xxxs">
+                                        <input
+                                          type="checkbox"
+                                          checked={o.foersteLaes ?? false}
+                                          onChange={e => updateOrder(o.id, 'foersteLaes', e.target.checked)}
+                                          className="accent-dark-teal w-[14px] h-[14px]"
+                                        />
+                                        <span className="font-inter text-xs text-text-secondary">Angiv som første læs</span>
+                                      </label>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                              <button
+                                onClick={addOrder}
+                                className="inline-flex items-center gap-xs font-inter text-sm font-medium text-dark-teal border border-dark-teal/40 rounded-lg px-sm py-xs hover:bg-dark-teal hover:text-white transition-colors self-start mt-sm"
+                              >
+                                <Plus size={15} />
+                                Tilføj biltype
+                              </button>
+                            </div>
+                            {orders.length > 0 && (
+                              <div className="flex flex-col gap-xs mt-md">
+                                <div className={`flex items-center gap-xs px-xs py-xxxs rounded-lg border ${capacityOk ? 'bg-[#E7F4EE] border-[#1F8A5B]/20' : 'bg-[#FBECEA] border-[#C8372D]/20'}`}>
+                                  <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 ${capacityOk ? 'bg-[#1F8A5B]' : 'bg-[#C8372D]'}`} />
+                                  <span className={`font-inter text-xs font-medium tabular-nums ${capacityOk ? 'text-text-primary' : 'text-[#C8372D]'}`}>
+                                    {capacityOk ? 'Kapacitet dækket' : `${day.tonsPlanned - totalCapacity} tons á forventet ${day.tonsPlanned} tons mangler disponering`}
+                                  </span>
+                                </div>
+                                {roundsPerTruck > 0 && (
+                                  <div className="flex items-center gap-xs px-xs py-xxxs rounded-lg bg-[#F0F4FF] border border-[#4A6FBF]/15">
+                                    <span className="font-inter text-xs text-text-primary tabular-nums">
+                                      Rundtid <span className="font-semibold">{roundTime} min</span>
+                                    </span>
+                                    <span className="text-text-muted">·</span>
+                                    <span className="font-inter text-xs text-text-primary tabular-nums">
+                                      <span className="font-semibold">{roundsPerTruck}</span> runder/bil
+                                    </span>
+                                    <span className="text-text-muted">·</span>
+                                    {(() => {
+                                      const avgTons = (totalTrucks > 0 && singleLoadCapacity > 0)
+                                        ? Math.round(singleLoadCapacity / totalTrucks)
+                                        : 30
+                                      const recommended = Math.ceil(day.tonsPlanned / (avgTons * roundsPerTruck))
+                                      return (
+                                        <span className="font-inter text-xs text-text-primary tabular-nums">
+                                          Anbefalet: <span className="font-semibold">{recommended}</span> biler (á gns {avgTons} tons)
+                                        </span>
+                                      )
+                                    })()}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          <hr className="border-hairline" />
+
+                          {/* Første læs + Interval */}
+                          <div>
+                            <p className="font-inter text-xs font-semibold text-text-primary mb-xs">
+                              Kørsel: {activeProduct.factory.name} – Søvej 6D, 4900 Nakskov
+                            </p>
+                            <div className="grid grid-cols-2 gap-xs">
+                              <div className="flex flex-col gap-xxxs">
+                                <label className="font-inter text-xxs text-text-muted">Første læs</label>
+                                <input
+                                  type="time"
+                                  value={params.firstLoadTime}
+                                  onChange={e => updateParam('firstLoadTime', e.target.value)}
+                                  className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-xxxs">
+                                <label className="font-inter text-xxs text-text-muted">Interval</label>
+                                <div className="flex items-center gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs focus-within:border-dark-teal">
+                                  <input
+                                    type="number"
+                                    value={params.intervalMinutes}
+                                    onChange={e => updateParam('intervalMinutes', Math.max(1, parseInt(e.target.value) || 1))}
+                                    className="w-full font-inter text-xs text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                  />
+                                  <span className="font-inter text-xxs text-text-muted">min</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Info-linje */}
+                          <div className="grid grid-cols-2 gap-xs">
+                            <div className="flex flex-col gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs">
+                              <span className="font-inter text-xxs text-text-muted">Afstand til fabrik</span>
+                              <div className="flex items-center gap-xxxs">
+                                <input
+                                  type="number"
+                                  value={factoryKm}
+                                  onChange={e => setFactoryKm(Math.max(1, parseInt(e.target.value) || 1))}
+                                  className="w-[48px] font-inter text-xs font-semibold text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                                <span className="font-inter text-xxs text-text-muted">km → {factoryKm} min</span>
+                              </div>
+                            </div>
+                            <div className="flex flex-col gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs">
+                              <span className="font-inter text-xxs text-text-muted">Forventet sidste bil</span>
+                              <span className="font-inter text-xs font-semibold text-text-primary tabular-nums">
+                                {(() => {
+                                  if (!totalTrucks || !params.firstLoadTime || roundsPerTruck === 0) return '–'
+                                  const [h, m] = params.firstLoadTime.split(':').map(Number)
+                                  const lastDeparture = h * 60 + m + (totalTrucks - 1) * params.intervalMinutes + (roundsPerTruck - 1) * roundTime
+                                  const lastArrival = lastDeparture + factoryKm
+                                  return `${String(Math.floor(lastArrival / 60)).padStart(2, '0')}:${String(lastArrival % 60).padStart(2, '0')}`
+                                })()}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Kommentar til vognmand */}
+                          <div className="flex flex-col gap-xxxs">
+                            <label className="font-inter text-xxs text-text-muted">Kommentar til vognmand</label>
+                            <textarea
+                              value={kørselKommentar[day.id] ?? ''}
+                              onChange={e => setKørselKommentar(prev => ({ ...prev, [day.id]: e.target.value }))}
+                              rows={2}
+                              placeholder="Særlige forhold, adgang, tidsvinduer..."
+                              className="w-full font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal transition-colors resize-none leading-relaxed"
+                            />
+                          </div>
+
+                          {/* Gem */}
+                          <div className="flex justify-end gap-xs pt-xxxs">
+                            <button
+                              onClick={() => setKørselExpandedId(null)}
+                              className="font-inter text-xs text-text-muted hover:text-text-primary px-xs py-xxxs"
+                            >Annullér</button>
+                            <button
+                              onClick={() => { setKørselPlanlagtIds(prev => new Set([...prev, day.id])); setKørselExpandedId(null) }}
+                              className="font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90"
+                            >Gem kørsel</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
 
           {/* ── Dokumentation ───────────────────────────────────── */}
           <section>
@@ -1322,304 +1627,6 @@ export function OrdrePlanScreen() {
               </button>
             </div>
 
-            {/* Kørsel */}
-            <div className="mt-lg">
-              <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Asfalt kørsel</h2>
-              <div className="bg-white border border-hairline rounded-xl overflow-hidden">
-                {activeDays.map((day, i) => {
-                  const isExpanded = kørselExpandedId === day.id
-                  const isPlanlagt = kørselPlanlagtIds.has(day.id)
-                  const bekraeftelse = vognmandBekraeftelser[day.id]
-                  const orders = kørselOrders[day.id] ?? []
-                  const params = kørselParams[day.id] ?? DEFAULT_KØRSEL_PARAMS
-                  const singleLoadCapacity = orders.reduce((sum, o) => {
-                    const vt = VEHICLE_TYPES.find(v => v.label === o.type)
-                    return sum + (vt ? vt.tons * o.antal : 0)
-                  }, 0)
-                  const totalTrucks = orders.reduce((s, o) => s + o.antal, 0)
-                  // Rundtid = 2× køretid (km × 1 min) + 15 min læsning + 15 min aflæsning
-                  const roundTime = factoryKm * 2 + 30
-                  const [rsh, rsm] = (params.firstLoadTime || '07:00').split(':').map(Number)
-                  const workEndMinutes = 15 * 60 + 30 // 15:30
-                  const roundsPerTruck = Math.max(0, Math.floor((workEndMinutes - (rsh * 60 + rsm)) / roundTime))
-
-                  // Total dagkapacitet = enkeltlæs × runder
-                  const totalCapacity = singleLoadCapacity * (roundsPerTruck || 1)
-                  const capacityOk = totalCapacity >= day.tonsPlanned
-
-                  function updateOrder(id: string, field: 'type' | 'antal' | 'foersteLaes', value: string | number | boolean) {
-                    setKørselOrders(prev => ({
-                      ...prev,
-                      [day.id]: (prev[day.id] ?? []).map(o => o.id === id ? { ...o, [field]: value } : o),
-                    }))
-                  }
-                  function removeOrder(id: string) {
-                    setKørselOrders(prev => ({ ...prev, [day.id]: (prev[day.id] ?? []).filter(o => o.id !== id) }))
-                  }
-                  function addOrder() {
-                    const newOrder: VehicleOrder = { id: `vo-${Date.now()}`, type: VEHICLE_TYPES[0].label, antal: 1 }
-                    setKørselOrders(prev => ({ ...prev, [day.id]: [...(prev[day.id] ?? []), newOrder] }))
-                  }
-                  function updateParam<K extends keyof KørselDayParams>(key: K, value: KørselDayParams[K]) {
-                    setKørselParams(prev => ({ ...prev, [day.id]: { ...(prev[day.id] ?? DEFAULT_KØRSEL_PARAMS), [key]: value } }))
-                  }
-
-                  return (
-                    <div key={day.id} className={i < activeDays.length - 1 || isExpanded ? 'border-b border-hairline' : ''}>
-                      {/* Hoved-række */}
-                      <div className={`grid items-center gap-md px-sm py-sm transition-colors ${!isExpanded ? 'hover:bg-[#F5F5F5]' : ''}`}
-                        style={{ gridTemplateColumns: '1fr auto' }}>
-                        <div>
-                          <p className="font-inter text-sm font-medium text-text-primary">
-                            {formatWeekday(day.date)} · {formatShortDate(day.date)}
-                          </p>
-                          <p className="font-inter text-xs text-text-muted">{day.tonsPlanned} tons</p>
-                        </div>
-                        <div className="flex items-center gap-xxxs">
-                          {isPlanlagt && !isExpanded ? (
-                            <div className="flex items-center gap-xs flex-wrap justify-end">
-                              <span className="inline-flex items-center gap-sm px-sm py-xxxs rounded-lg bg-[#E7F4EE] font-inter text-xs font-medium text-text-primary whitespace-nowrap">
-                                <span>{orders.reduce((s, o) => s + o.antal, 0)} biler bestilt</span>
-                                <span className="text-text-muted">·</span>
-                                <span>Interval {params.intervalMinutes} min</span>
-                                <span className="text-text-muted">·</span>
-                                <span>Første læs {params.firstLoadTime}</span>
-                              </span>
-                              {/* Vognmand status badge */}
-                              {bekraeftelse ? (
-                                <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-lg bg-[#2E9E65] font-inter text-xs font-semibold text-white whitespace-nowrap">
-                                  <CheckCircle2 size={11} className="flex-shrink-0" />
-                                  Bekræftet vognmand
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-lg bg-yellow/25 font-inter text-xs font-semibold text-[#8A6A00] whitespace-nowrap">
-                                  <span className="w-[6px] h-[6px] rounded-full bg-yellow flex-shrink-0" />
-                                  Afventer vognmand
-                                </span>
-                              )}
-                              <div className="flex">
-                                <button
-                                  onClick={() => setKørselExpandedId(day.id)}
-                                  className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-lg border border-hairline bg-white font-inter text-xs font-medium text-text-muted hover:text-text-primary transition-colors"
-                                >
-                                  <Pencil size={11} />
-                                  Ret
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                if (isExpanded) {
-                                  setKørselPlanlagtIds(prev => new Set([...prev, day.id]))
-                                  setKørselExpandedId(null)
-                                } else {
-                                  setKørselExpandedId(day.id)
-                                  if ((kørselOrders[day.id] ?? []).length === 0) {
-                                    setKørselOrders(prev => ({
-                                      ...prev,
-                                      [day.id]: [{ id: `vo-${Date.now()}`, type: '', antal: 1 }],
-                                    }))
-                                  }
-                                }
-                              }}
-                              className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap"
-                            >
-                              {isExpanded ? 'Gem kørsel' : 'Planlæg kørsel'}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Expand */}
-                      {isExpanded && (
-                        <div className="mx-sm mb-lg rounded-xl border border-dark-teal/20 bg-[#F5F9FA] shadow-sm flex flex-col gap-sm p-sm">
-
-                          {/* Biler */}
-                          <div>
-                            <p className="font-inter text-xs font-semibold text-text-primary mb-xs">Biler</p>
-                            <div className="flex flex-col gap-xs">
-                              {orders.map(o => {
-                                const vt = VEHICLE_TYPES.find(v => v.label === o.type)
-                                return (
-                                  <div key={o.id} className="flex flex-col gap-xxxs">
-                                    <div className="flex items-center gap-xs">
-                                      <select
-                                        value={o.type}
-                                        onChange={e => updateOrder(o.id, 'type', e.target.value)}
-                                        className="flex-1 font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                                      >
-                                        <option value="">Vælg biltype</option>
-                                        {VEHICLE_TYPES.map(v => (
-                                          <option key={v.label} value={v.label}>{v.label} · {v.tons} tons</option>
-                                        ))}
-                                      </select>
-                                      <div className="flex items-center border border-hairline rounded-lg overflow-hidden bg-white">
-                                        <button
-                                          onClick={() => updateOrder(o.id, 'antal', Math.max(1, o.antal - 1))}
-                                          className="px-xs py-xs font-inter text-sm text-text-muted hover:bg-[#F5F5F5] transition-colors"
-                                        >−</button>
-                                        <span className="px-xs font-inter text-xs font-semibold text-text-primary w-[28px] text-center">{o.antal}</span>
-                                        <button
-                                          onClick={() => updateOrder(o.id, 'antal', o.antal + 1)}
-                                          className="px-xs py-xs font-inter text-sm text-text-muted hover:bg-[#F5F5F5] transition-colors"
-                                        >+</button>
-                                      </div>
-                                      <span className="font-inter text-xs text-text-muted w-[70px] text-right tabular-nums whitespace-nowrap">
-                                        {vt ? vt.tons * o.antal : 0} Tons
-                                      </span>
-                                      <button onClick={() => removeOrder(o.id)} className="text-text-muted hover:text-bad transition-colors">
-                                        <X size={14} />
-                                      </button>
-                                    </div>
-                                    {o.type === 'Grab' && (
-                                      <label className="inline-flex items-center gap-xxxs cursor-pointer ml-xxxs">
-                                        <input
-                                          type="checkbox"
-                                          checked={o.foersteLaes ?? false}
-                                          onChange={e => updateOrder(o.id, 'foersteLaes', e.target.checked)}
-                                          className="accent-dark-teal w-[14px] h-[14px]"
-                                        />
-                                        <span className="font-inter text-xs text-text-secondary">Angiv som første læs</span>
-                                      </label>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                              <button
-                                onClick={addOrder}
-                                className="inline-flex items-center gap-xs font-inter text-sm font-medium text-dark-teal border border-dark-teal/40 rounded-lg px-sm py-xs hover:bg-dark-teal hover:text-white transition-colors self-start mt-sm"
-                              >
-                                <Plus size={15} />
-                                Tilføj biltype
-                              </button>
-                            </div>
-                            {orders.length > 0 && (
-                              <div className="flex flex-col gap-xs mt-md">
-                                <div className={`flex items-center gap-xs px-xs py-xxxs rounded-lg border ${capacityOk ? 'bg-[#E7F4EE] border-[#1F8A5B]/20' : 'bg-[#FBECEA] border-[#C8372D]/20'}`}>
-                                  <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 ${capacityOk ? 'bg-[#1F8A5B]' : 'bg-[#C8372D]'}`} />
-                                  <span className={`font-inter text-xs font-medium tabular-nums ${capacityOk ? 'text-text-primary' : 'text-[#C8372D]'}`}>
-                                    {capacityOk ? 'Kapacitet dækket' : `${day.tonsPlanned - totalCapacity} tons á forventet ${day.tonsPlanned} tons mangler disponering`}
-                                  </span>
-                                </div>
-                                {roundsPerTruck > 0 && (
-                                  <div className="flex items-center gap-xs px-xs py-xxxs rounded-lg bg-[#F0F4FF] border border-[#4A6FBF]/15">
-                                    <span className="font-inter text-xs text-text-primary tabular-nums">
-                                      Rundtid <span className="font-semibold">{roundTime} min</span>
-                                    </span>
-                                    <span className="text-text-muted">·</span>
-                                    <span className="font-inter text-xs text-text-primary tabular-nums">
-                                      <span className="font-semibold">{roundsPerTruck}</span> runder/bil
-                                    </span>
-                                    <span className="text-text-muted">·</span>
-                                    {(() => {
-                                      const avgTons = (totalTrucks > 0 && singleLoadCapacity > 0)
-                                        ? Math.round(singleLoadCapacity / totalTrucks)
-                                        : 30
-                                      const recommended = Math.ceil(day.tonsPlanned / (avgTons * roundsPerTruck))
-                                      return (
-                                        <span className="font-inter text-xs text-text-primary tabular-nums">
-                                          Anbefalet: <span className="font-semibold">{recommended}</span> biler (á gns {avgTons} tons)
-                                        </span>
-                                      )
-                                    })()}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          <hr className="border-hairline" />
-
-                          {/* Første læs + Interval */}
-                          <div>
-                            <p className="font-inter text-xs font-semibold text-text-primary mb-xs">
-                              Kørsel: {activeProduct.factory.name} – Søvej 6D, 4900 Nakskov
-                            </p>
-                            <div className="grid grid-cols-2 gap-xs">
-                              <div className="flex flex-col gap-xxxs">
-                                <label className="font-inter text-xxs text-text-muted">Første læs</label>
-                                <input
-                                  type="time"
-                                  value={params.firstLoadTime}
-                                  onChange={e => updateParam('firstLoadTime', e.target.value)}
-                                  className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                                />
-                              </div>
-                              <div className="flex flex-col gap-xxxs">
-                                <label className="font-inter text-xxs text-text-muted">Interval</label>
-                                <div className="flex items-center gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs focus-within:border-dark-teal">
-                                  <input
-                                    type="number"
-                                    value={params.intervalMinutes}
-                                    onChange={e => updateParam('intervalMinutes', Math.max(1, parseInt(e.target.value) || 1))}
-                                    className="w-full font-inter text-xs text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                                  />
-                                  <span className="font-inter text-xxs text-text-muted">min</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Info-linje */}
-                          <div className="grid grid-cols-2 gap-xs">
-                            <div className="flex flex-col gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs">
-                              <span className="font-inter text-xxs text-text-muted">Afstand til fabrik</span>
-                              <div className="flex items-center gap-xxxs">
-                                <input
-                                  type="number"
-                                  value={factoryKm}
-                                  onChange={e => setFactoryKm(Math.max(1, parseInt(e.target.value) || 1))}
-                                  className="w-[48px] font-inter text-xs font-semibold text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                                />
-                                <span className="font-inter text-xxs text-text-muted">km → {factoryKm} min</span>
-                              </div>
-                            </div>
-                            <div className="flex flex-col gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs">
-                              <span className="font-inter text-xxs text-text-muted">Forventet sidste bil</span>
-                              <span className="font-inter text-xs font-semibold text-text-primary tabular-nums">
-                                {(() => {
-                                  if (!totalTrucks || !params.firstLoadTime || roundsPerTruck === 0) return '–'
-                                  const [h, m] = params.firstLoadTime.split(':').map(Number)
-                                  const lastDeparture = h * 60 + m + (totalTrucks - 1) * params.intervalMinutes + (roundsPerTruck - 1) * roundTime
-                                  const lastArrival = lastDeparture + factoryKm
-                                  return `${String(Math.floor(lastArrival / 60)).padStart(2, '0')}:${String(lastArrival % 60).padStart(2, '0')}`
-                                })()}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Kommentar til vognmand */}
-                          <div className="flex flex-col gap-xxxs">
-                            <label className="font-inter text-xxs text-text-muted">Kommentar til vognmand</label>
-                            <textarea
-                              value={kørselKommentar[day.id] ?? ''}
-                              onChange={e => setKørselKommentar(prev => ({ ...prev, [day.id]: e.target.value }))}
-                              rows={2}
-                              placeholder="Særlige forhold, adgang, tidsvinduer..."
-                              className="w-full font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal transition-colors resize-none leading-relaxed"
-                            />
-                          </div>
-
-                          {/* Gem */}
-                          <div className="flex justify-end gap-xs pt-xxxs">
-                            <button
-                              onClick={() => setKørselExpandedId(null)}
-                              className="font-inter text-xs text-text-muted hover:text-text-primary px-xs py-xxxs"
-                            >Annullér</button>
-                            <button
-                              onClick={() => { setKørselPlanlagtIds(prev => new Set([...prev, day.id])); setKørselExpandedId(null) }}
-                              className="font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90"
-                            >Gem kørsel</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
           </section>
 
           </div>
@@ -1632,6 +1639,7 @@ export function OrdrePlanScreen() {
               vognmandBekraeftelse={activeDays[0] ? vognmandBekraeftelser[activeDays[0].id] : undefined}
               vognmandMaterielBekraeftelse={vognmandMaterielBekraeftelse}
               todayDay={activeDays[0]}
+              products={products}
             />
           )}
 
@@ -2092,13 +2100,43 @@ const MATERIEL_ENHEDER: MaterielEnhed[] = [
   { anlaegsNr: '7-0078', beskrivelse: 'HAMM DV70VV' },
 ]
 
-function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeftelse, vognmandMaterielBekraeftelse, todayDay }: {
+function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeftelse, vognmandMaterielBekraeftelse, todayDay, products }: {
   forundersoegelseFotos: MockPhoto[]
   onAddPhotos: (p: MockPhoto[]) => void
   vognmandBekraeftelse?: VognmandBekraeftelse
   vognmandMaterielBekraeftelse?: VognmandMaterielBekraeftelse
   todayDay?: DayPlan
+  /** Alle produkter i ordren — bruges til produkt+dato-selector */
+  products: MockProduct[]
 }) {
+  // ── Produkt + dato selector state ───────────────────────────────────────────
+  // TODO (produktion): Selector-state (selectedProductId + selectedDate) skal huskes
+  //   pr. ordre i URL eller user-state. Default er dagens dato + dagens aktive produkt.
+  const [selectedProductId, setSelectedProductId] = useState<string>(() => {
+    const todayStr = TODAY.toISOString().split('T')[0]
+    const activeToday = products.find(p =>
+      p.startDate !== undefined && p.endDate !== undefined &&
+      p.startDate <= todayStr && p.endDate >= todayStr
+    )
+    return (activeToday ?? products[0]).id
+  })
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    return TODAY.toISOString().split('T')[0]
+  })
+
+  // Mock-variation per (produkt, dato) — værdier ændrer sig deterministisk med valg
+  // TODO: Erstat med Supabase når klar — hent faktiske dagtal fra plan_vejebilag og dagplan
+  function getMockDataForProductDate(productId: string, date: string) {
+    const hash = (productId + date).split('').reduce((s, c) => s + c.charCodeAt(0), 0)
+    const selectedProduct = products.find(p => p.id === productId)
+    const baseArea = selectedProduct?.m2 ?? 1000
+    return {
+      tonsAnkommet: 50 + (hash % 200),
+      areal: Math.round(baseArea * 0.3 + (hash % Math.round(baseArea * 0.5))),
+      forventetUdlagtM2: Math.round(baseArea * 0.4 + (hash % Math.round(baseArea * 0.4))),
+    }
+  }
+
   // ── Dagsdata — hardcoded for demo, TODO: hent fra ordre-objekt når Supabase klar ───
   const DEMO_ORDRE_ID = '260423891'
   const DEMO_DATO = new Date().toISOString().slice(0, 10)
@@ -2247,7 +2285,143 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
 
   return (
     <div className="flex flex-col gap-[48px]">
+      {/* ── Produkt-selector ─────────────────────────────────────────── */}
+      <div className="flex flex-col gap-xs pb-sm border-b border-hairline">
+        <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest">
+          Produkt
+        </span>
+        <div className="flex gap-xs flex-wrap" role="tablist" aria-label="Produkter i ordre">
+          {products.map(p => {
+            const isSelected = p.id === selectedProductId
+            const todayStr = TODAY.toISOString().split('T')[0]
+            const status: 'aktuel' | 'færdig' | 'fremtidig' =
+              p.endDate !== undefined && todayStr > p.endDate ? 'færdig' :
+              p.startDate !== undefined && todayStr < p.startDate ? 'fremtidig' :
+              'aktuel'
+
+            const baseBox = 'flex flex-col gap-xxxs items-start min-w-[150px] px-sm py-xs rounded-xl border text-left transition-all'
+            const variantClass = isSelected
+              ? 'bg-deep-teal border-deep-teal'
+              : status === 'færdig'
+                ? 'bg-good-bg border-hairline opacity-70 hover:opacity-100'
+                : status === 'fremtidig'
+                  ? 'bg-soft-aqua/40 border-hairline opacity-70 hover:opacity-100'
+                  : 'bg-white border-hairline hover:border-deep-teal/30'
+
+            const titleColor = isSelected ? 'text-white' : 'text-text-primary'
+            const subColor = isSelected ? 'text-white/80' : 'text-text-muted'
+            const tonsColor = isSelected ? 'text-white/70' : 'text-text-muted'
+
+            return (
+              <button
+                key={p.id}
+                role="tab"
+                aria-pressed={isSelected}
+                onClick={() => {
+                  setSelectedProductId(p.id)
+                  // Hvis valgt produkts dato-range ikke indeholder selectedDate, hop til startDate
+                  if (p.startDate && p.endDate) {
+                    if (selectedDate < p.startDate || selectedDate > p.endDate) {
+                      setSelectedDate(p.startDate)
+                    }
+                  }
+                }}
+                className={[baseBox, variantClass].join(' ')}
+              >
+                <span className={`font-inter font-bold text-xs tabular-nums ${titleColor}`}>
+                  {p.startDate ? formatShortDate(p.startDate) : '–'} – {p.endDate ? formatShortDate(p.endDate) : '–'}
+                </span>
+                <span className={`font-poppins font-semibold text-sm tracking-tight ${titleColor}`}>
+                  {p.recipeCode}
+                </span>
+                <span className={`font-inter text-xs ${subColor}`}>
+                  {p.recipeName} · {p.thicknessMm} mm
+                </span>
+                <div className="flex items-center gap-xxxs mt-xxxs">
+                  <span className={`font-inter text-xs tabular-nums ${tonsColor}`}>
+                    {p.tonsTotal} tons
+                  </span>
+                  {status === 'færdig' && !isSelected && (
+                    <span className="inline-flex items-center gap-[3px] px-xxxs rounded-full bg-good/15 font-inter text-xxs font-medium text-good">
+                      <CheckCircle2 size={10} aria-hidden="true" /> Færdig
+                    </span>
+                  )}
+                  {status === 'fremtidig' && !isSelected && (
+                    <span className="inline-flex items-center gap-[3px] px-xxxs rounded-full bg-deep-teal/10 font-inter text-xxs font-medium text-deep-teal">
+                      Kommende
+                    </span>
+                  )}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Dato-piller for valgt produkt */}
+        {(() => {
+          const selectedProduct = products.find(p => p.id === selectedProductId)
+          if (!selectedProduct?.startDate || !selectedProduct?.endDate) return null
+
+          const dates: string[] = []
+          const start = new Date(selectedProduct.startDate + 'T00:00:00')
+          const end = new Date(selectedProduct.endDate + 'T00:00:00')
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            dates.push(d.toISOString().split('T')[0])
+          }
+          const todayStr = TODAY.toISOString().split('T')[0]
+
+          return (
+            <div className="flex flex-col gap-xs mt-xs">
+              <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest">
+                Dato
+              </span>
+              <div className="flex gap-xxxs flex-wrap" role="tablist" aria-label="Datoer for valgt produkt">
+                {dates.map(dStr => {
+                  const isDateSelected = dStr === selectedDate
+                  const isToday = dStr === todayStr
+                  const isPast = dStr < todayStr
+                  return (
+                    <button
+                      key={dStr}
+                      role="tab"
+                      aria-pressed={isDateSelected}
+                      onClick={() => setSelectedDate(dStr)}
+                      className={[
+                        'inline-flex items-center gap-xxxs px-sm py-xs rounded-lg border font-inter text-xs font-medium transition-colors',
+                        isDateSelected
+                          ? 'bg-deep-teal border-deep-teal text-white'
+                          : isPast
+                            ? 'bg-soft-gray border-hairline text-text-muted hover:text-text-primary'
+                            : 'bg-white border-hairline text-text-primary hover:border-deep-teal/30',
+                      ].join(' ')}
+                    >
+                      {formatWeekday(dStr)} {formatShortDate(dStr)}
+                      {isToday && (
+                        <span className={`text-xxs ml-xxxs ${isDateSelected ? 'text-white/70' : 'text-text-muted'}`}>· i dag</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Visnings-banner — viser aktivt filter selv om sektions-data endnu ikke er koblet */}
+        {(() => {
+          const sp = products.find(p => p.id === selectedProductId)
+          if (!sp) return null
+          return (
+            <div className="flex items-center gap-xs px-sm py-xs rounded-lg bg-soft-aqua/30 border border-soft-aqua font-inter text-xs text-deep-teal mt-xs">
+              <span className="font-semibold">Visning:</span>
+              <span>{sp.recipeCode} · {formatShortDate(selectedDate)}</span>
+            </div>
+          )
+        })()}
+      </div>
+
       {/* ── Dagens overblik — status-bokse ───────────────────────────── */}
+      {/* TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate) */}
       <div className="flex flex-col gap-xs">
         <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Dagens overblik</h2>
         {/* Alle 7 bokse i ét fælles grid — samme bredde og højde via auto-rows-fr */}
@@ -2257,6 +2431,9 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
           const materielBekraeftet2 = !!(vognmandMaterielBekraeftelse && vognmandMaterielBekraeftelse.items.length > 0)
           const antalMateriel2 = vognmandMaterielBekraeftelse?.items.length ?? 0
           const forundersoegelseForetaget2 = underlaegsType && tilfredsstillende !== null && tilfredsstillende !== undefined
+          // Hent mock-variation baseret på valgt produkt + dato
+          const mockData = getMockDataForProductDate(selectedProductId, selectedDate)
+          const selectedProductObj = products.find(p => p.id === selectedProductId)
           return (
             <div className="grid grid-cols-3 xl:grid-cols-7 gap-xs auto-rows-fr">
               {/* Biler */}
@@ -2302,28 +2479,29 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                 </span>
               </div>
               {/* 4 OrdreInfoCards — kun når recept er klar */}
+              {/* TODO (produktion): Kortene bruger mockData koblet til (selectedProductId, selectedDate) */}
               {recept && (
                 <>
                   <OrdreInfoCard
                     label="AREAL I DAG"
-                    value={fmtTal(DEMO_AREAL_I_DAG)}
+                    value={fmtTal(mockData.areal)}
                     unit="m²"
-                    subtekst={`á ${fmtTal(DEMO_ORDRE_TOTAL_AREAL)} m²`}
+                    subtekst={`á ${fmtTal(selectedProductObj?.m2 ?? DEMO_ORDRE_TOTAL_AREAL)} m²`}
                   />
                   <OrdreInfoCard
                     label="PRODUKT"
-                    value={recept.navn}
-                    subtekst={recept.kode}
+                    value={selectedProductObj?.recipeCode ?? recept.navn}
+                    subtekst={selectedProductObj?.recipeName ?? recept.kode}
                   />
                   <OrdreInfoCard
                     label="TYKKELSE"
-                    value={fmtTal(DEMO_TYKKELSE)}
+                    value={fmtTal(selectedProductObj?.thicknessMm ?? DEMO_TYKKELSE)}
                     unit="mm"
                   />
                   <OrdreInfoCard
                     label="TONS I DAG"
-                    value={fmtTal(DEMO_TONS_I_DAG)}
-                    subtekst={`á ${fmtTal(DEMO_ORDRE_TOTAL_TONS)} t`}
+                    value={fmtTal(mockData.tonsAnkommet)}
+                    subtekst={`á ${fmtTal(selectedProductObj?.tonsTotal ?? DEMO_ORDRE_TOTAL_TONS)} t`}
                   />
                 </>
               )}
@@ -2342,6 +2520,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
         */}
       </div>
 
+      {/* TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate) */}
       <section>
         <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Forundersøgelse</h2>
         <div className={`w-full bg-surface border border-hairline rounded-2xl shadow-sm overflow-hidden mb-sm`}>
@@ -2680,6 +2859,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
       </section>
 
       {/* ── Udlægning ────────────────────────────────────────────── */}
+      {/* TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate) */}
       {recept && (() => {
         const tonsProgress = DEMO_TONS_I_DAG > 0 ? Math.round((tonsAnkommet / DEMO_TONS_I_DAG) * 100) : 0
         const forventetProgress = DEMO_AREAL_I_DAG > 0 ? Math.round((forventetUdlagtM2 / DEMO_AREAL_I_DAG) * 100) : 0
@@ -2694,7 +2874,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
             <div className="grid grid-cols-1 md:grid-cols-3 gap-xs">
               <FremdriftCard
                 variant="tons-ankommet"
-                label="TONS ANKOMMET"
+                label="UDVEJET FABRIK"
                 value={fmtTal(tonsAnkommet, 1)}
                 unit=""
                 subtekst={`á ${fmtTal(DEMO_TONS_I_DAG)} t dagens plan`}
@@ -2757,6 +2937,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
       })()}
 
       {/* ── Vejesedler og indkomne tons ──────────────────────────── */}
+      {/* TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate) */}
       <section>
         <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Vejesedler og indkomne tons</h2>
         <VejesedlerTable
@@ -2770,6 +2951,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
       </section>
 
       {/* ── Bestilte biler ────────────────────────────────────────── */}
+      {/* TODO (produktion): Sektion (Bilafregning) filtreres på (selectedProductId, selectedDate) */}
       {todayDay && (
         <section>
           <div className="mb-sm">
@@ -2813,9 +2995,13 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                                 <span className="font-inter text-xs text-text-muted">{bil.biltype}</span>
                               </td>
                               <td className="align-middle px-xs py-xs">
-                                {bil.er_materiel_bil && (
+                                {bil.er_materiel_bil ? (
                                   <span className="inline-flex items-center gap-xxxs bg-warn-bg text-text-secondary font-inter font-semibold text-xxs px-xs py-xxxs rounded-md uppercase tracking-wider">
                                     Kørt materiel
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-xxxs bg-soft-aqua text-deep-teal font-inter font-semibold text-xxs px-xs py-xxxs rounded-md uppercase tracking-wider">
+                                    Asfaltkørsel
                                   </span>
                                 )}
                               </td>
@@ -2956,6 +3142,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
       )}
 
       {/* ── Materiel ─────────────────────────────────────────────── */}
+      {/* TODO (produktion): Sektion (Materielafregning) filtreres på (selectedProductId, selectedDate) */}
       <section>
         <div className="flex flex-wrap items-center justify-between gap-sm mb-sm">
           <div className="flex items-center gap-xs">
@@ -3010,29 +3197,33 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                         <td className="align-middle font-inter text-xs text-text-primary px-xs py-xs">{enhed.beskrivelse}</td>
                         <td className="align-middle px-xs py-xs text-right">
                           {timeafregningFraPlan === 'nej' ? (
-                            // Case A: simpel checkbox
+                            // Case A: toggle switch
                             <div className="flex justify-end">
-                              <label className="flex items-center justify-center w-[18px] h-[18px] cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={materielAnvendt[enhed.anlaegsNr] ?? true}
-                                  onChange={e =>
-                                    setMaterielAnvendt(prev => ({ ...prev, [enhed.anlaegsNr]: e.target.checked }))
-                                  }
-                                  className="sr-only"
-                                  aria-label={`${enhed.beskrivelse} anvendt`}
-                                />
-                                <span className={[
-                                  'w-4 h-4 rounded-sm border flex items-center justify-center',
+                              <button
+                                type="button"
+                                role="switch"
+                                aria-checked={materielAnvendt[enhed.anlaegsNr] ?? true}
+                                aria-label={`${enhed.beskrivelse} anvendt`}
+                                onClick={() =>
+                                  setMaterielAnvendt(prev => ({
+                                    ...prev,
+                                    [enhed.anlaegsNr]: !(prev[enhed.anlaegsNr] ?? true),
+                                  }))
+                                }
+                                className={[
+                                  'relative inline-flex items-center w-9 h-5 rounded-full transition-colors',
                                   (materielAnvendt[enhed.anlaegsNr] ?? true)
-                                    ? 'bg-surface border-hairline-2'
-                                    : 'bg-surface border-hairline-2',
-                                ].join(' ')}>
-                                  {(materielAnvendt[enhed.anlaegsNr] ?? true) && (
-                                    <Check size={11} className="text-text-primary" strokeWidth={3} />
-                                  )}
-                                </span>
-                              </label>
+                                    ? 'bg-good'
+                                    : 'bg-hairline-2',
+                                ].join(' ')}
+                              >
+                                <span
+                                  className={[
+                                    'inline-block w-4 h-4 rounded-full bg-white shadow transition-transform',
+                                    (materielAnvendt[enhed.anlaegsNr] ?? true) ? 'translate-x-[18px]' : 'translate-x-[2px]',
+                                  ].join(' ')}
+                                />
+                              </button>
                             </div>
                           ) : (
                             // Case B: timer-input per enhed
