@@ -107,7 +107,7 @@ export function BilProfilModal({
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="font-inter text-[11px] font-semibold uppercase tracking-widest text-text-muted">
-                Biltype
+                Hænger
               </span>
               <select
                 value={form.biltype}

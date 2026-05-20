@@ -1,14 +1,14 @@
 // TODO: Erstat med Supabase når klar
 
 export const BILTYPER = [
-  '6 Aks · 32 tons',
-  '7 Aks · 35 tons',
-  'Forvogn · 18 tons',
-  'Forvogn/Kærre · 32 tons',
-  'Grab · 28 tons',
-  'Sneglebil · 15 tons',
-  'Snegl m. kærre · 30 tons',
-  'Sideudlægger · 16 tons',
+  'Ingen hænger',
+  'Centeraksel-hænger',
+  'Påhængsvogn (drejekrans)',
+  'Tippehænger',
+  'Termo-hænger',
+  'Sættevogn',
+  'Blokvogn',
+  'Grab-hænger',
 ] as const
 
 export interface Chauffør {
@@ -38,11 +38,11 @@ export const MOCK_CHAUFFOERER: Chauffør[] = [
 ]
 
 export const MOCK_BILER: Bil[] = [
-  { reg: 'XE32114', biltype: '6 Aks · 32 tons',     type: '6-aks', tons: 32, chaufførId: 'c1', chaufførNavn: 'Lars Pedersen',    aktiv: true },
-  { reg: 'AB54231', biltype: '6 Aks · 32 tons',     type: '6-aks', tons: 30, chaufførId: 'c2', chaufførNavn: 'Brian Nielsen',    aktiv: true },
-  { reg: 'CV98012', biltype: 'Grab · 28 tons',       type: 'andet', tons: 28, chaufførId: 'c3', chaufførNavn: 'Mads Christensen', aktiv: true },
-  { reg: 'TH11233', biltype: '7 Aks · 35 tons',     type: '6-aks', tons: 35, chaufførId: 'c4', chaufførNavn: 'Jens Andersen',    aktiv: true },
-  { reg: 'MO99821', biltype: '6 Aks · 32 tons',     type: '6-aks', tons: 32, chaufførId: 'c5', chaufførNavn: 'Søren Hansen',     aktiv: true },
-  { reg: 'KA45567', biltype: 'Forvogn · 18 tons',   type: '4-aks', tons: 18, chaufførId: 'c6', chaufførNavn: 'Peter Madsen',     aktiv: true },
-  { reg: 'BL77331', biltype: 'Blokvogn',            type: 'andet', tons: 0,  chaufførId: 'c1', chaufførNavn: 'Lars Pedersen',    aktiv: true },
+  { reg: 'XE32114', biltype: 'Centeraksel-hænger',       type: '6-aks', tons: 32, chaufførId: 'c1', chaufførNavn: 'Lars Pedersen',    aktiv: true },
+  { reg: 'AB54231', biltype: 'Påhængsvogn (drejekrans)', type: '6-aks', tons: 30, chaufførId: 'c2', chaufførNavn: 'Brian Nielsen',    aktiv: true },
+  { reg: 'CV98012', biltype: 'Grab-hænger',              type: 'andet', tons: 28, chaufførId: 'c3', chaufførNavn: 'Mads Christensen', aktiv: true },
+  { reg: 'TH11233', biltype: 'Tippehænger',              type: '6-aks', tons: 35, chaufførId: 'c4', chaufførNavn: 'Jens Andersen',    aktiv: true },
+  { reg: 'MO99821', biltype: 'Termo-hænger',             type: '6-aks', tons: 32, chaufførId: 'c5', chaufførNavn: 'Søren Hansen',     aktiv: true },
+  { reg: 'KA45567', biltype: 'Ingen hænger',             type: '4-aks', tons: 18, chaufførId: 'c6', chaufførNavn: 'Peter Madsen',     aktiv: true },
+  { reg: 'BL77331', biltype: 'Blokvogn',                 type: 'andet', tons: 0,  chaufførId: 'c1', chaufførNavn: 'Lars Pedersen',    aktiv: true },
 ]

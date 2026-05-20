@@ -102,8 +102,14 @@ function OrdreKort({ ordre, onDisponer }: OrdreKortProps) {
             <p className="font-poppins font-semibold text-sm text-deep-teal leading-snug truncate">
               {ordre.adresse}
             </p>
-            <p className="font-inter text-xs text-text-muted mt-0.5">
+            <p className="font-inter text-xs text-text-primary mt-0.5">
+              Holdnummer 10541 – Jens Thorsager
+            </p>
+            <p className="font-inter text-xs text-text-muted">
               Ordrenummer: {ordre.ordrenr} · {ordre.produktKode}
+            </p>
+            <p className="font-inter text-xs text-text-muted">
+              Formand: Lars Hansen – 22 33 44 55
             </p>
           </div>
           <button

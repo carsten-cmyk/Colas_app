@@ -38,6 +38,11 @@ function isWeekend(d: Date): boolean {
   return dow === 0 || dow === 6
 }
 
+// TODO (produktion): Brug dansk kalender med danske mærkedage (helligdage).
+// Skal markere mindst: nytårsdag, skærtorsdag, langfredag, 2. påskedag, store bededag,
+// Kr. himmelfartsdag, 2. pinsedag, juleaften, juledag, 2. juledag, nytårsaftensdag.
+// Helligdage skal markeres visuelt på samme måde som weekender i Gantten.
+
 function getViewDays(mode: ViewMode): number {
   if (mode === 'uge') return 7
   if (mode === '14-dage') return 14
@@ -141,12 +146,8 @@ export function VognmandGanttScreen() {
         {/* Page header */}
         <div className="mb-5 flex items-end justify-between gap-6 flex-wrap">
           <div>
-            <h1 className="font-poppins font-semibold text-2xl text-deep-teal leading-tight">
-              Kalender view
-            </h1>
-            <p className="font-inter text-xs text-text-muted mt-0.5">
-              {fmtShort(windowStart)} – {fmtShort(windowEnd)}
-            </p>
+            <h1 className="font-poppins font-semibold text-2xl text-deep-teal leading-tight">Kalender view</h1>
+            <p className="font-inter text-xs text-text-muted mt-0.5">{fmtShort(windowStart)} – {fmtShort(windowEnd)}</p>
           </div>
 
           {/* View toggle — aligned med overskrift */}
@@ -210,6 +211,7 @@ export function VognmandGanttScreen() {
                 <ChevronRight size={16} />
               </button>
             </div>
+
         </div>
 
         {/* Gantt-kort */}
@@ -234,13 +236,11 @@ export function VognmandGanttScreen() {
                   return (
                     <div
                       key={i}
-                      style={{
-                        flex: 1,
-                        minWidth: cellMin,
-                        ...(we && !isToday ? { backgroundColor: '#F5F5F5' } : {}),
-                        ...(isToday ? { backgroundColor: 'rgba(46,158,101,0.09)' } : {}),
-                      }}
-                      className="flex flex-col items-center py-2 relative"
+                      style={{ flex: 1, minWidth: cellMin }}
+                      className={[
+                        'flex flex-col items-center py-2 relative',
+                        isToday ? 'bg-good-bg' : we ? 'bg-surface-2' : '',
+                      ].filter(Boolean).join(' ')}
                     >
                       {isToday && (
                         <div
@@ -264,8 +264,10 @@ export function VognmandGanttScreen() {
                         {DAY_SHORT[day.getDay()]}
                       </span>
                       <div
-                        className="w-[22px] h-[22px] mt-[2px] rounded-full flex items-center justify-center"
-                        style={isToday ? { backgroundColor: '#2E9E65' } : {}}
+                        className={[
+                          'w-[22px] h-[22px] mt-[2px] rounded-full flex items-center justify-center',
+                          isToday ? 'bg-good' : '',
+                        ].filter(Boolean).join(' ')}
                       >
                         <span
                           className={`font-poppins font-semibold text-xs ${
@@ -310,8 +312,14 @@ export function VognmandGanttScreen() {
                       <p className="font-poppins font-semibold text-xs text-deep-teal leading-snug">
                         {ordre.adresse}
                       </p>
-                      <p className="font-inter text-[11px] text-text-muted mt-0.5">
+                      <p className="font-inter text-[11px] text-text-primary mt-0.5">
+                        Holdnummer 10541 – Jens Thorsager
+                      </p>
+                      <p className="font-inter text-[11px] text-text-muted">
                         Ordrenummer: {ordre.ordrenr}
+                      </p>
+                      <p className="font-inter text-[11px] text-text-muted">
+                        Formand: Lars Hansen – 22 33 44 55
                       </p>
                     </button>
 
@@ -330,16 +338,24 @@ export function VognmandGanttScreen() {
                           : 'neutral'
                         : null
 
+                      // Aften/nat: tidsvindue-farve overrider status-farve på hele baren
+                      const barColorClass = inRange && status
+                        ? ordre.tidsvindue === 'aften' ? 'bg-warning'
+                        : ordre.tidsvindue === 'nat' ? 'bg-deep-teal'
+                        : CELL_BAR_CLASS[status]
+                        : ''
+
+                      // Tilgang B: weekend-overlay kun på weekend-celler inden for bar-spanet
+                      const showWeekendOverlay = inRange && we && ordre.tidsvindue === 'weekend'
+
                       return (
                         <div
                           key={di}
-                          style={{
-                            flex: 1,
-                            minWidth: cellMin,
-                            ...(we && !isToday ? { backgroundColor: '#FAFAFA' } : {}),
-                            ...(isToday ? { backgroundColor: 'rgba(46,158,101,0.04)' } : {}),
-                          }}
-                          className="flex flex-col items-center justify-start pt-4 relative"
+                          style={{ flex: 1, minWidth: cellMin }}
+                          className={[
+                            'flex flex-col items-center justify-start pt-4 relative',
+                            isToday ? 'bg-good-bg/30' : we ? 'bg-soft-gray' : '',
+                          ].filter(Boolean).join(' ')}
                         >
                           {isToday && (
                             <div
@@ -357,14 +373,23 @@ export function VognmandGanttScreen() {
                               {/* Sammenhængende stav */}
                               <div
                                 className={[
-                                  'h-[6px] w-full',
-                                  CELL_BAR_CLASS[status],
+                                  'h-[6px] w-full relative',
+                                  barColorClass,
                                   isFirst ? 'rounded-l-full ml-[3px]' : '',
                                   isLast ? 'rounded-r-full mr-[3px]' : '',
                                 ]
                                   .filter(Boolean)
                                   .join(' ')}
-                              />
+                              >
+                                {/* Tilgang B: weekend-overlay — bg-bad på lø/sø-celler inden for bar */}
+                                {showWeekendOverlay && (
+                                  <span
+                                    className="absolute inset-0 bg-bad pointer-events-none"
+                                    style={{ zIndex: 2 }}
+                                    aria-label="Weekend-udførelse"
+                                  />
+                                )}
+                              </div>
 
                               {/* Badge med antal biler — kun hvis der er en bestilling */}
                               {bestilling && (
@@ -400,7 +425,10 @@ export function VognmandGanttScreen() {
             { cls: 'bg-orange-500', label: 'Delvist disponeret' },
             { cls: 'bg-good',       label: 'Fuldt disponeret' },
             { cls: 'bg-yellow',     label: 'Ændret af formand' },
-            { cls: 'bg-light-aqua/50', label: 'Ingen bestilling (weekend/fridag)' },
+              { cls: 'bg-light-aqua/50', label: 'Ingen bestilling (weekend/fridag)' },
+            { cls: 'bg-warning',      label: 'Aften' },
+            { cls: 'bg-deep-teal',    label: 'Nat' },
+            { cls: 'bg-bad',          label: 'Weekend-udførelse' },
           ].map(({ cls, label }) => (
             <div key={label} className="flex items-center gap-1.5">
               <div className={`w-5 h-2.5 rounded-full ${cls}`} />

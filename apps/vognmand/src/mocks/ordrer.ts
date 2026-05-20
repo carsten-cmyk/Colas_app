@@ -53,6 +53,8 @@ export const MOCK_ORDRER: Ordre[] = [
     mængdeTotal: 210,
     startDate: '2026-03-20',
     endDate: '2026-03-22',
+    // Fredag–søndag — spænder over weekenden
+    tidsvindue: 'weekend',
     dage: [
       // Fredag 20/3 — ændret af formand → gul
       { dato: '2026-03-20', bestilteBiler: 2, disponeredeBiler: 2, ændretAfFormand: true, mødetidFabrik: '06:00', tidFabrikTilPlads: 30 },
@@ -69,12 +71,34 @@ export const MOCK_ORDRER: Ordre[] = [
     mængdeTotal: 760,
     startDate: '2026-03-24',
     endDate: '2026-03-27',
+    // Aftenhold — udføres uden for normal arbejdstid
+    tidsvindue: 'aften',
     dage: [
       // Tirsdag–fredag 24–27/3 — alle ikke disponeret → rød
       { dato: '2026-03-24', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 40 },
       { dato: '2026-03-25', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 40 },
       { dato: '2026-03-26', bestilteBiler: 2, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '07:00', tidFabrikTilPlads: 60 },
       { dato: '2026-03-27', bestilteBiler: 2, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '07:00', tidFabrikTilPlads: 60, kommentar: 'Afvent signal fra formand' },
+    ],
+  },
+  {
+    id: 'o4',
+    ordrenr: '1212512',
+    titel: 'Motorring 3 – natasfalterin',
+    adresse: 'Motorring 3, afkørsel 25, 2730 Herlev',
+    lokation: 'Herlev',
+    fabrik: 'PROD B · GLOSTRUP',
+    produktKode: 'SMA 11t',
+    mængdeTotal: 320,
+    startDate: '2026-03-17',
+    endDate: '2026-03-19',
+    // Nathold — vejarbejde i nattetimerne
+    tidsvindue: 'nat',
+    dage: [
+      // Tirsdag–torsdag 17–19/3
+      { dato: '2026-03-17', bestilteBiler: 2, disponeredeBiler: 2, ændretAfFormand: false, mødetidFabrik: '22:00', tidFabrikTilPlads: 20 },
+      { dato: '2026-03-18', bestilteBiler: 2, disponeredeBiler: 1, ændretAfFormand: false, mødetidFabrik: '22:00', tidFabrikTilPlads: 20 },
+      { dato: '2026-03-19', bestilteBiler: 2, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '22:00', tidFabrikTilPlads: 20 },
     ],
   },
 ]

@@ -43,4 +43,6 @@ export interface Ordre {
   dage: DagDisponering[]
   tidligereKørte?: TidligereKørt[]
   materiel?: MaterielLinje[]
+  /** Angiver om ordren udføres uden for normal arbejdstid */
+  tidsvindue?: 'aften' | 'nat' | 'weekend'
 }
