@@ -4,11 +4,12 @@
  * Når en prototype er godkendt → byg den ordentligt i src/pages/
  */
 import { Routes, Route, Link } from 'react-router-dom'
-import { ChevronRight, Layout, CalendarDays, ClipboardList, Truck } from 'lucide-react'
+import { ChevronRight, Layout, CalendarDays, ClipboardList, Truck, CalendarCheck } from 'lucide-react'
 import { AppShell } from './shell/AppShell'
 import { GanttScreen } from './gantt/GanttScreen'
 import { OrdrePlanScreen } from './ordre-plan/OrdrePlanScreen'
 import { TransportberegnerScreen } from './transportberegner/TransportberegnerScreen'
+import { DagsoversigtScreen } from './dagsoversigt/DagsoversigtScreen'
 
 interface Prototype {
   id: string
@@ -52,6 +53,14 @@ const PROTOTYPES: Prototype[] = [
     icon: <Truck size={22} className="text-deep-teal" />,
     sprint: 1,
   },
+  {
+    id: 'dagsoversigt',
+    title: 'Dagsoversigt',
+    description: 'Dagens ordrer — startpunkt for planlægning. Kombiner til samleordre.',
+    path: 'dagsoversigt',
+    icon: <CalendarCheck size={22} className="text-deep-teal" />,
+    sprint: 1,
+  },
 ]
 
 export function PrototypeHub() {
@@ -62,6 +71,7 @@ export function PrototypeHub() {
       <Route path="gantt" element={<GanttScreen />} />
       <Route path="ordre-plan" element={<OrdrePlanScreen />} />
       <Route path="transportberegner" element={<TransportberegnerScreen />} />
+      <Route path="dagsoversigt" element={<DagsoversigtScreen />} />
     </Routes>
   )
 }
