@@ -243,6 +243,10 @@ export interface Vejeseddel {
   etaMinutter: number | null
   /** Forventet ETA i minutter tildelt ved disponering — bruges til forsinkelse-beregning i EtaBadge */
   forventetEtaMinutter: number | null
+  /** Multilæs-flag: bil leverer samme produkt til 2+ ordrer. Tons skal fordeles af formand. */
+  multilaesFlag?: boolean
+  /** Puljelæs-flag: bil har flere produkter til samme ordre. Ingen fordeling — tons går direkte. */
+  puljelaesFlag?: boolean
 }
 
 // ─── Dagsoverblik ─────────────────────────────────────────────────────────────

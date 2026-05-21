@@ -1,3 +1,4 @@
+import { Layers } from 'lucide-react'
 import type { Vejeseddel, Recept } from '../../types/order'
 import type { UdlaeggerEnhed } from '../../types/udlaegger'
 import { TemperaturBadge } from './TemperaturBadge'
@@ -76,6 +77,27 @@ function ProduktCelle({
   return <Dash />
 }
 
+/** Læs-type badge — markerer multilæs (gul, kræver fordeling) eller puljelæs (blå, ingen fordeling) */
+function LaesTypeBadge({ multilaes, puljelaes }: { multilaes?: boolean; puljelaes?: boolean }) {
+  if (multilaes) {
+    return (
+      <span className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-md bg-warn-bg border border-yellow text-deep-teal font-inter font-semibold text-xxs uppercase tracking-wider">
+        <Layers size={10} />
+        Multilæs
+      </span>
+    )
+  }
+  if (puljelaes) {
+    return (
+      <span className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-md bg-soft-aqua border border-dark-teal/30 text-deep-teal font-inter font-semibold text-xxs uppercase tracking-wider">
+        <Layers size={10} />
+        Puljelæs
+      </span>
+    )
+  }
+  return null
+}
+
 export function VejeseddelRow({
   vejeseddel,
   recept,
@@ -103,9 +125,12 @@ export function VejeseddelRow({
         {vejeseddel.chauffoerNavn}
       </td>
 
-      {/* Produkt */}
+      {/* Produkt + læs-type badge (multilæs/puljelæs) */}
       <td className="font-inter text-xs text-text-primary px-xs py-xs">
-        <ProduktCelle recept={recept} receptkode={vejeseddel.receptkode} />
+        <div className="flex items-center gap-xs flex-wrap">
+          <ProduktCelle recept={recept} receptkode={vejeseddel.receptkode} />
+          <LaesTypeBadge multilaes={vejeseddel.multilaesFlag} puljelaes={vejeseddel.puljelaesFlag} />
+        </div>
       </td>
 
       {/* Fabrik */}
