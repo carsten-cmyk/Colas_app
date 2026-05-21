@@ -4,7 +4,7 @@
  * Må ikke importeres i produktionskode.
  */
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
-import { List } from 'lucide-react'
+import { List, Calendar } from 'lucide-react'
 import { MOCK_ORDRER } from '@/mocks/ordrer'
 import { antalÅbne } from '@/mocks/disponeringState'
 
@@ -16,8 +16,9 @@ type NavItem = {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'liste',  label: 'Aktive ordre', icon: <List size={15} />, path: '/prototyper/liste' },
-  { id: 'arkiv',  label: 'Ordre arkiv',  icon: <List size={15} />, path: '/prototyper/arkiv' },
+  { id: 'liste',  label: 'Aktive ordre',     icon: <List size={15} />,     path: '/prototyper/liste' },
+  { id: 'gantt',  label: 'Kalender oversigt', icon: <Calendar size={15} />, path: '/prototyper/gantt' },
+  { id: 'arkiv',  label: 'Ordre arkiv',      icon: <List size={15} />,     path: '/prototyper/arkiv' },
 ]
 
 export function VognmandShell() {
@@ -51,7 +52,9 @@ export function VognmandShell() {
           <nav className="flex flex-col gap-[2px] px-xs" style={{ paddingTop: 66 }} aria-label="Hovedmenu">
             {NAV_ITEMS.map(item => {
               const isActive = item.id === 'liste'
-                ? (pathname.startsWith('/prototyper/liste') || pathname.startsWith('/prototyper/gantt') || pathname.startsWith('/prototyper/disponering'))
+                ? (pathname.startsWith('/prototyper/liste') || pathname.startsWith('/prototyper/disponering'))
+                : item.id === 'gantt'
+                ? pathname.startsWith('/prototyper/gantt')
                 : pathname.startsWith(item.path)
               return (
                 <button

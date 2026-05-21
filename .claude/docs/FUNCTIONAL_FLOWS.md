@@ -577,6 +577,157 @@ hvor `densitet_kg_per_m3` er heltal fra `recepter[receptkode].densitet` (fx 2400
 
 ---
 
+## Flow 11: Multilæs (inkl. samleordre) — Formand → Vognmand → Chauffør → Vejning
+
+**LÅST 2026-05-21:** Samleordre og multilæs er DATAMÆSSIGT IDENTISKE — forskellen er kun beslutnings-niveau (morgen vs. drip). Begge bruger samme læs-, vejeseddel- og fordelings-flow.
+
+**To triggers:**
+- **A. Multilæs på ekstra-bestilling**: Formand opretter ekstra-bestilling med multilæs ON i Ordre-plan og vælger 2+ ordrer
+- **B. Samleordre**: Formand kombinerer 2+ ordrer i Dagsoversigt → alle morgen-bestillinger for de ordrer bliver automatisk multilæs
+
+### Trin 0A — Samleordre-trigger (morgen, valgfrit)
+**App:** formand
+**Komponent:** `DagsoversigtScreen`
+**Handling:** Formand markerer 2+ ordrer for samme dag via checkbox → "Kombiner"-knap → bekræftelses-modal → samleordre oprettes.
+**Skriver til:** `samleordrer` med `{ id, dato, ordre_ids: [a, b], anchor_ordre_id: a }`.
+**Konsekvens:** ALLE morgen-bestillinger for ordrerne på den dato sættes automatisk som multilæs med anchor + stop-liste fra samleordren.
+
+### Trin 1 — Formand opretter/ser multilæs-bestilling i Ordre-plan
+**App:** formand
+**Komponent:** `OrdrePlanScreen` → `EkstraBestillingBox` (drip) eller produkt-bokse (morgen via samleordre)
+**Handling A (drip):** Tilføj ekstra-bestilling. Toggle multilæs ON. Vælg andre ordrer via checkbox-liste. Vælg produkt fra union-dropdown. Indtast tons.
+**Handling B (samleordre):** Produkter på dagen er pre-set som multilæs (auto fra samleordre). Formand justerer tons-fordeling mellem children. Header viser "Samleordre: X + Y".
+**Skriver til:** `ekstra_bestillinger` (A) eller `morgen_bestillinger` (B) med `{ multilaes: true, andre_ordrer: [...], product_id, tons, anchor_ordre_id }`.
+
+### Trin 2 — Formand klikker Send til fabrik
+**App:** formand
+**Komponent:** `OrdrePlanScreen` → bekræftelses-modal
+**Handling:** Bekræft afsendelse.
+**Skriver til:** `ekstra_bestillinger.sent = true`. Bestillingen dispaches til fabrik OG vognmand.
+
+### Trin 3 — Vognmand modtager bil-bestilling
+**App:** vognmand
+**Komponent:** `OrdreKort` / `DisponeringsView`
+**Viser:** Bil-bestilling med:
+  - Produkt + total tons
+  - `Multilæs (N stop)`-badge
+  - Anchor-udførselssted som rækkefølge #1
+  - Komplet stop-liste i ordnet rækkefølge
+  - Tons-andel pr. stop (fra formand's morgen-bestilling)
+**Læser:** `ekstra_bestillinger` JOIN `orders` for stop-adresser.
+**Vigtigt:** Read-only på rækkefølgen — vognmand kan IKKE ændre. Formand bestemmer via anchor-valg.
+
+### Trin 4 — Vognmand disponerer bil
+**App:** vognmand
+**Komponent:** `DisponeringsView`
+**Handling:** Tildel bil + chauffør til multilæs-bestilling. Bil-bookningen "arver" hele stop-listen.
+**Skriver til:** `ekstra_bestillinger.confirmed_vehicle = { reg_nr, chauffoer_navn, tlf, bil_type }`.
+
+### Trin 5 — Chauffør får multi-stop task
+**App:** chauffeur
+**Komponent:** `TaskCard` / `TaskDetailScreen` (kommende multi-stop UI)
+**Viser:** Task med stop-rækkefølge:
+  - Stop 1: anchor (med ordre-info, tons)
+  - Stop 2-N: øvrige stops i rækkefølge
+**Læser:** `assigned_tasks` med `multilaes_stops[]`.
+**Uden anchor + stop-liste i bil-bestillingen kan chauffør-app intet vise** — datakæden er ufravigelig.
+
+### Trin 6 — Chauffør aflæsser stop for stop
+**App:** chauffeur
+**Handling:** Markér hvert stop som "Aflæsset" når levering er sket. Tons-andel pr. stop kan justeres på dagen hvis nødvendigt (kunden ville have mere/mindre).
+**Skriver til:** `multilaes_stops[].afleveret_tons`, `multilaes_stops[].afleveret_tid`.
+
+### Trin 7 — Vejning på fabrik
+**App:** (fabrik-system, udenfor Colas-apps)
+**Handling:** Pr. produkt på bilen genereres ÉN vejeseddel ved vejning (chauffør vejer tom, læsser, vejer; tara, læsser produkt 2, vejer).
+**Skriver til:** `vejesedler` pr. produkt med `{ product_id, netto_tons, multilaes_flag: true, læs_id }`.
+
+### Trin 8 — Formand fordeler tons + timer ved dagens slut
+**App:** formand
+**Komponent:** `OrdrePlanScreen` → Udførelse-mode → `BilAfregning` expander
+**Handling:**
+  - Bil-rækken viser vejesedlerne under sig (én pr. produkt)
+  - Multilæs-vejesedler har "Fordel"-expander → manuel tons-input pr. ordre + rest-counter
+  - Timer går til anchor-ordre som default; formand kan flytte via radio
+  - Hvis akkord-bil og 1,5-times-reglen er trådt i kraft → automatisk forslag om skift til timeløn for hele dagen, formand bekræfter
+**Skriver til:** `vejesedler[].fordeling[]` med `{ ordre_id, tons }` per ordre. `bil_afregning.timer_pr_ordre[]`.
+
+### Datamodel-noter
+
+```
+ekstra_bestillinger
+├── id
+├── ordre_id                          // anchor (for multilæs) eller den ene ordre (for puljelæs)
+├── product_id
+├── tons (total)
+├── multilaes: bool
+├── andre_ordrer: ordre_id[]          // hvis multilaes
+├── puljelaes: bool                   // hvis flere produkter samme bil til samme ordre
+├── sent: bool
+├── confirmed_vehicle: { reg_nr, ... }
+└── multilaes_stops[]                 // ordnet rækkefølge med tons-andel (kun multilæs)
+
+vejesedler
+├── id
+├── læs_id                            // én læs = én bil-tur
+├── product_id
+├── netto_tons
+├── multilaes_flag: bool              // hvis tons skal fordeles på flere ordrer
+└── fordeling[]: { ordre_id, tons }   // udfyldes af formand (multilæs) eller auto (puljelæs/single)
+```
+
+---
+
+## Flow 12: Puljelæs ekstra-bestilling — Formand → Vognmand → Chauffør → Vejning
+
+**Trigger:** Formand opretter en ekstra-bestilling med puljelæs ON i Ordre-plan (samme bil, flere produkter, samme ordre). Eller — på ordre-niveau — formand sætter puljelæs ON i morgen-bestilling så ordrens flere produkter pakkes på 1 bil.
+
+**Søsterflow til Flow 11 (multilæs).** Forskellen er at puljelæs har 1 destination — ingen fordeling kræves.
+
+### Trin 1 — Formand opretter puljelæs-bestilling
+**App:** formand
+**Komponent:** `OrdrePlanScreen` → `EkstraBestillingBox` med puljelæs-toggle ON
+**Handling:** Toggle puljelæs ON (kan også være ON proaktivt før 2. produkt er oprettet). Indtast produkt og tons.
+**Skriver til:** `ekstra_bestillinger` med `{ puljelaes: true, multilaes: false, product_id, tons, ordre_id }`.
+
+### Trin 2 — Formand sender til fabrik
+**App:** formand
+**Komponent:** `OrdrePlanScreen` → bekræftelses-modal
+**Skriver til:** `ekstra_bestillinger.sent = true`.
+
+### Trin 3 — Vognmand modtager bil-bestilling
+**App:** vognmand
+**Komponent:** `OrdreKort` / `DisponeringsView`
+**Viser:** Bil-bestilling med:
+  - "Puljelæs (N produkter)"-badge
+  - Én udførselsadresse (ordrens udførselssted)
+  - Liste over produkter med hver deres tons
+**Vognmand booker bil/chauffør** — ingen rækkefølge-beslutning nødvendig.
+
+### Trin 4 — Chauffør får standard task med puljelæs-badge
+**App:** chauffeur
+**Viser:** Task med ÉN destination + puljelæs-badge der signalerer:
+  - Skal vejes tom → læs produkt 1 → vej → tara → læs produkt 2 → vej (én vejeseddel pr. produkt)
+**Læser:** `assigned_tasks` med `puljelaes_products[]`.
+
+### Trin 5 — Vejning pr. produkt
+**App:** (fabrik-system)
+**Handling:** 1 vejeseddel udskrives PR. PRODUKT på bilen.
+**Skriver til:** `vejesedler` med `{ product_id, netto_tons, multilaes_flag: false, læs_id }`.
+
+### Trin 6 — Formand ved dagens slut: bilafregning arver tons
+**App:** formand
+**Komponent:** `OrdrePlanScreen` → Udførelse-mode → `BilAfregning` expander
+**Handling:**
+  - Vejesedlerne (1 pr. produkt) listes under bilen
+  - INGEN fordelings-expander — tons går automatisk til ordren
+  - Time-bil: timer indtastes manuelt som normalt
+  - Akkord-bil: bilen arver tons fra vejesedlerne, × sats = beløb
+  - 1,5-times-reglen gælder fortsat (akkord → time hvis triggered)
+**Skriver til:** `vejesedler[].fordeling[]` med `{ ordre_id, tons }` — auto-udfyldt for puljelæs (single ordre).
+
+---
+
 ## Datamodel — nøglerelationer
 
 ```
@@ -794,3 +945,4 @@ afregninger                                   // fra Colas til vognmand
   - Legenden vises under Gantt-kortet sammen med state-forklaringerne
   - Chauffør-app surfacer feltet i fase 2 (TBD: badge på ordre-kort eller i task-detail). Vognmand bruger feltet til disponering — fx undgå chauffører der ikke vil/kan tage natarbejde
 - **Helligdage skal markeres som weekend i Gantt (produktion)** — Prototypens weekend-tint (`bg-surface-2`/`bg-good-bg` på dag-headers + cells) skal i produktion udvides til en dansk kalender med mærkedage: nytårsdag, skærtorsdag, langfredag, 2. påskedag, store bededag, Kr. himmelfartsdag, 2. pinsedag, juleaften, juledag, 2. juledag, nytårsaftensdag. Helligdage skal rendres med SAMME visuelle stil som weekender. Konsekvens for `tidsvindue: 'weekend'`-overlay: bør udvides til at dække helligdage også (TBD ved Supabase-kobling — kræver enten helligdagskalender-tabel eller server-side beregning)
+- **Chauffør-app erstatter Danvægt-vejekort via NFC HCE (antagelse, afventer kunde-bekræftelse)** — Den planlagte arkitektur er at chauffør-appen fungerer som virtuelt NFC-kort: chaufføren holder telefonen hen til Danvægt-læseren, der identificerer ham som med dagens fysiske kort. Teknik: **Host Card Emulation (HCE)** på Android, Apple Wallet-pass på iOS. **Forudsætning:** Danvægt-læseren skal bruge **13,56 MHz NFC (ISO 14443-A/B)**. "RFID" er bredt — kun NFC-frekvensen kan emuleres. Hvis læseren er 125 kHz LF-RFID eller UHF, virker det IKKE og kræver hardware-skift hos Danvægt. Konsekvenser ved positiv bekræftelse: (1) chauffør-app skal hver morgen hente et nyt "kort-ID" via PLAN-integration (svarer til dagens kort-omkodning), (2) backup-flow nødvendigt for glemt telefon/fladt batteri/NFC-fejl, (3) iOS-flåde kræver Apple Wallet-pass-integration eller standardisering på Android. Se `Docs/Formand/AFKLARING_Multi-produkt_og_Vejekort.md` Q23-29 for åbne spørgsmål.

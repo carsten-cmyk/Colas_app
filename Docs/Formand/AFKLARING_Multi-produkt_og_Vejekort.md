@@ -93,22 +93,46 @@ Chaufføren er central her — det er ham, der fysisk har begge produkter med, o
 
 ---
 
-## 7. Vejekort på Danvægt (NFC)
+## 7. Vejekort på Danvægt (NFC card emulation)
 
-I dag bruges der **fysiske kort, der kodes om hver dag** til chaufførerne. Kortet scannes på Danvægt-anlægget ved fabrikken, så vejningen ved hvem chaufføren er, og hvilken ordre vejesedlen skal kobles til.
+I dag bruges der **fysiske kort, der kodes om hver dag** til chaufførerne. Chaufføren holder kortet hen til Danvægt-læseren ved fabrikken, hvorefter vægten ved hvem chaufføren er og hvilken ordre vejesedlen skal kobles til.
 
-**Vores antagelser:**
-- Kortene er NFC-baserede (kan scannes ved kontakt med læser)
-- Den daglige om-kodning sker fordi opgavefordelingen ændres dag-til-dag
-- Hvis vi kan koble chauffør-appen ind, kan vi slippe for de fysiske kort — telefonen kan agere som identifikationsenhed via NFC eller QR-kode
+**Vores tekniske retning (afklaret med Carsten 2026-05-20):**
 
-**Spørgsmål:**
-23. **Er kortene NFC?** Eller bruger Danvægt en anden teknologi (RFID, magnetstribe, stregkode)? Det afgør, om en telefon kan erstatte dem direkte.
-24. Hvor mange kort er i omløb i dag, og hvem håndterer den daglige kodning (administrativt)?
-25. Hvordan ser jeres aftale ud med Danvægt — kan vi få adgang til at integrere chauffør-appen mod deres vægt-systemer, eller skal vi gå gennem Danvægt for hver tilpasning?
-26. Hvis vi går videre med at lade appen erstatte kortene: **hvad er backup'en**, hvis chaufføren glemmer telefonen, batteriet er fladt, eller appen crasher ved vægten? (Skal kortene leve videre som backup i en overgangsperiode?)
-27. Er det realistisk at fase kortene ud helt, eller skal app'en og kortet eksistere parallelt i en længere periode?
-28. Skal vejningen kunne **sende vejesedlen direkte ind i Colas-systemet** ved scanning (real-time), eller vil vi stadig hente vejesedler via PLAN med ~10 min forsinkelse?
+Telefonen skal **fungere som et virtuelt NFC-kort** — chaufføren holder telefonen hen til Danvægt-læseren, og læseren identificerer ham. Det er IKKE telefonen der scanner Danvægt; det er Danvægt der læser telefonen, præcis som et fysisk kort i dag.
+
+Teknisk hedder mønsteret **Host Card Emulation (HCE)**:
+- **Android:** Indbygget HCE-API. Appen broadcaster et "kort-ID" når telefonen er låst op + nær læseren.
+- **iOS:** Begrænset — virker kun via **Apple Wallet-passes** eller specifik partnerintegration. Ikke samme frihed som Android.
+
+**Kritisk forudsætning:** Danvægt-læseren skal acceptere standard **13,56 MHz NFC (ISO 14443-A/B)**. "RFID" er en bred kategori, og kun NFC-frekvensen kan emuleres af en telefon.
+
+| RFID-variant | Frekvens | Telefon kan emulere? |
+|---|---|---|
+| Low-frequency RFID (ældre adgangskort) | 125 kHz | ❌ Nej |
+| **NFC (ISO 14443)** | 13,56 MHz | ✅ Ja (Android HCE; iOS via Wallet) |
+| UHF RFID (lager-tags) | 860-960 MHz | ❌ Nej |
+
+**Spørgsmål til kunden:**
+
+23. **Hvilken NFC/RFID-standard bruger Danvægt-læseren?** Specifikt: er det **13,56 MHz NFC / ISO 14443-A eller B**? Dette står typisk på selve læseren eller kan oplyses af Danvægt. Hvis ja → telefonen kan emulere kortet. Hvis 125 kHz eller UHF → kræver hardware-skift hos Danvægt eller alternativt identifikations-flow (fx QR-kode på skærm i bilen som læseren scanner).
+
+24. Hvor mange kort er i omløb i dag, og hvem håndterer den daglige om-kodning (administrativt)?
+
+25. Hvordan ser jeres aftale ud med Danvægt — kan vi få adgang til at integrere chauffør-appen mod deres vægt-systemer (få det "kort-ID" appen skal broadcaste tildelt programmatisk hver dag), eller skal vi gå gennem Danvægt for hver tilpasning?
+
+26. Hvis vi går videre med HCE-løsningen: **hvad er backup'en**, hvis chaufføren glemmer telefonen, batteriet er fladt, NFC er slået fra, eller appen crasher ved vægten? Skal kortene leve videre som backup i en overgangsperiode? Hvad er den minimale "graceful degradation"?
+
+27. Er det realistisk at fase kortene ud helt, eller skal app + kort eksistere parallelt i en længere periode (anbefales 6-12 mdr)?
+
+28. Skal vejningen kunne **sende vejesedlen direkte ind i Colas-systemet** ved scanning (real-time push fra Danvægt → Colas), eller vil vi stadig hente vejesedler via PLAN med ~10 min forsinkelse?
+
+29. **iOS-flåde:** Hvor mange af jeres chauffører bruger iPhone vs. Android? iOS-NFC er begrænset — hvis flertallet er iPhone, skal vi enten lave Apple Wallet-pass-integration eller acceptere at flåden standardiserer på Android-enheder.
+
+**Risici hvis det IKKE er 13,56 MHz NFC:**
+- Hardware-skift hos Danvægt (potentielt på alle fabrikker) → kapital-investering + udrulnings-tid
+- Alternativ: QR-kode-flow (læseren scanner skærm) — kræver kamera på Danvægt eller separat kameralæser
+- Alternativ: Bluetooth/BLE-broadcast — kræver software-opgradering af læseren
 
 ---
 
