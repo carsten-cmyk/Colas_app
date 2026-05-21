@@ -49,9 +49,6 @@ function getViewDays(mode: ViewMode): number {
   return 31
 }
 
-function getCellMinWidth(mode: ViewMode): number {
-  return mode === 'maaned' ? 34 : 46
-}
 
 function getBestilling(ordre: Ordre, day: Date): DagDisponering | undefined {
   const iso = day.toISOString().slice(0, 10)
@@ -110,7 +107,6 @@ export function VognmandGanttScreen() {
   const [offset, setOffset] = useState(0)
 
   const viewDays = getViewDays(viewMode)
-  const cellMin = getCellMinWidth(viewMode)
 
   function getWindowStart(): Date {
     if (viewMode === 'uge') {
@@ -146,7 +142,7 @@ export function VognmandGanttScreen() {
         {/* Page header */}
         <div className="mb-5 flex items-end justify-between gap-6 flex-wrap">
           <div>
-            <h1 className="font-poppins font-semibold text-2xl text-deep-teal leading-tight">Kalender view</h1>
+            <h1 className="font-poppins font-semibold text-2xl text-deep-teal leading-tight">Kalender oversigt</h1>
             <p className="font-inter text-xs text-text-muted mt-0.5">{fmtShort(windowStart)} – {fmtShort(windowEnd)}</p>
           </div>
 
@@ -163,7 +159,7 @@ export function VognmandGanttScreen() {
               className="px-3 py-2 font-inter text-xs font-medium bg-deep-teal text-white flex items-center gap-1.5"
             >
               <LayoutGrid size={14} />
-              Kalender view
+              Kalender oversigt
             </button>
           </div>
         </div>
@@ -215,12 +211,12 @@ export function VognmandGanttScreen() {
         </div>
 
         {/* Gantt-kort */}
-        <div className="bg-white rounded-lg border border-hairline shadow-md overflow-hidden">
-          <div className="overflow-x-auto">
-            <div style={{ minWidth: 280 + viewDays * cellMin }}>
+        <div className="space-y-xs">
 
+          {/* Dato-header som sit eget kort */}
+          <div className="bg-white rounded-lg border border-hairline shadow-sm overflow-hidden">
               {/* Dato-header */}
-              <div className="flex border-b border-hairline bg-surface-2">
+              <div className="flex bg-soft-aqua">
                 <div
                   style={{ width: 280, flexShrink: 0 }}
                   className="px-4 py-3 flex items-end border-r border-box-outline"
@@ -236,11 +232,11 @@ export function VognmandGanttScreen() {
                   return (
                     <div
                       key={i}
-                      style={{ flex: 1, minWidth: cellMin }}
-                      className={[
-                        'flex flex-col items-center py-2 relative',
-                        isToday ? 'bg-good-bg' : we ? 'bg-surface-2' : '',
-                      ].filter(Boolean).join(' ')}
+                      style={{
+                        flex: 1, minWidth: 0,
+                        ...(isToday ? { backgroundColor: 'rgba(46, 158, 101, 0.1)' } : {}),
+                      }}
+                      className={`flex flex-col items-center py-2 relative${we && !isToday ? ' bg-surface-2' : ''}`}
                     >
                       {isToday && (
                         <div
@@ -264,10 +260,8 @@ export function VognmandGanttScreen() {
                         {DAY_SHORT[day.getDay()]}
                       </span>
                       <div
-                        className={[
-                          'w-[22px] h-[22px] mt-[2px] rounded-full flex items-center justify-center',
-                          isToday ? 'bg-good' : '',
-                        ].filter(Boolean).join(' ')}
+                        className="w-[26px] h-[26px] mt-xxxs rounded-full flex items-center justify-center"
+                        style={isToday ? { backgroundColor: '#2E9E65' } : {}}
                       >
                         <span
                           className={`font-poppins font-semibold text-xs ${
@@ -281,24 +275,24 @@ export function VognmandGanttScreen() {
                   )
                 })}
               </div>
+          </div>
 
-              {/* Ordre-rækker */}
-              {visibleOrdrer.length === 0 && (
-                <div className="py-16 text-center font-inter text-sm text-text-muted">
-                  Ingen ordrer i denne periode
-                </div>
-              )}
+          {/* Tom-state */}
+          {visibleOrdrer.length === 0 && (
+            <div className="bg-white rounded-lg border border-hairline shadow-sm py-16 text-center font-inter text-sm text-text-muted">
+              Ingen ordrer i denne periode
+            </div>
+          )}
 
-              {visibleOrdrer.map((ordre, oi) => {
+          {/* Ordre-kort — ét kort per ordre */}
+          {visibleOrdrer.map((ordre) => {
                 const start = parseDate(ordre.startDate)
                 const end = parseDate(ordre.endDate)
 
                 return (
                   <div
                     key={ordre.id}
-                    className={`flex min-h-[80px] transition-colors hover:bg-[#FCFCFC] ${
-                      oi < visibleOrdrer.length - 1 ? 'border-b border-box-outline' : ''
-                    }`}
+                    className="flex min-h-[80px] bg-white rounded-lg border border-hairline shadow-sm overflow-hidden transition-shadow hover:shadow-md"
                   >
                     {/* Venstre: ordre-info */}
                     <button
@@ -351,7 +345,7 @@ export function VognmandGanttScreen() {
                       return (
                         <div
                           key={di}
-                          style={{ flex: 1, minWidth: cellMin }}
+                          style={{ flex: 1, minWidth: 0 }}
                           className={[
                             'flex flex-col items-center justify-start pt-4 relative',
                             isToday ? 'bg-good-bg/30' : we ? 'bg-soft-gray' : '',
@@ -414,8 +408,6 @@ export function VognmandGanttScreen() {
                 )
               })}
 
-            </div>
-          </div>
         </div>
 
         {/* Forklaring */}
