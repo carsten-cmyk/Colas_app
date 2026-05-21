@@ -35,6 +35,7 @@ interface GanttOrder {
   tonsDelivered: number
   products: GanttProduct[]
   tidsvindue?: 'aften' | 'nat' | 'weekend' // angiver om ordren udføres uden for normal arbejdstid
+  jobnummer: string
 }
 
 // Anchored to prototype date
@@ -44,6 +45,7 @@ const MOCK_ORDERS: GanttOrder[] = [
   {
     id: '1',
     orderNumber: '1212343',
+    jobnummer: '4821',
     projectName: 'Uddannelsescenter Syd, Nakskov',
     state: 'active',
     startDate: '2026-03-14',
@@ -59,6 +61,7 @@ const MOCK_ORDERS: GanttOrder[] = [
   {
     id: '2',
     orderNumber: '1212344',
+    jobnummer: '5102',
     projectName: 'Havnevej Renovering, Roskilde',
     state: 'planned',
     startDate: '2026-03-18',
@@ -73,6 +76,7 @@ const MOCK_ORDERS: GanttOrder[] = [
   {
     id: '3',
     orderNumber: '1212345',
+    jobnummer: '4977',
     projectName: 'Rolighedsvej Asfalt, Rønde',
     state: 'completed',
     startDate: '2026-03-09',
@@ -86,6 +90,7 @@ const MOCK_ORDERS: GanttOrder[] = [
   {
     id: '4',
     orderNumber: '1212346',
+    jobnummer: '5234',
     projectName: 'Strandvej Vedligehold, Helsingør',
     state: 'planned',
     startDate: '2026-03-23',
@@ -159,10 +164,6 @@ function getViewDays(mode: ViewMode): number {
   return 31 // maaned — fast 31 for prototypen
 }
 
-function getCellMinWidth(mode: ViewMode): number {
-  if (mode === 'maaned') return 34
-  return 46
-}
 
 export function GanttScreen() {
   const navigate = useNavigate()
@@ -177,7 +178,6 @@ export function GanttScreen() {
   }
 
   const viewDays = getViewDays(viewMode)
-  const cellMin = getCellMinWidth(viewMode)
 
   // Uge: start på mandag, ellers start på offset
   function getWindowStart(): Date {
@@ -205,11 +205,11 @@ export function GanttScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-soft-aqua flex flex-col">
+    <div className="min-h-screen bg-page flex flex-col">
       <TopBar userInitials="OJ" userName="Ole J." onSettingsPress={() => {}} />
 
       <main className="flex-1 overflow-y-auto" style={{ paddingBottom: 70 }}>
-        <div className="max-w-screen-xl mx-auto px-sm pt-md pb-md">
+        <div className="w-[80%] mx-auto px-sm pt-md pb-md">
 
           {/* Page header */}
           <div className="mb-sm pl-sm flex items-center justify-between flex-wrap gap-sm">
@@ -286,8 +286,8 @@ export function GanttScreen() {
 
           {/* Gantt card */}
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="overflow-x-auto">
-              <div style={{ minWidth: 160 + 90 + viewDays * cellMin }}>
+            <div>
+              <div>
 
                 {/* Date header */}
                 <div className="flex border-b border-box-outline bg-soft-aqua">
@@ -304,7 +304,7 @@ export function GanttScreen() {
                       <div
                         key={i}
                         style={{
-                          flex: 1, minWidth: cellMin,
+                          flex: 1, minWidth: 0,
                           ...(isToday ? { backgroundColor: 'rgba(46, 158, 101, 0.1)' } : {}),
                         }}
                         className={`flex flex-col items-center py-xs relative${weekend && !isToday ? ' bg-surface-2' : ''}`}
@@ -343,11 +343,17 @@ export function GanttScreen() {
                       style={{ width: 160, flexShrink: 0 }}
                       className="px-sm py-xs flex flex-col justify-center gap-xxxs"
                     >
-                      <p className="font-poppins font-semibold text-xs text-deep-teal truncate">
-                        Ordrenr. {order.orderNumber}
+                      <p className="font-poppins font-bold text-xs text-deep-teal leading-tight">
+                        Udførselssted
                       </p>
-                      <p className="font-inter text-xxs text-text-muted leading-snug line-clamp-2">
+                      <p className="font-inter text-xs text-text-primary leading-snug line-clamp-2">
                         {order.projectName}
+                      </p>
+                      <p className="font-inter text-xxs text-text-muted leading-tight">
+                        Jobnummer {order.jobnummer}
+                      </p>
+                      <p className="font-inter text-xxs text-text-muted leading-tight">
+                        Ordrenummer {order.orderNumber}
                       </p>
                     </div>
 
@@ -388,7 +394,7 @@ export function GanttScreen() {
                         <div
                           key={di}
                           style={{
-                            flex: 1, minWidth: cellMin,
+                            flex: 1, minWidth: 0,
                             ...(isToday ? { backgroundColor: 'rgba(46, 158, 101, 0.05)' } : {}),
                           }}
                           className={`flex items-center relative${weekend && !isToday ? ' bg-surface-2' : ''}`}
