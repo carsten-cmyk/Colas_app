@@ -487,7 +487,7 @@ const STATUS_CLASS_V3: Record<OrderStatus, string> = {
  *  Status-piller er rounded-full (matcher toggle-æstetikken i OrdrePlanScreen linje 1236-1256).
  *  Planlæg-knap: bg-deep-teal text-white rounded-full font-poppins font-semibold — direkte toggle-stil.
  */
-function OrderCardBodyV3({ order, samleNr }: { order: MockOrder; samleNr?: string }) {
+function OrderCardBodyV3({ order }: { order: MockOrder }) {
   return (
     <>
       {/* ─── Header-strip ─────────────────────────────────────────────────── */}
@@ -617,11 +617,6 @@ export function DagsoversigtScreen() {
 
   const todayStr = dateToString(TODAY)
   const todayOrders = ordersForDate(selectedDate)
-
-  // Samleordre-id lookup for en given order
-  function getSamleordreId(orderId: string): string | undefined {
-    return samleordrer.find(s => s.orderIds.includes(orderId))?.id
-  }
 
   // Samleordre-nr (S-1, S-2...) baseret på index
   function getSamleordreNr(samleordreId: string): string {
@@ -881,7 +876,7 @@ export function DagsoversigtScreen() {
                             key={order.id}
                             className={idx < childOrders.length - 1 ? 'border-b border-hairline' : ''}
                           >
-                            <OrderCardBodyV3 order={order} samleNr={samleNr} />
+                            <OrderCardBodyV3 order={order} />
                           </div>
                         ))}
 
@@ -910,8 +905,6 @@ export function DagsoversigtScreen() {
               {standaloneOrders.map((order) => {
                 const multiDay = isMultiDay(order)
                 const isChecked = selectedOrderIds.has(order.id)
-                const samleId = getSamleordreId(order.id)
-                const samleNr = samleId ? getSamleordreNr(samleId) : undefined
 
                 return (
                   <div
@@ -942,7 +935,7 @@ export function DagsoversigtScreen() {
 
                       {/* Ordre-indhold via V3 */}
                       <div className="flex-1 min-w-0">
-                        <OrderCardBodyV3 order={order} samleNr={samleNr} />
+                        <OrderCardBodyV3 order={order} />
 
                         {/* Planlæg-knap — toggle-stil: bg-deep-teal text-white rounded-full */}
                         <div className="px-sm pb-sm flex justify-end">
