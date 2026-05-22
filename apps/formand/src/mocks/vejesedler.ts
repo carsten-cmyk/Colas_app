@@ -24,7 +24,7 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
 
   {
     // Ankommet — temperatur registreret, OK (168°C > 140°C min)
-    // MULTILÆS: bilen leverede ABB 11 til 3 ordrer — formand skal fordele tons
+    // MULTILÆS (datafelt bevares): bilen leverede ABB 11 til 3 ordrer — formand skal fordele tons. Ikke vist visuelt som "Multilæs" — indlejret i samleordre-kontekst.
     id: 'v-001',
     ordrenummer: '260423891',
     status: 'ankommet',
@@ -45,7 +45,7 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
   {
     // Ankommet — temperatur registreret, Lav (148°C < 140°C er OK, men 148 > 140 — skift til 132 for Lav-badge)
     // Lav-scenarie: 132°C < 140°C min_temperatur → badge "Lav"
-    // PULJELÆS: bilen leverede SMA 11S + GAB 1 til samme ordre — denne vejeseddel er ét af to produkter
+    // PULJELÆS (visuelt: "Samles på en bil"): bilen leverede SMA 11S + GAB 1 til samme ordre — denne vejeseddel er ét af to produkter
     id: 'v-002',
     ordrenummer: '260423891',
     status: 'ankommet',

@@ -35,6 +35,8 @@ import { useVejesedler } from '@/hooks/useVejesedler'
 import { useDagsoverblik } from '@/hooks/useDagsoverblik'
 import { INITIAL_RECEPTER } from '@/mocks/recepter'
 import { INITIAL_UDLAEGGERE } from '@/mocks/udlaeggere'
+import { formatWeekday, formatLongDate, formatDateRange } from '@/utils/date'
+import type { DagsoverblikRegistrering } from '@/types/order'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -103,8 +105,8 @@ interface KørselDayParams {
   driveMinutes: number
   loadMinutes: number
   deliverMinutes: number
-  intervalMinutes: number
-  firstLoadTime: string
+  intervalMinutes?: number
+  firstLoadTime?: string
   lastLoadTime: string
   pauses: KørselPause[]
 }
@@ -124,8 +126,8 @@ const DEFAULT_KØRSEL_PARAMS: KørselDayParams = {
   driveMinutes:    36,
   loadMinutes:     15,
   deliverMinutes:  10,
-  intervalMinutes: 20,
-  firstLoadTime:   '07:00',
+  intervalMinutes: undefined,
+  firstLoadTime:   undefined,
   lastLoadTime:    '15:00',
   pauses:          [],
 }
@@ -133,20 +135,21 @@ const DEFAULT_KØRSEL_PARAMS: KørselDayParams = {
 // ─── Ekstra-bestilling ──────────────────────────────────────────────────────
 // Drip-bestilling der opstår når formand løbende på dagen bestiller mere asfalt
 // end den oprindelige morgen-tons rakte.
-//   - Puljelæs ON: ekstra deler bil med andre ekstras (samme ordre, samme dag) der også har puljelæs ON
+//   - "Samles på en bil" (puljelaes) ON: ekstra deler bil med andre ekstras (samme ordre, samme dag)
 //     → implicit gruppe; ingen eksplicit parring
-//   - Multilæs ON: ekstra udvider scope til andre ordrer (samme dag); union af produkter i dropdown
-//     → fordeling om aftenen via vejesedler/bilafregning
-// Puljelæs og multilæs er adskilte scopes og kan kombineres.
+//   - "Samles på en bil" (multilaes) ON: ekstra udvider scope til andre ordrer (samme dag);
+//     union af produkter i dropdown → fordeling om aftenen via vejesedler/bilafregning
+// De to scopes er adskilte og kan kombineres. "Multilæs" som visuel kategori fjernet — se fordeling-mekanikken.
 // TODO: Erstat med Supabase når klar — fordeling pr. ordre afgøres om aftenen via vejesedler.
 interface EkstraBestilling {
   id: string
   date: string             // YYYY-MM-DD — samme dag som morgen-bestillingen
   productId: string        // produkt-reference
   tons: number
-  puljelaes: boolean       // del bil med andre puljelæs-ON ekstras (samme ordre+date)
-  multilaes: boolean       // udvid scope til andre ordrer
-  // Når multilaes ON: andre ordrer denne bil også leverer til (skal være samme dag)
+  samlesPaaEnBil: boolean  // deler bil med andre ekstras på samme ordre+dato — label: "Samles på en bil"
+  puljelaes: boolean       // data-flag bevaret for vejeseddel-kompatibilitet — ikke vist i UI
+  multilaes: boolean       // data-flag bevaret for vejeseddel-kompatibilitet — ikke vist i UI (samleordre-konceptet erstatter)
+  // Faste defaults — fjernet som UI-toggle (samleordre-mode håndterer cross-ordre fordeling)
   andreOrdrer: string[]
   sent: boolean
 }
@@ -162,6 +165,8 @@ interface AndenOrdre {
   products: { id: string; recipeCode: string; recipeName: string }[]
 }
 
+// Bevaret til fremtidig brug — andre ordrer på dagen kan genbruges i samleordre-flow
+// @ts-ignore TS6133 — bruges ikke i UI pt., men mock-data bevares til næste iteration
 const ANDRE_ORDRER_FOR_DATO: Record<string, AndenOrdre[]> = {
   '2026-03-17': [
     {
@@ -288,14 +293,14 @@ const INITIAL_COMMENTS: NoteComment[] = [
     id: 'nc1',
     initials: 'OJ',
     name: 'Ole Jensen',
-    timestamp: '14. mar · 08:42',
+    timestamp: '14. marts · 08:42',
     text: 'Området er opmålt og klargjort. Underlag ser fornuftigt ud — mindre ujævnheder ved indkørslen mod nord er udbedret. Koordination med skolens vicevært er på plads, adgang sikret fra kl. 06:00.',
   },
   {
     id: 'nc2',
     initials: 'HT',
     name: 'Henrik Thor',
-    timestamp: '14. mar · 11:15',
+    timestamp: '14. marts · 11:15',
     text: 'Besigtigelse gennemført. Bemærk at det nordøstlige hjørne kræver ekstra komprimering — kunden har påpeget sætninger fra tidligere belægning. Aftalt med Ole at vi tager et ekstra gennemløb med HAMM HD10 i det område inden udlægning af lag 2.',
   },
 ]
@@ -325,6 +330,41 @@ interface SamleordreChild {
     tonsTotal: number
   }[]
   resources: MockResource[]
+  projektleder: string
+  projektlederTlf: string
+  fabrik: string
+  fabrikTlf: string
+  kundeVirksomhed: string
+  kundekontakt: string
+  kundekontaktTlf: string
+  /** Antal biler planlagt for denne ordre */
+  antalBiler: number
+  /** Om vognmand har bekræftet biler for denne ordre */
+  vognmandBekraeftet: boolean
+  /** Antal materiel-stykker til transport for denne ordre */
+  antalMateriel: number
+  /** Om vognmand har bekræftet materiel-transport for denne ordre */
+  materielBekraeftet: boolean
+  /** Om forundersøgelse er foretaget OG tilfredsstillende */
+  forundersoegelseOK: boolean
+  /** Status for forundersøgelse — 'OK' | 'IKKE_OK' | 'MANGLER' */
+  forundersoegelseStatus: 'OK' | 'IKKE_OK' | 'MANGLER'
+  /** Per-child Forundersøgelse-detaljer — vises i Udførsel-mode */
+  // TODO: Erstat med Supabase når klar — hent fra forundersoegelse-tabel pr. ordre
+  forundersoegelseDetails?: {
+    underlaegsType: 'asfalt' | 'beton' | 'grus' | null
+    tilfredsstillende: boolean | null
+    besigtigelseComment: string
+    photoCount: number
+  }
+  /** Per-child Udlægning-detaljer — vises i Udførsel-mode */
+  // TODO: Erstat med Supabase når klar — hent fra udlaegning-tabel pr. ordre
+  udlaegningDetails?: {
+    status: 'ikke-startet' | 'i-gang' | 'færdig'
+    startTid?: string
+    sluttId?: string
+    noter: string
+  }
 }
 
 interface SamleordreContext {
@@ -351,6 +391,34 @@ const MOCK_SAMLEORDRE: SamleordreContext = {
         { id: 'r2', plantNumber: '3-0112', description: 'VÖGELE 1900-3I',    transportTag: 'blokvogn',    status: 'ikke-planlagt' },
         { id: 'r3', plantNumber: '7-0078', description: 'HAMM DV70VV',       transportTag: 'kran-baand',  status: 'ikke-planlagt' },
       ],
+      // TODO: Erstat med Supabase når klar
+      projektleder: 'Henrik Thor',
+      projektlederTlf: '40 50 60 70',
+      fabrik: 'Køge Fabrik',
+      fabrikTlf: '56 78 12 34',
+      kundeVirksomhed: 'Uddannelsescenter Syd',
+      kundekontakt: 'Jens Christensen',
+      kundekontaktTlf: '21 34 56 78',
+      // TODO: Erstat med Supabase når klar — per-child dagsoverblik
+      antalBiler: 4,
+      vognmandBekraeftet: true,
+      antalMateriel: 3,
+      materielBekraeftet: true,
+      forundersoegelseOK: true,
+      forundersoegelseStatus: 'OK',
+      // TODO: Erstat med Supabase når klar — per-child forundersøgelse
+      forundersoegelseDetails: {
+        underlaegsType: 'asfalt',
+        tilfredsstillende: true,
+        besigtigelseComment: 'Underlag er fast og jævnt',
+        photoCount: 3,
+      },
+      // TODO: Erstat med Supabase når klar — per-child udlægning
+      udlaegningDetails: {
+        status: 'i-gang',
+        startTid: '07:15',
+        noter: 'Starter med GAB I',
+      },
     },
     {
       // Anden ordre i samleordren
@@ -366,25 +434,52 @@ const MOCK_SAMLEORDRE: SamleordreContext = {
         { id: 'sp3', recipeCode: 'ABB11',  recipeName: 'ABB 11',  tonsTotal: 100 },
       ],
       resources: [],
+      // TODO: Erstat med Supabase når klar
+      projektleder: 'Mette Lund',
+      projektlederTlf: '31 67 92 14',
+      fabrik: 'Køge Vest Fabrik',
+      fabrikTlf: '44 32 11 55',
+      kundeVirksomhed: 'Greve Erhvervspark',
+      kundekontakt: 'Lars Madsen',
+      kundekontaktTlf: '28 91 44 02',
+      // TODO: Erstat med Supabase når klar — per-child dagsoverblik
+      antalBiler: 2,
+      vognmandBekraeftet: false,
+      antalMateriel: 1,
+      materielBekraeftet: false,
+      forundersoegelseOK: false,
+      forundersoegelseStatus: 'MANGLER',
+      // TODO: Erstat med Supabase når klar — per-child forundersøgelse
+      forundersoegelseDetails: {
+        underlaegsType: null,
+        tilfredsstillende: null,
+        besigtigelseComment: 'Skal besigtiges efter morgenens regn',
+        photoCount: 0,
+      },
+      // TODO: Erstat med Supabase når klar — per-child udlægning
+      udlaegningDetails: {
+        status: 'ikke-startet',
+        noter: '',
+      },
     },
   ],
 }
 
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatWeekday(dateStr: string) {
-  return ['Søndag', 'Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag'][new Date(dateStr + 'T00:00:00').getDay()]
-}
-
-function formatShortDate(dateStr: string) {
-  const d = new Date(dateStr + 'T00:00:00')
-  return `${d.getDate()}/${d.getMonth() + 1}`
-}
+// Date-format helpers (formatLongDate, formatDateRange, formatWeekday) er
+// centraliseret i `@/utils/date` — SINGLE SOURCE OF TRUTH for alle dato-visninger.
+// Når dato-formatet skal ændres globalt — RET DER. Ingen inline-formatting i UI.
 
 const DA_MONTHS = ['januar', 'februar', 'marts', 'april', 'maj', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'december']
-function formatLongDate(dateStr: string) {
-  const d = new Date(dateStr + 'T00:00:00')
-  return `${d.getDate()}. ${DA_MONTHS[d.getMonth()]} ${d.getFullYear()}`
+
+// Timestamp-formatter — "DD. måned · HH:MM" — til godkendt/kommentar/bekræftet-stempler.
+// Lokal helper fordi den blander dato + tid (ikke en pure date-display).
+function formatTimestamp(d: Date | string): string {
+  const dt = typeof d === 'string' ? new Date(d) : d
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${dt.getDate()}. ${DA_MONTHS[dt.getMonth()]} · ${pad(dt.getHours())}:${pad(dt.getMinutes())}`
 }
 
 // Frozen "today" for prototype — bruger mock-dato svarende til produkternes range
@@ -405,7 +500,7 @@ function addDays(base: Date, n: number): Date {
 
 // ─── Types (mode) ─────────────────────────────────────────────────────────────
 
-type OrderMode = 'planlaegning' | 'udfoersel'
+type OrderMode = 'planlaegning' | 'udfoersel' | 'afregning'
 
 type UnderlagType = 'asfalt' | 'grus' | 'beton' | 'fraeset' | 'andet'
 type UnderlaegsAarsag = 'revner' | 'sporkoert' | 'krakeleret' | 'ujaevn' | 'saetninger' | 'snavs' | 'bloed' | 'graes-ukrudt'
@@ -475,7 +570,7 @@ interface ConfirmedTruck {
 interface VognmandBekraeftelse {
   dayId: string
   biler: ConfirmedTruck[]
-  bekraeftetTidspunkt: string // "DD. mmm · HH:MM"
+  bekraeftetTidspunkt: string // "DD. måned · HH:MM" — via formatTimestamp()
 }
 
 interface ConfirmedMaterielItem {
@@ -508,7 +603,7 @@ interface VognmandMaterielBekraeftelse {
 // Se .claude/docs/MATERIEL_FLOW.md for fuld spec.
 // TODO: Erstat med Supabase når klar — afregning_type kommer fra vognmand.aftaler.chauffoerer[], timer fra chauffeur-app, tons fra plan_vejebilag-tabel
 const INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE: VognmandMaterielBekraeftelse = {
-  bekraeftetTidspunkt: '15. mar · 17:05',
+  bekraeftetTidspunkt: '15. marts · 17:05',
   items: [
     {
       resourceId: 'r1',
@@ -562,7 +657,7 @@ const INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE: VognmandMaterielBekraeftelse = {
 const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
   'd2-1': {
     dayId: 'd2-1',
-    bekraeftetTidspunkt: '15. mar · 16:42',
+    bekraeftetTidspunkt: '15. marts · 16:42',
     biler: [
       {
         regnr: 'AB 12 345',
@@ -599,10 +694,10 @@ const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
         chauffoer: 'Søren Karlsen',
         tlf: '26 77 88 99',
         biltype: '6 Aks',
-        // akkord-afregning — tons arves fra vejesedler (49.2t multilæs + 12.5t puljelæs = 61.7t)
+        // akkord-afregning — tons arves fra vejesedler (49.2t multilæs)
         afregning: {
           afregning_type: 'akkord',
-          tons_koert: 61.7,
+          tons_koert: 49.2,
           ventetid: 0,
           godkendt_af_formand: false,
         },
@@ -623,46 +718,6 @@ const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
               { ordre_id: 'ord-1212350', ordre_label: '1212350 · Ringvej Syd 44', tons: 9.2, is_anchor: false },
             ],
           },
-          {
-            id: 'vsb-3',
-            product_code: 'GAB 1',
-            product_name: 'GAB 0/16 bærelag',
-            netto_tons: 12.5,
-            multilaes_flag: false,
-            puljelaes_flag: true,
-            aflæsset_efter_1_5t: false,
-            // TODO: Erstat med Supabase når klar — laes_id fra plan_vejebilag-tabel
-            laes_id: 'laes-pulje-1',
-            pre_fordeling: [
-              { ordre_id: 'ord-1212343', ordre_label: '1212343 · Søvej 6D', tons: 12.5, is_anchor: true },
-            ],
-          },
-          {
-            id: 'vsb-4',
-            product_code: 'GAB 0/8',
-            product_name: 'GAB 0/8 slidlag',
-            netto_tons: 8.4,
-            multilaes_flag: false,
-            puljelaes_flag: true,
-            aflæsset_efter_1_5t: false,
-            laes_id: 'laes-pulje-1',
-            pre_fordeling: [
-              { ordre_id: 'ord-1212343', ordre_label: '1212343 · Søvej 6D', tons: 8.4, is_anchor: true },
-            ],
-          },
-          {
-            id: 'vsb-5',
-            product_code: 'SMA 8S',
-            product_name: 'SMA 8S toplag',
-            netto_tons: 6.2,
-            multilaes_flag: false,
-            puljelaes_flag: true,
-            aflæsset_efter_1_5t: false,
-            laes_id: 'laes-pulje-1',
-            pre_fordeling: [
-              { ordre_id: 'ord-1212343', ordre_label: '1212343 · Søvej 6D', tons: 6.2, is_anchor: true },
-            ],
-          },
         ],
       },
       {
@@ -677,7 +732,7 @@ const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
           ventetid: 0,
           pause: 0,
           godkendt_af_formand: true,
-          godkendt_tidspunkt: '16. mar · 09:14',
+          godkendt_tidspunkt: '16. marts · 09:14',
         },
       },
       // Akkord-bil med 1,5-times-reglen triggered
@@ -759,7 +814,11 @@ export function OrdrePlanScreen() {
   // Samleordre-mode: aktiveres når samleordreId er sat i URL eller navigation.state
   // TODO: Erstat med Supabase når klar — hent samleordre fra samleordrer-tabel
   const isSamleordreMode = !!(urlSamleordreId ?? navState?.samleordreId)
-  const samleordreCtx = isSamleordreMode ? MOCK_SAMLEORDRE : null
+  // Samleordre-context er state så formanden kan tilføje ekstra ordrer på dagen
+  // TODO: Erstat med Supabase når klar — mutationer skal persisteres til samleordre_children
+  const [samleordreCtx, setSamleordreCtx] = useState<SamleordreContext | null>(
+    isSamleordreMode ? MOCK_SAMLEORDRE : null
+  )
   const [activeTab, setActiveTab] = useState<TabName>('dagens-opgaver')
   // Samleordre Ordredetaljer tab: hvilken child-ordre vises i spec-grid
   const [samleordreTabOrderNr, setSamleordreTabOrderNr] = useState<string>(() =>
@@ -767,6 +826,8 @@ export function OrdrePlanScreen() {
   )
   const [activeMode, setActiveMode] = useState<OrderMode>('planlaegning')
   const [activeProductId, setActiveProductId] = useState('p2')
+  // "Skjul detaljer"-toggle for Ordredetaljer-spec-grid i Planlægning-mode
+  const [planlaegningOrdredetaljerExpanded, setPlanlaegningOrdredetaljerExpanded] = useState(true)
   const [products, setProducts] = useState<MockProduct[]>(INITIAL_PRODUCTS)
   // Valgt dag i Bestilling-rækken (driver produkt-bokse + planlægning for ordren)
   // Initialiseres fra location.state eller TODAY.
@@ -776,10 +837,19 @@ export function OrdrePlanScreen() {
   // Ekstra-bestillinger pr. dato
   // TODO: Erstat med Supabase når klar
   const [ekstraBestillinger, setEkstraBestillinger] = useState<EkstraBestilling[]>([])
+  // "Samles på en bil" per produkt+dag: key = `${productId}__${dayId}`
+  // TODO: Erstat med Supabase når klar
+  const [productSamlesFlags, setProductSamlesFlags] = useState<Record<string, boolean>>({})
+
+  function setProductSamles(productId: string, dayId: string, value: boolean) {
+    setProductSamlesFlags(prev => ({ ...prev, [`${productId}__${dayId}`]: value }))
+  }
   // Bekræftelses-modal før afsendelse til fabrik
   const [showConfirmSend, setShowConfirmSend] = useState(false)
   // TODO: Erstat med Supabase når klar — kommentar gemmes på ordren ved afsendelse
   const [kommentar, setKommentar] = useState('')
+  // TODO: Erstat med Supabase når klar — kommentarer gemmes på ordren/dagen
+  const [sentKommentarer, setSentKommentarer] = useState<Record<string, string>>({})
   const [resources, setResources] = useState<MockResource[]>(INITIAL_RESOURCES)
   const [fjernModalId, setFjernModalId] = useState<string | null>(null)
   const [cancellingDayId, setCancellingDayId] = useState<string | null>(null)
@@ -814,11 +884,28 @@ export function OrdrePlanScreen() {
     ],
   })
   const [kørselParams, setKørselParams] = useState<Record<string, KørselDayParams>>({})
-  const [factoryKm, setFactoryKm] = useState(36) // TODO: initialiseres fra ordre.factory.km
+  // TODO: Erstat med Supabase når klar — km-værdi gemmes på ordren, default fra Google API
+  const GOOGLE_KM = 36 // Google-beregnet køreafstand — bruges som hint hvis formand redigerer
+  const [factoryKm, setFactoryKm] = useState(GOOGLE_KM)
   const [kørselKommentar, setKørselKommentar] = useState<Record<string, string>>({})
   const [materielKommentar, setMaterielKommentar] = useState<Record<string, string>>({})
   const [vognmandBekraeftelser] = useState<Record<string, VognmandBekraeftelse>>(INITIAL_VOGNMAND_BEKRAEFTELSER)
   const [vognmandMaterielBekraeftelse] = useState<VognmandMaterielBekraeftelse>(INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE)
+
+  // ── Udlægning state (løftet til root så AfregningContent + UdfoerselContent deler det) ──
+  // TODO: Erstat med Supabase når klar — hent fra plan_vejebilag + dagplan
+  const DEMO_TONS_I_DAG = 251        // t   — TODO: hent fra dagplan
+  const DEMO_AREAL_I_DAG = 1339      // m² — TODO: beregn fra dagplan-tons × 1000/kg_per_m2
+  const DEMO_TYKKELSE = 45           // mm  — TODO: hent fra ordre.planlaegning.tykkelse
+  const DEMO_ORDRE_ID_UDLAEGNING = '260423891'
+  const DEMO_DATO_UDLAEGNING = new Date().toISOString().slice(0, 10)
+  const { recept } = useRecept('82101H') // SMA 11S — TODO: Erstat med Supabase når klar
+  const { tonsAnkommet, forventetUdlagtM2, faktiskRegistrering, gemFaktisk } = useDagsoverblik(
+    DEMO_ORDRE_ID_UDLAEGNING,
+    DEMO_DATO_UDLAEGNING,
+    recept
+  )
+  const [visUdlaegningInput, setVisUdlaegningInput] = useState(false)
 
   const activeProduct = products.find(p => p.id === activeProductId)!
   const days = activeProduct.days
@@ -901,16 +988,17 @@ export function OrdrePlanScreen() {
   }
 
   function addEkstraBestilling() {
-    const defaultProductId = productsForSelectedDate[0]?.product.id ?? activeProductId
+    // Tom default så "Vælg produkt"-placeholder vises i dropdown'en
     setEkstraBestillinger(prev => [
       ...prev,
       {
         id: `eb-${Date.now()}`,
         date: selectedPlanDate,
-        productId: defaultProductId,
+        productId: '',
         tons: 0,
-        puljelaes: false,
-        multilaes: false,
+        samlesPaaEnBil: false,
+        puljelaes: false,   // data-flag — ikke vist i UI
+        multilaes: false,   // data-flag — ikke vist i UI
         andreOrdrer: [],
         sent: false,
       },
@@ -925,10 +1013,31 @@ export function OrdrePlanScreen() {
     setEkstraBestillinger(prev => prev.filter(eb => eb.id !== id))
   }
 
+  // Samleordrens dato — bruges af 'Tilføj ordre'-flow til at kalde Dagsoversigt
+  // med korrekt dato-filter. TODO: hent fra samleordre.date i Supabase.
+  const samleordreDate = '2026-03-17'
+
+  // Når Dagsoversigt sender brugeren tilbage med location.state.addedChildren,
+  // betyder det at en eller flere ordrer skal tilføjes til samleordren.
+  // Vi læser ved mount og opdaterer samleordreCtx-state.
+  // TODO: Erstat med Supabase når klar — server-side mutation på samleordre_children
+  useEffect(() => {
+    const state = location.state as { addedChildren?: SamleordreChild[] } | null
+    const addedChildren = state?.addedChildren
+    if (!addedChildren || addedChildren.length === 0 || !samleordreCtx) return
+    const eksisterendeOrdrenumre = new Set(samleordreCtx.children.map(c => c.orderNumber))
+    const newChildren = addedChildren.filter(c => !eksisterendeOrdrenumre.has(c.orderNumber))
+    if (newChildren.length === 0) return
+    setSamleordreCtx({ ...samleordreCtx, children: [...samleordreCtx.children, ...newChildren] })
+    // Ryd location.state så refresh ikke gentager tilføjelsen
+    navigate(location.pathname + location.search, { replace: true, state: null })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Send alle ikke-sendte morgen-bestillinger for valgt dag samtidigt
   function sendAlleForSelectedDate() {
     const dayIds = productsForSelectedDate
-      .filter(({ day }) => day.morgenTons != null && !sentDayIds.has(day.id))
+      .filter(({ day }) => !sentDayIds.has(day.id))
       .map(({ day }) => day.id)
     setSentDayIds(prev => new Set([...prev, ...dayIds]))
     // Send også ikke-sendte ekstra-bestillinger for dagen
@@ -951,10 +1060,12 @@ export function OrdrePlanScreen() {
 
   // Genbrugbar Ordredetaljer-visning: samleordre split-view med tabs ELLER fuld bredde Spec-grid.
   // Bruges både på Planlægning-mode (direkte synlig) og Udførsel-mode (i collapsed-expander).
-  const ordredetaljerCard = (
+  // hideTabs=true skjuler tab-rækken — bruges i Udførsel-mode hvor tabs er på selve Ordredetaljer-rækken.
+  const makeOrdredetaljerCard = (hideTabs?: boolean) => (
     isSamleordreMode && samleordreCtx ? (
       <div className="mb-lg">
-        {/* Tabs ovenpå spec-grid — kun fyldt op til indholdet, ikke fuld bredde */}
+        {/* Tabs ovenpå spec-grid — skjules i Udførsel-mode (tabs er på Ordredetaljer-rækken) */}
+        {!hideTabs && (
         <div className="inline-flex gap-xxxs">
           {samleordreCtx.children.map(child => {
             const isActive = child.orderNumber === samleordreTabOrderNr
@@ -973,7 +1084,7 @@ export function OrdrePlanScreen() {
                 {child.isAnchor && (
                   <span
                     className="w-[6px] h-[6px] rounded-full bg-yellow flex-shrink-0"
-                    aria-label="Anchor-ordre"
+                    aria-label="Primær ordre"
                   />
                 )}
                 <span>{child.stedLabel}</span>
@@ -981,59 +1092,62 @@ export function OrdrePlanScreen() {
             )
           })}
         </div>
-        <div className="bg-white border border-hairline rounded-tr-xl rounded-b-xl overflow-hidden">
+        )}
+        {/* Hjørner: rounded-tr-xl kun når tabs vises (de danner en "browser-tab" kant); fuldt rounded ved hideTabs */}
+        <div className={`bg-white border border-hairline overflow-hidden ${hideTabs ? 'rounded-xl' : 'rounded-tr-xl rounded-b-xl'}`}>
           {(() => {
             const tabChild = samleordreCtx.children.find(c => c.orderNumber === samleordreTabOrderNr)
             if (!tabChild) return null
             const tabProduct = tabChild.isAnchor ? activeProduct : null
             return (
               <div className="flex-1 min-w-0">
-                <div className="grid grid-cols-4 divide-x divide-hairline bg-white">
-                  <div className="p-sm">
-                    <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Mængde</span>
-                    <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
-                      {tabProduct ? tabProduct.tonsTotal : tabChild.products.reduce((s, p) => s + p.tonsTotal, 0)}{' '}
-                      <small className="font-inter text-xs text-text-muted">tons</small>
+                <div className="grid grid-cols-5 auto-rows-fr divide-x divide-hairline bg-white items-stretch">
+                  {/* TODO: Erstat med Supabase når klar — child.start_date/end_date pr. ordre */}
+                  <div className="p-sm flex flex-col h-full min-h-[96px]">
+                    <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Udføres i perioden</span>
+                    <span className="font-poppins font-semibold text-md text-text-primary tabular-nums mt-auto">
+                      {tabProduct
+                        ? (tabProduct.startDate && tabProduct.endDate ? formatDateRange(tabProduct.startDate, tabProduct.endDate) : '–')
+                        : (orderStartDate && orderEndDate ? formatDateRange(orderStartDate, orderEndDate) : '–')}
                     </span>
                   </div>
-                  <div className="p-sm">
-                    <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Produkter</span>
+                  <div className="p-sm flex flex-col h-full min-h-[96px]">
+                    <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Mængde tons</span>
+                    <span className="font-poppins font-semibold text-md text-text-primary tabular-nums mt-auto">
+                      {tabProduct ? tabProduct.tonsTotal : tabChild.products.reduce((s, p) => s + p.tonsTotal, 0)}
+                    </span>
+                  </div>
+                  <div className="p-sm flex flex-col h-full min-h-[96px]">
+                    <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Produkt</span>
+                    <div className="mt-auto flex flex-col gap-xxxs">
                     {tabChild.products.map(p => (
                       <div key={p.id}>
-                        <span className="font-poppins font-semibold text-sm text-text-primary tabular-nums block leading-tight">
-                          {p.recipeCode}
-                        </span>
-                        <span className="font-inter text-xxs text-text-muted">
-                          {p.recipeName} · {p.tonsTotal} t
+                        <span className="font-poppins font-semibold text-md text-text-primary block leading-tight">
+                          {p.recipeName}
                         </span>
                       </div>
                     ))}
+                    </div>
                   </div>
-                  <div className="p-sm">
-                    <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Udførselssted</span>
-                    <span className="font-inter text-sm text-text-primary leading-snug block">
-                      {tabChild.udfoerelseSted}
+                  <div className="p-sm flex flex-col h-full min-h-[96px]">
+                    <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Tykkelse</span>
+                    <span className="font-poppins font-semibold text-md text-text-primary tabular-nums mt-auto">
+                      {tabProduct?.thicknessMm != null ? `${tabProduct.thicknessMm} mm` : '–'}
                     </span>
-                    {tabChild.isAnchor && (
-                      <span className="inline-flex items-center gap-xxxs mt-xxxs">
-                        <span className="w-[6px] h-[6px] rounded-full bg-yellow flex-shrink-0" />
-                        <span className="font-inter text-xxs text-text-muted">Anchor</span>
-                      </span>
-                    )}
                   </div>
-                  <div className="p-sm">
+                  <div className="p-sm flex flex-col h-full min-h-[96px]">
                     <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Fabrik</span>
                     {tabProduct ? (
-                      <>
-                        <span className="font-poppins font-semibold text-sm text-text-primary leading-tight block">
-                          {tabProduct.factory.name}
-                        </span>
+                      <div className="mt-auto flex flex-col gap-xxxs">
                         <span className="font-inter text-xs text-text-muted">
                           {tabProduct.factory.driveTimeMinutes} min til plads
                         </span>
-                      </>
+                        <span className="font-poppins font-semibold text-sm text-text-primary leading-tight block">
+                          {tabProduct.factory.name}
+                        </span>
+                      </div>
                     ) : (
-                      <span className="font-inter text-xs text-text-muted">–</span>
+                      <span className="font-inter text-xs text-text-muted mt-auto">–</span>
                     )}
                   </div>
                 </div>
@@ -1072,36 +1186,46 @@ export function OrdrePlanScreen() {
       </div>
     ) : (
       <div className="bg-white rounded-xl border border-hairline overflow-hidden mb-lg">
-        <div className="grid grid-cols-4 divide-x divide-hairline bg-white">
-          <div className="p-sm">
-            <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Mængde</span>
-            <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
-              {activeProduct.tonsTotal} <small className="font-inter text-xs text-text-muted">tons</small>
+        <div className="grid grid-cols-5 auto-rows-fr divide-x divide-hairline bg-white items-stretch">
+          {/* TODO: Erstat med Supabase når klar — child.start_date/end_date pr. ordre */}
+          <div className="p-sm flex flex-col h-full min-h-[96px]">
+            <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Udføres i perioden</span>
+            <span className="font-poppins font-semibold text-md text-text-primary tabular-nums mt-auto">
+              {activeProduct.startDate && activeProduct.endDate
+                ? formatDateRange(activeProduct.startDate, activeProduct.endDate)
+                : (orderStartDate && orderEndDate ? formatDateRange(orderStartDate, orderEndDate) : '–')}
             </span>
           </div>
-          <div className="p-sm">
+          <div className="p-sm flex flex-col h-full min-h-[96px]">
+            <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Mængde tons</span>
+            <span className="font-poppins font-semibold text-md text-text-primary tabular-nums mt-auto">
+              {activeProduct.tonsTotal}
+            </span>
+          </div>
+          <div className="p-sm flex flex-col h-full min-h-[96px]">
             <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Produkt</span>
-            <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums block leading-tight">
-              {activeProduct.recipeCode}
-            </span>
-            <span className="font-inter text-xs text-text-muted">
-              {activeProduct.recipeName} · {activeProduct.thicknessMm} mm
+            <div className="mt-auto flex flex-col gap-xxxs">
+              <span className="font-poppins font-semibold text-md text-text-primary block leading-tight">
+                {activeProduct.recipeName}
+              </span>
+            </div>
+          </div>
+          <div className="p-sm flex flex-col h-full min-h-[96px]">
+            <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Tykkelse</span>
+            <span className="font-poppins font-semibold text-md text-text-primary tabular-nums mt-auto">
+              {activeProduct.thicknessMm != null ? `${activeProduct.thicknessMm} mm` : '–'}
             </span>
           </div>
-          <div className="p-sm">
-            <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Areal</span>
-            <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
-              {activeProduct.m2.toLocaleString('da-DK')}<small className="font-inter text-xs text-text-muted ml-xxxs">m²</small>
-            </span>
-          </div>
-          <div className="p-sm">
+          <div className="p-sm flex flex-col h-full min-h-[96px]">
             <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Fabrik</span>
-            <span className="font-poppins font-semibold text-sm text-text-primary leading-tight block">
-              {activeProduct.factory.name}
-            </span>
-            <span className="font-inter text-xs text-text-muted">
-              {activeProduct.factory.driveTimeMinutes} min til plads
-            </span>
+            <div className="mt-auto flex flex-col gap-xxxs">
+              <span className="font-inter text-xs text-text-muted">
+                {activeProduct.factory.driveTimeMinutes} min til plads
+              </span>
+              <span className="font-poppins font-semibold text-sm text-text-primary leading-tight block">
+                {activeProduct.factory.name}
+              </span>
+            </div>
           </div>
         </div>
         <div className="border-t border-hairline bg-white grid grid-cols-2 divide-x divide-hairline">
@@ -1177,6 +1301,18 @@ export function OrdrePlanScreen() {
                     </div>
                   ))}
                 </div>
+                {/* Tilføj-ordre-knap: sender brugeren til Dagsoversigt i 'tilføj-mode'
+                    hvor det eksisterende checkbox-flow genbruges. Dagsoversigt navigerer
+                    tilbage med ?addOrderNumbers=... når brugeren bekræfter via FAB. */}
+                <button
+                  type="button"
+                  onClick={() => navigate(`/prototyper/dagsoversigt?date=${encodeURIComponent(samleordreDate)}&addToSamleordreId=${samleordreCtx!.id}`)}
+                  className="mt-sm inline-flex items-center gap-xxxs px-sm py-xs font-inter text-xs font-medium text-dark-teal bg-white border border-dashed border-hairline-2 rounded-lg hover:text-deep-teal hover:bg-soft-aqua hover:border-deep-teal/40 transition-colors w-fit"
+                  aria-label="Tilføj ordre til samleordre"
+                >
+                  <Plus size={14} />
+                  Tilføj ordre
+                </button>
               </>
             ) : (
               <>
@@ -1197,34 +1333,48 @@ export function OrdrePlanScreen() {
             )}
           </div>
 
-          {/* Kontakter */}
-          <div className="flex flex-col border-t border-hairline pt-xs">
-            <div className="flex flex-col gap-xxxs px-xs pb-xs">
-              <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Projektleder</span>
-              <p className="font-inter text-sm font-semibold text-text-primary leading-tight">Henrik Thor</p>
-              <a href="tel:+4540506070" className="font-inter text-sm text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
-                <Phone size={13} />
-                40 50 60 70
-              </a>
-            </div>
-            <div className="flex flex-col gap-xxxs px-xs py-xs border-t border-hairline">
-              <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Fabrik</span>
-              <p className="font-inter text-sm font-semibold text-text-primary leading-tight">Køge Fabrik</p>
-              <a href="tel:+4556781234" className="font-inter text-sm text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
-                <Phone size={13} />
-                56 78 12 34
-              </a>
-            </div>
-            <div className="flex flex-col gap-xxxs px-xs pt-xs border-t border-hairline">
-              <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Kundekontakt</span>
-              <p className="font-inter text-xxs text-text-muted leading-tight mb-xxxs">Uddannelsescenter Syd</p>
-              <p className="font-inter text-sm font-semibold text-text-primary leading-tight">Jens Christensen</p>
-              <a href="tel:+4521345678" className="font-inter text-sm text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
-                <Phone size={13} />
-                21 34 56 78
-              </a>
-            </div>
-          </div>
+          {/* Kontakter — skifter med aktiv samleordre-tab når isSamleordreMode */}
+          {(() => {
+            const activeChild = isSamleordreMode && samleordreCtx
+              ? samleordreCtx.children.find(c => c.orderNumber === samleordreTabOrderNr)
+              : null
+            const projektleder     = activeChild ? activeChild.projektleder     : 'Henrik Thor'
+            const projektlederTlf  = activeChild ? activeChild.projektlederTlf  : '40 50 60 70'
+            const fabrik           = activeChild ? activeChild.fabrik           : 'Køge Fabrik'
+            const fabrikTlf        = activeChild ? activeChild.fabrikTlf        : '56 78 12 34'
+            const kundeVirksomhed  = activeChild ? activeChild.kundeVirksomhed  : 'Uddannelsescenter Syd'
+            const kundekontakt     = activeChild ? activeChild.kundekontakt     : 'Jens Christensen'
+            const kundekontaktTlf  = activeChild ? activeChild.kundekontaktTlf  : '21 34 56 78'
+            return (
+              <div className="flex flex-col border-t border-hairline pt-xs">
+                <div className="flex flex-col gap-xxxs px-xs pb-xs">
+                  <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Projektleder</span>
+                  <p className="font-inter text-sm font-semibold text-text-primary leading-tight">{projektleder}</p>
+                  <a href={`tel:+45${projektlederTlf.replace(/\s/g, '')}`} className="font-inter text-sm text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
+                    <Phone size={13} />
+                    {projektlederTlf}
+                  </a>
+                </div>
+                <div className="flex flex-col gap-xxxs px-xs py-xs border-t border-hairline">
+                  <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Fabrik</span>
+                  <p className="font-inter text-sm font-semibold text-text-primary leading-tight">{fabrik}</p>
+                  <a href={`tel:+45${fabrikTlf.replace(/\s/g, '')}`} className="font-inter text-sm text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
+                    <Phone size={13} />
+                    {fabrikTlf}
+                  </a>
+                </div>
+                <div className="flex flex-col gap-xxxs px-xs pt-xs border-t border-hairline">
+                  <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Kundekontakt</span>
+                  <p className="font-inter text-xxs text-text-muted leading-tight mb-xxxs">{kundeVirksomhed}</p>
+                  <p className="font-inter text-sm font-semibold text-text-primary leading-tight">{kundekontakt}</p>
+                  <a href={`tel:+45${kundekontaktTlf.replace(/\s/g, '')}`} className="font-inter text-sm text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors">
+                    <Phone size={13} />
+                    {kundekontaktTlf}
+                  </a>
+                </div>
+              </div>
+            )
+          })()}
 
         </aside>
 
@@ -1234,9 +1384,9 @@ export function OrdrePlanScreen() {
           {/* ── Mode-toggle + tilbage-link på samme række ──────────────────── */}
           <div className="flex items-center justify-between flex-wrap gap-sm mb-md">
             <div className="inline-flex bg-white border border-hairline rounded-full p-xxxs gap-xxxs shadow-sm">
-              {([ 'planlaegning', 'udfoersel' ] as OrderMode[]).map(mode => {
+              {([ 'planlaegning', 'udfoersel', 'afregning' ] as OrderMode[]).map(mode => {
                 const isActive = mode === activeMode
-                const label = mode === 'planlaegning' ? 'Planlægning' : 'Udførsel'
+                const label = mode === 'planlaegning' ? 'Planlægning' : mode === 'udfoersel' ? 'Udførsel' : 'Afregning'
                 return (
                   <button
                     key={mode}
@@ -1269,14 +1419,25 @@ export function OrdrePlanScreen() {
           {/* ── Sektion: Udlægning ───────────────────────────────── */}
           <section>
 
-            {/* ── Header-row: kun titel (tilbage-link er flyttet op til toggle-rækken) ──────────────── */}
-            <div className="mb-md">
+            {/* ── Header-row: titel + "Skjul detaljer"-toggle ────────────────
+                Knappen sidder TÆT på h2'en (ikke ude i højre side via justify-between). */}
+            <div className="flex items-center gap-sm mb-md">
               <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight">Ordredetaljer</h2>
+              <button
+                type="button"
+                onClick={() => setPlanlaegningOrdredetaljerExpanded(prev => !prev)}
+                className="inline-flex items-center gap-xxxs px-sm py-xs font-inter text-xs font-medium text-dark-teal hover:text-deep-teal hover:bg-soft-aqua rounded-lg transition-colors"
+                aria-label={planlaegningOrdredetaljerExpanded ? 'Skjul ordredetaljer' : 'Vis ordredetaljer'}
+              >
+                {planlaegningOrdredetaljerExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                {planlaegningOrdredetaljerExpanded ? 'Skjul detaljer' : 'Vis detaljer'}
+              </button>
             </div>
 
-            {/* Spec-grid — genbrug af ordredetaljerCard (samme visning bruges i Udførsel-mode expander) */}
-            {ordredetaljerCard}
+            {/* Spec-grid — med tabs synlige (hideTabs=false er default i Planlægning-mode) */}
+            {planlaegningOrdredetaljerExpanded && makeOrdredetaljerCard()}
 
+            <hr className="my-lg border-t border-hairline" />
 
             {/* ── Bestillings-række for valgt dag ──────────────────────── */}
             {/* Produkter (én boks pr. produkt) + ekstra-bestillinger + "+ Ekstra"-knap + "Send alle" */}
@@ -1285,8 +1446,8 @@ export function OrdrePlanScreen() {
             <div className="flex flex-col gap-sm">
               {/* Overskrift + tydelige dato-piller i samme kontekst.
                   Pillen er den primære dato-indikator nu (datoen er fjernet fra overskriften). */}
-              <div className="flex items-center gap-sm flex-wrap">
-                <h3 className="font-poppins font-semibold text-md text-text-primary">Bestilling</h3>
+              <div>
+                <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight mb-sm">Asfaltbestilling</h2>
                 {planDays.length > 0 && (
                   <div className="flex items-center gap-xs flex-wrap">
                     {planDays
@@ -1332,30 +1493,27 @@ export function OrdrePlanScreen() {
               <div className="flex gap-xs flex-wrap items-stretch">
                 {/* Produkt-bokse for valgt dag — status-pill under (ingen send-knap, kun statusfelt) */}
                 {(() => {
-                  // Samleordre: beregn ordre-tags og tonsHint per recipeCode
+                  // Samleordre: beregn ordre-tags per recipeCode
                   // Produkter samles per recipeCode — vises KUN ÉN gang selv om begge ordrer har det
                   // TODO: Erstat med Supabase når klar
                   const samleordreTags: Record<string, string[]> = {}
-                  const samleordreTonsHint: Record<string, string> = {}
                   if (isSamleordreMode && samleordreCtx) {
                     // Byg map: recipeCode → [stedLabel] for alle ordrer der har produktet
-                    const rcToChildren: Record<string, { stedLabel: string; tonsTotal: number }[]> = {}
+                    const rcToChildren: Record<string, { stedLabel: string }[]> = {}
                     for (const child of samleordreCtx.children) {
                       for (const cp of child.products) {
                         if (!rcToChildren[cp.recipeCode]) rcToChildren[cp.recipeCode] = []
-                        rcToChildren[cp.recipeCode].push({ stedLabel: child.stedLabel, tonsTotal: cp.tonsTotal })
+                        rcToChildren[cp.recipeCode].push({ stedLabel: child.stedLabel })
                       }
                     }
                     for (const [rc, entries] of Object.entries(rcToChildren)) {
                       samleordreTags[rc] = entries.map(e => e.stedLabel)
-                      samleordreTonsHint[rc] = entries.map(e => `${e.stedLabel} ${e.tonsTotal}t`).join(' · ')
                     }
                   }
                   return productsForSelectedDate.map(({ product, day }) => {
                     const isSent = sentDayIds.has(day.id)
                     const isFocused = product.id === activeProductId
                     const ordreTagLabels = isSamleordreMode ? (samleordreTags[product.recipeCode] ?? [product.recipeName]) : undefined
-                    const tonsHint = isSamleordreMode ? samleordreTonsHint[product.recipeCode] : undefined
                     return (
                       <div key={product.id} className="flex flex-col gap-xs">
                         <ProductBoxV2
@@ -1372,7 +1530,8 @@ export function OrdrePlanScreen() {
                           onConfirmCancel={(r) => cancelDay(product.id, day.id, r)}
                           onRestore={() => restoreDay(day.id)}
                           ordreTagLabels={ordreTagLabels}
-                          tonsHint={tonsHint}
+                          samlesPaaEnBil={productSamlesFlags[`${product.id}__${day.id}`] ?? false}
+                          onSamlesPaaEnBilChange={(v) => setProductSamles(product.id, day.id, v)}
                         />
                         {/* Status-pill — sendt / aflyst / afventer */}
                         <StatusPill
@@ -1386,16 +1545,11 @@ export function OrdrePlanScreen() {
 
                 {/* Ekstra-bestilling-bokse for valgt dag */}
                 {ekstraForSelectedDate.map(eb => {
-                  // Implicit puljelæs-gruppe: andre ekstras på samme dato med puljelæs ON
-                  const otherPuljelaesCount = ekstraForSelectedDate.filter(o => o.id !== eb.id && o.puljelaes).length
-                  const andreOrdrerForDato = ANDRE_ORDRER_FOR_DATO[eb.date] ?? []
                   return (
                     <div key={eb.id} className="flex flex-col gap-xs">
                       <EkstraBestillingBox
                         ekstra={eb}
                         products={products}
-                        andreOrdrer={andreOrdrerForDato}
-                        otherPuljelaesCount={otherPuljelaesCount}
                         onUpdate={(patch) => updateEkstraBestilling(eb.id, patch)}
                         onRemove={() => removeEkstraBestilling(eb.id)}
                       />
@@ -1427,7 +1581,7 @@ export function OrdrePlanScreen() {
 
                 {/* "Send til fabrik" CTA — én delt knap der sender alle ikke-sendte */}
                 {productsForSelectedDate.length > 0 && (() => {
-                  const ikkeSendteProdukter = productsForSelectedDate.filter(({ day }) => day.morgenTons != null && !sentDayIds.has(day.id))
+                  const ikkeSendteProdukter = productsForSelectedDate.filter(({ day }) => !sentDayIds.has(day.id))
                   const ikkeSendteEkstra = ekstraForSelectedDate.filter(eb => !eb.sent && eb.tons > 0)
                   const totalIkkeSendt = ikkeSendteProdukter.length + ikkeSendteEkstra.length
                   const disabled = totalIkkeSendt === 0
@@ -1453,7 +1607,24 @@ export function OrdrePlanScreen() {
                           {disabled ? 'Intet at sende' : `${totalIkkeSendt} bestilling${totalIkkeSendt === 1 ? '' : 'er'} klar`}
                         </span>
                       </button>
-                      <div className="w-[160px] h-[24px]" aria-hidden="true" />
+                      {sentKommentarer[selectedPlanDate] ? (
+                        <span
+                          className="group relative inline-flex items-center gap-xxxs px-xs py-xxxs font-inter text-xs font-medium text-text-muted hover:text-deep-teal cursor-help w-[180px] justify-center"
+                          aria-label={`Kommentarer sendt til fabrik: ${sentKommentarer[selectedPlanDate]}`}
+                        >
+                          <MessageSquare size={12} />
+                          Kommentarer sendt til fabrik
+                          {/* Custom CSS-tooltip — instant visning ved hover (i modsætning til browserens native title-delay) */}
+                          <span
+                            role="tooltip"
+                            className="pointer-events-none absolute bottom-full right-0 mb-xxxs z-50 hidden group-hover:block bg-deep-teal text-white text-xs font-inter font-normal px-sm py-xs rounded-md shadow-lg whitespace-pre-line max-w-[280px] min-w-[180px] text-left leading-snug"
+                          >
+                            {sentKommentarer[selectedPlanDate]}
+                          </span>
+                        </span>
+                      ) : (
+                        <div className="w-[180px] h-[24px]" aria-hidden="true" />
+                      )}
                     </div>
                   )
                 })()}
@@ -1511,7 +1682,7 @@ export function OrdrePlanScreen() {
                         style={{ gridTemplateColumns: '1fr auto' }}>
                         <div>
                           <p className="font-inter text-sm font-medium text-text-primary">
-                            {formatWeekday(day.date)} · {formatShortDate(day.date)}
+                            {formatWeekday(day.date)} · {formatLongDate(day.date)}
                           </p>
                           <p className="font-inter text-xs text-text-muted">{day.tonsPlanned} tons</p>
                         </div>
@@ -1521,9 +1692,9 @@ export function OrdrePlanScreen() {
                               <span className="inline-flex items-center gap-sm px-sm py-xxxs rounded-lg bg-[#E7F4EE] font-inter text-xs font-medium text-text-primary whitespace-nowrap">
                                 <span>{orders.reduce((s, o) => s + o.antal, 0)} biler bestilt</span>
                                 <span className="text-text-muted">·</span>
-                                <span>Interval {params.intervalMinutes} min</span>
+                                <span>Interval {params.intervalMinutes != null ? `${params.intervalMinutes} min` : '–'}</span>
                                 <span className="text-text-muted">·</span>
-                                <span>Første læs {params.firstLoadTime}</span>
+                                <span>Første læs {params.firstLoadTime || '–'}</span>
                               </span>
                               {/* Vognmand status badge */}
                               {bekraeftelse ? (
@@ -1682,8 +1853,8 @@ export function OrdrePlanScreen() {
                                 <label className="font-inter text-xxs text-text-muted">Første læs</label>
                                 <input
                                   type="time"
-                                  value={params.firstLoadTime}
-                                  onChange={e => updateParam('firstLoadTime', e.target.value)}
+                                  value={params.firstLoadTime ?? ''}
+                                  onChange={e => updateParam('firstLoadTime', e.target.value || undefined)}
                                   className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
                                 />
                               </div>
@@ -1692,8 +1863,8 @@ export function OrdrePlanScreen() {
                                 <div className="flex items-center gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs focus-within:border-dark-teal">
                                   <input
                                     type="number"
-                                    value={params.intervalMinutes}
-                                    onChange={e => updateParam('intervalMinutes', Math.max(1, parseInt(e.target.value) || 1))}
+                                    value={params.intervalMinutes ?? ''}
+                                    onChange={e => updateParam('intervalMinutes', e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value) || 1))}
                                     className="w-full font-inter text-xs text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
                                   />
                                   <span className="font-inter text-xxs text-text-muted">min</span>
@@ -1711,16 +1882,19 @@ export function OrdrePlanScreen() {
                                   type="number"
                                   value={factoryKm}
                                   onChange={e => setFactoryKm(Math.max(1, parseInt(e.target.value) || 1))}
-                                  className="w-[48px] font-inter text-xs font-semibold text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                  className="w-[48px] font-poppins text-base font-semibold text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
                                 />
                                 <span className="font-inter text-xxs text-text-muted">km → {factoryKm} min</span>
                               </div>
+                              {factoryKm !== GOOGLE_KM && (
+                                <span className="font-inter text-xxs text-text-muted">Google-beregnet: {GOOGLE_KM} km</span>
+                              )}
                             </div>
                             <div className="flex flex-col gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs">
                               <span className="font-inter text-xxs text-text-muted">Forventet sidste bil</span>
                               <span className="font-inter text-xs font-semibold text-text-primary tabular-nums">
                                 {(() => {
-                                  if (!totalTrucks || !params.firstLoadTime || roundsPerTruck === 0) return '–'
+                                  if (!totalTrucks || !params.firstLoadTime || roundsPerTruck === 0 || params.intervalMinutes == null) return '–'
                                   const [h, m] = params.firstLoadTime.split(':').map(Number)
                                   const lastDeparture = h * 60 + m + (totalTrucks - 1) * params.intervalMinutes + (roundsPerTruck - 1) * roundTime
                                   const lastArrival = lastDeparture + factoryKm
@@ -1730,14 +1904,14 @@ export function OrdrePlanScreen() {
                             </div>
                           </div>
 
-                          {/* Kommentar til vognmand */}
+                          {/* Kommentar til chauffør — sendes med ordren til chauffør-appen (se FUNCTIONAL_FLOWS Flow 1 Trin 8) */}
                           <div className="flex flex-col gap-xxxs">
-                            <label className="font-inter text-xxs text-text-muted">Kommentar til vognmand</label>
+                            <label className="font-inter text-xxs text-text-muted">Kommentar til chauffør</label>
                             <textarea
                               value={kørselKommentar[day.id] ?? ''}
                               onChange={e => setKørselKommentar(prev => ({ ...prev, [day.id]: e.target.value }))}
                               rows={2}
-                              placeholder="Særlige forhold, adgang, tidsvinduer..."
+                              placeholder="Fx 'Brug bagvejen', 'Aflæsningssted flyttet 50m mod vest', 'Støjrestriktion efter 22'..."
                               className="w-full font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal transition-colors resize-none leading-relaxed"
                             />
                           </div>
@@ -2257,11 +2431,34 @@ export function OrdrePlanScreen() {
               onAddPhotos={(newPhotos) => setPhotos(prev => [...prev, ...newPhotos])}
               vognmandBekraeftelse={activeDays[0] ? vognmandBekraeftelser[activeDays[0].id] : undefined}
               vognmandMaterielBekraeftelse={vognmandMaterielBekraeftelse}
-              todayDay={activeDays[0]}
               products={products}
               isSamleordreMode={isSamleordreMode}
               samleordreCtx={samleordreCtx}
-              ordredetaljerCard={ordredetaljerCard}
+              samleordreTabOrderNr={samleordreTabOrderNr}
+              makeOrdredetaljerCard={makeOrdredetaljerCard}
+              onNavigateToAfregning={() => setActiveMode('afregning')}
+            />
+          )}
+
+          {activeMode === 'afregning' && (
+            <AfregningContent
+              vognmandBekraeftelse={activeDays[0] ? vognmandBekraeftelser[activeDays[0].id] : undefined}
+              vognmandMaterielBekraeftelse={vognmandMaterielBekraeftelse}
+              todayDay={activeDays[0]}
+              isSamleordreMode={isSamleordreMode}
+              samleordreCtx={samleordreCtx}
+              samleordreTabOrderNr={samleordreTabOrderNr}
+              recept={recept}
+              tonsAnkommet={tonsAnkommet}
+              forventetUdlagtM2={forventetUdlagtM2}
+              faktiskRegistrering={faktiskRegistrering}
+              visUdlaegningInput={visUdlaegningInput}
+              onSetVisUdlaegningInput={setVisUdlaegningInput}
+              onGemFaktisk={gemFaktisk}
+              demoTonsIDag={DEMO_TONS_I_DAG}
+              demoArealIDag={DEMO_AREAL_I_DAG}
+              demoTykkelse={DEMO_TYKKELSE}
+              makeOrdredetaljerCard={makeOrdredetaljerCard}
             />
           )}
 
@@ -2331,6 +2528,9 @@ export function OrdrePlanScreen() {
               <button
                 type="button"
                 onClick={() => {
+                  if (kommentar.trim().length > 0) {
+                    setSentKommentarer(prev => ({ ...prev, [selectedPlanDate]: kommentar.trim() }))
+                  }
                   sendAlleForSelectedDate()
                   setShowConfirmSend(false)
                   setKommentar('')
@@ -2367,9 +2567,9 @@ function StatusPill({ kind, afventerLabel }: {
 }) {
   if (kind === 'sendt') {
     return (
-      <div className="w-[160px] h-[24px] inline-flex items-center justify-center gap-[5px] rounded-md bg-[#E7F4EE] border border-[#1F8A5B]/25">
-        <span className="w-[5px] h-[5px] rounded-full bg-[#1F8A5B] flex-shrink-0" />
-        <span className="font-inter text-xxs font-semibold text-[#1F8A5B]">Sendt til fabrik</span>
+      <div className="w-[160px] h-[24px] inline-flex items-center justify-center gap-[5px] rounded-md bg-good-bg border border-good/25">
+        <span className="w-[5px] h-[5px] rounded-full bg-good flex-shrink-0" />
+        <span className="font-inter text-xxs font-semibold text-good">Sendt til fabrik</span>
       </div>
     )
   }
@@ -2396,7 +2596,8 @@ function ProductBoxV2({
   product, day, isFocused, isSelectingReason, isSent,
   onFocus, onUpdateTons, onUpdateMorgenTons,
   onCancel, onAbortCancel, onConfirmCancel, onRestore,
-  ordreTagLabels, tonsHint,
+  ordreTagLabels,
+  samlesPaaEnBil, onSamlesPaaEnBilChange,
 }: {
   product: MockProduct
   day: DayPlan
@@ -2412,16 +2613,18 @@ function ProductBoxV2({
   onRestore: () => void
   /** Samleordre: labels for de ordrer dette produkt tilhører, fx ['Søvej', 'Strandvejen'] */
   ordreTagLabels?: string[]
-  /** Samleordre: fordeling-hint, fx 'Søvej 250t · Strandvejen 200t' */
-  tonsHint?: string
+  /** Angiver om dette produkt/dag skal samles på én bil */
+  samlesPaaEnBil?: boolean
+  /** Callback ved ændring af "Samles på en bil" */
+  onSamlesPaaEnBilChange?: (v: boolean) => void
 }) {
   const [weatherActive, setWeatherActive] = useState(false)
 
   if (day.cancelled) {
     return (
       <div className="w-[160px] min-h-[172px] flex-1 bg-white rounded-xl border border-bad/30 flex flex-col items-center justify-center gap-xxxs opacity-60 p-sm">
-        <p className="font-poppins font-semibold text-sm text-text-muted">{product.recipeCode}</p>
-        <p className="font-inter text-xxs text-text-muted">{product.recipeName}</p>
+        <p className="font-poppins font-semibold text-sm text-text-muted">{product.recipeName}</p>
+        <p className="font-inter text-xxs text-text-muted">{product.recipeCode}</p>
         <p className="font-inter font-semibold text-xs text-bad mt-xxxs">Aflyst</p>
         {day.cancelReason && <p className="font-inter text-xxs text-text-muted capitalize">{day.cancelReason}</p>}
         <button onClick={onRestore} className="mt-xxxs font-inter text-xxs text-dark-teal underline">Fortryd</button>
@@ -2497,14 +2700,14 @@ function ProductBoxV2({
         </div>
       </div>
 
-      {/* Produkt-header — klikbar for fokus (driver Spec-grid) */}
+      {/* Produkt-header — klikbar for fokus (driver Spec-grid). */}
       <button
         onClick={onFocus}
         aria-pressed={isFocused}
         className="flex flex-col items-start text-left pr-md"
       >
-        <span className="font-poppins font-semibold text-sm text-text-primary leading-tight">{product.recipeCode}</span>
-        <span className="font-inter text-xxs text-text-muted">{product.recipeName} · {product.thicknessMm} mm</span>
+        <span className="font-poppins font-semibold text-sm text-text-primary leading-tight">{product.recipeName}</span>
+        <span className="font-inter text-xxs text-text-muted">{product.thicknessMm} mm</span>
         {/* Samleordre: ordre-tags der viser hvilke ordrer dette produkt tilhører */}
         {ordreTagLabels && ordreTagLabels.length > 0 && (
           <div className="flex flex-wrap gap-xxxs mt-xxxs">
@@ -2519,6 +2722,10 @@ function ProductBoxV2({
           </div>
         )}
       </button>
+
+      {/* Spacer — skubber Forventet + Morgen + checkbox til bunden, så de
+          aligner på tværs af bokse uanset header-højde (med/uden ordre-tags). */}
+      <div className="flex-1" />
 
       {/* Forventet — låses efter send (per unified planning model) */}
       <div>
@@ -2567,11 +2774,19 @@ function ProductBoxV2({
           />
           <span className="font-inter text-xxs text-text-muted flex-shrink-0">tons</span>
         </div>
-        {/* Samleordre: fordeling-hint under morgen-tons */}
-        {tonsHint && (
-          <p className="font-inter text-xxs text-text-muted mt-xxxs leading-tight">{tonsHint}</p>
-        )}
       </div>
+
+      {/* "Samles på en bil"-checkbox — per produkt+dag (sidder direkte efter Morgen — bottom-aligned via flex-1 spacer øverst) */}
+      <label className="inline-flex items-center gap-xxxs cursor-pointer">
+        <input
+          type="checkbox"
+          checked={samlesPaaEnBil ?? false}
+          onChange={e => onSamlesPaaEnBilChange?.(e.target.checked)}
+          disabled={isSent}
+          className="w-3 h-3 accent-deep-teal disabled:cursor-not-allowed"
+        />
+        <span className="font-inter text-xxs text-text-muted">Samles på en bil</span>
+      </label>
 
     </div>
   )
@@ -2580,41 +2795,19 @@ function ProductBoxV2({
 // ─── EkstraBestillingBox ──────────────────────────────────────────────────────
 // Drip-bestilling boks — samme dimensioner som ProductBoxV2, gul accent for at
 // signalere at det er en tilføjelse løbende på dagen, ikke morgen-planlægning.
-// Indeholder to scope-toggles:
-//   - Puljelæs: implicit gruppe med andre puljelæs-ON ekstras (samme ordre+date)
-//   - Multilæs: udvider scope til andre ordrer på dagen via picker
+// Indeholder én "Samles på en bil"-checkbox (samlesPaaEnBil) per ekstra-bestilling.
+// Cross-ordre scope-toggle ("+ andre ordrer") er fjernet — samleordre-konceptet håndterer fordeling på tværs.
 
 function EkstraBestillingBox({
   ekstra, products,
-  andreOrdrer, otherPuljelaesCount,
   onUpdate, onRemove,
 }: {
   ekstra: EkstraBestilling
   products: MockProduct[]
-  andreOrdrer: AndenOrdre[]
-  otherPuljelaesCount: number          // andre puljelæs-ON ekstras på samme dato
   onUpdate: (patch: Partial<EkstraBestilling>) => void
   onRemove: () => void
 }) {
-  // Union af produkter (ordrens egne + valgte andre ordrers) når multilæs ON
-  const valgteAndreOrdrer = andreOrdrer.filter(o => ekstra.andreOrdrer.includes(o.id))
-  const produktOptions = ekstra.multilaes
-    ? [
-        ...products.map(p => ({ value: p.id, label: p.recipeCode, kilde: 'Denne ordre' })),
-        ...valgteAndreOrdrer.flatMap(o =>
-          o.products.map(p => ({ value: `${o.id}:${p.id}`, label: p.recipeCode, kilde: o.orderNumber }))
-        ),
-      ]
-    : products.map(p => ({ value: p.id, label: p.recipeCode, kilde: 'Denne ordre' }))
-
-  function toggleAndenOrdre(ordreId: string) {
-    const exists = ekstra.andreOrdrer.includes(ordreId)
-    onUpdate({
-      andreOrdrer: exists
-        ? ekstra.andreOrdrer.filter(id => id !== ordreId)
-        : [...ekstra.andreOrdrer, ordreId],
-    })
-  }
+  const produktOptions = products.map(p => ({ value: p.id, label: p.recipeName }))
 
   if (ekstra.sent) {
     return (
@@ -2625,24 +2818,24 @@ function EkstraBestillingBox({
         </div>
         <div>
           <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block mb-xxxs">Produkt</span>
-          <span className="font-poppins font-semibold text-sm text-text-primary">
-            {products.find(p => p.id === ekstra.productId)?.recipeCode ?? '–'}
-          </span>
+          {(() => {
+            const p = products.find(pr => pr.id === ekstra.productId)
+            return p ? (
+              <>
+                <span className="font-poppins font-semibold text-sm text-text-primary block leading-tight">{p.recipeName}</span>
+                <span className="font-inter text-xxs text-text-muted">{p.recipeCode}</span>
+              </>
+            ) : <span className="font-poppins font-semibold text-sm text-text-primary">–</span>
+          })()}
         </div>
         <div>
           <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block mb-xxxs">Sendt</span>
           <span className="font-poppins font-bold text-lg text-text-primary tabular-nums">{ekstra.tons}t</span>
         </div>
-        {ekstra.puljelaes && (
+        {ekstra.samlesPaaEnBil && (
           <span className="inline-flex items-center gap-[5px] font-inter text-xxs text-deep-teal">
             <Layers size={10} />
-            Puljelæs {otherPuljelaesCount > 0 ? `(+${otherPuljelaesCount} ekstra på samme bil)` : ''}
-          </span>
-        )}
-        {ekstra.multilaes && (
-          <span className="inline-flex items-center gap-[5px] font-inter text-xxs text-deep-teal">
-            <Layers size={10} />
-            Multilæs ({ekstra.andreOrdrer.length + 1} ordrer)
+            Samles på en bil
           </span>
         )}
       </div>
@@ -2660,28 +2853,17 @@ function EkstraBestillingBox({
         <X size={12} />
       </button>
 
+      {/* Header — E Ekstra badge-row, natural højde */}
       <div className="flex items-center gap-xxxs">
         <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-yellow text-deep-teal font-poppins font-bold text-xxs">E</span>
         <span className="font-poppins font-semibold text-xs text-deep-teal">Ekstra</span>
       </div>
 
-      {/* Produkt-dropdown — union når multilæs ON */}
-      <div>
-        <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block mb-xxxs">Produkt</span>
-        <select
-          value={ekstra.productId}
-          onChange={e => onUpdate({ productId: e.target.value })}
-          className="w-full bg-white border border-hairline rounded-lg px-xs py-xxxs font-poppins font-semibold text-xs text-text-primary focus:border-dark-teal outline-none"
-        >
-          {produktOptions.map(opt => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}{ekstra.multilaes ? ` (${opt.kilde})` : ''}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Spacer — skubber Tons + Produkt + checkbox til bunden, så de aligner
+          med Forventet + Morgen + checkbox på ProductBoxV2. */}
+      <div className="flex-1" />
 
-      {/* Tons-input */}
+      {/* Tons-input — aligner med "Forventet" på ProductBoxV2 */}
       <div>
         <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block mb-xxxs">Tons</span>
         <div className="flex items-center gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xxxs focus-within:border-dark-teal transition-colors">
@@ -2696,87 +2878,37 @@ function EkstraBestillingBox({
         </div>
       </div>
 
-      {/* ── Scope-toggles ────────────────────────────────────────── */}
-      <div className="flex flex-col gap-xxxs pt-xxxs border-t border-yellow/30">
-        {/* Puljelæs-toggle — kan slås ON proaktivt selv ved 1 ekstra-bestilling */}
-        <button
-          onClick={() => onUpdate({ puljelaes: !ekstra.puljelaes })}
-          aria-pressed={ekstra.puljelaes}
-          className="flex items-center gap-xxxs text-left transition-colors hover:opacity-80"
-        >
-          <span className={[
-            'w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors',
-            ekstra.puljelaes ? 'bg-deep-teal border-deep-teal' : 'bg-white border-hairline',
-          ].join(' ')}>
-            {ekstra.puljelaes && <CheckCircle2 size={10} className="text-yellow" strokeWidth={3} />}
-          </span>
-          <span className="font-inter text-xxs font-medium text-text-secondary flex items-center gap-[3px]">
-            <Layers size={10} className="text-deep-teal" />
-            Puljelæs
-          </span>
-        </button>
-        {/* Status — implicit gruppe */}
-        {ekstra.puljelaes && otherPuljelaesCount > 0 && (
-          <span className="font-inter text-xxs text-text-muted pl-[20px] leading-tight">
-            Pakket med {otherPuljelaesCount} anden ekstra
-          </span>
-        )}
-
-        {/* Multilæs-toggle */}
-        <button
-          onClick={() => onUpdate({ multilaes: !ekstra.multilaes })}
-          aria-pressed={ekstra.multilaes}
-          className="flex items-center gap-xxxs text-left transition-colors hover:opacity-80"
-        >
-          <span className={[
-            'w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors',
-            ekstra.multilaes ? 'bg-deep-teal border-deep-teal' : 'bg-white border-hairline',
-          ].join(' ')}>
-            {ekstra.multilaes && <CheckCircle2 size={10} className="text-yellow" strokeWidth={3} />}
-          </span>
-          <span className="font-inter text-xxs font-medium text-text-secondary flex items-center gap-[3px]">
-            <Truck size={10} className="text-deep-teal" />
-            Multilæs
-          </span>
-        </button>
+      {/* Produkt-dropdown — aligner med "Morgen tons" på ProductBoxV2.
+          Wrappet i samme stil-container som tons-input + select bumpet til text-lg
+          så højden matcher Morgen tons-boksen. */}
+      <div>
+        <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block mb-xxxs">Produkt</span>
+        <div className="flex items-center bg-white border border-hairline rounded-lg px-xs py-xxxs focus-within:border-dark-teal transition-colors">
+          <select
+            value={ekstra.productId}
+            onChange={e => onUpdate({ productId: e.target.value })}
+            className="w-full font-poppins font-semibold text-lg text-text-primary bg-transparent border-none outline-none appearance-none"
+          >
+            <option value="">Vælg</option>
+            {produktOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {/* Multilæs ordre-picker — vises kun når toggle ON */}
-      {ekstra.multilaes && (
-        <div className="flex flex-col gap-xxxs pt-xxs border-t border-yellow/30">
-          <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block">Andre ordrer</span>
-          {andreOrdrer.length === 0 ? (
-            <span className="font-inter text-xxs text-text-muted italic">Ingen andre ordrer i dag</span>
-          ) : (
-            andreOrdrer.map(o => {
-              const isChecked = ekstra.andreOrdrer.includes(o.id)
-              return (
-                <button
-                  key={o.id}
-                  onClick={() => toggleAndenOrdre(o.id)}
-                  aria-pressed={isChecked}
-                  className="flex items-start gap-xxxs text-left hover:opacity-80 transition-colors"
-                >
-                  <span className={[
-                    'w-3 h-3 mt-[3px] rounded border flex items-center justify-center flex-shrink-0 transition-colors',
-                    isChecked ? 'bg-deep-teal border-deep-teal' : 'bg-white border-hairline',
-                  ].join(' ')}>
-                    {isChecked && <CheckCircle2 size={8} className="text-yellow" strokeWidth={3} />}
-                  </span>
-                  <div className="flex flex-col gap-0 min-w-0 flex-1">
-                    <span className="font-inter text-xxs font-semibold text-text-primary leading-tight truncate">
-                      {o.orderNumber}
-                    </span>
-                    <span className="font-inter text-xxs text-text-muted leading-tight truncate">
-                      {o.jobnummer.replace(/^\d+\.\s*/, '')}
-                    </span>
-                  </div>
-                </button>
-              )
-            })
-          )}
-        </div>
-      )}
+      {/* "Samles på en bil"-checkbox — per ekstra-bestilling (bottom-aligned via flex-1 spacer øverst) */}
+      <label className="inline-flex items-center gap-xxxs cursor-pointer">
+        <input
+          type="checkbox"
+          checked={ekstra.samlesPaaEnBil ?? false}
+          onChange={e => onUpdate({ samlesPaaEnBil: e.target.checked })}
+          className="w-3 h-3 accent-deep-teal"
+        />
+        <span className="font-inter text-xxs text-text-muted">Samles på en bil</span>
+      </label>
     </div>
   )
 }
@@ -2991,20 +3123,23 @@ const MATERIEL_ENHEDER: MaterielEnhed[] = [
   { anlaegsNr: '7-0078', beskrivelse: 'HAMM DV70VV' },
 ]
 
-function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeftelse, vognmandMaterielBekraeftelse, todayDay, products, isSamleordreMode, samleordreCtx, ordredetaljerCard }: {
+function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeftelse, vognmandMaterielBekraeftelse, products, isSamleordreMode, samleordreCtx, samleordreTabOrderNr, makeOrdredetaljerCard, onNavigateToAfregning }: {
   forundersoegelseFotos: MockPhoto[]
   onAddPhotos: (p: MockPhoto[]) => void
   vognmandBekraeftelse?: VognmandBekraeftelse
   vognmandMaterielBekraeftelse?: VognmandMaterielBekraeftelse
-  todayDay?: DayPlan
   /** Alle produkter i ordren — bruges til produkt+dato-selector */
   products: MockProduct[]
   /** True når Ordre-plan vises i samleordre-kontekst */
   isSamleordreMode?: boolean
   /** Samleordre-context med children (anchor + andre ordrer) når isSamleordreMode === true */
   samleordreCtx?: SamleordreContext | null
-  /** Genbrugt Ordredetaljer-visning fra Planlægning-mode (samme JSX som vises der) */
-  ordredetaljerCard: ReactNode
+  /** Aktivt ordrenummer i samleordre-tab — bruges til per-child dagsoverblik */
+  samleordreTabOrderNr?: string
+  /** Factory-funktion til Ordredetaljer-visning — kald med hideTabs=true for at skjule tab-rækken */
+  makeOrdredetaljerCard: (hideTabs?: boolean) => ReactNode
+  /** Callback til at navigere til Afregning-mode fra Vejesedler-sektionen */
+  onNavigateToAfregning?: () => void
 }) {
   // ── Produkt + dato selector state ───────────────────────────────────────────
   // TODO (produktion): Selector-state (selectedProductId + selectedDate) skal huskes
@@ -3039,19 +3174,14 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
   // ── Dagsdata — hardcoded for demo, TODO: hent fra ordre-objekt når Supabase klar ───
   const DEMO_ORDRE_ID = '260423891'
   const DEMO_DATO = new Date().toISOString().slice(0, 10)
-  const DEMO_AREAL_I_DAG = 1339      // m² — TODO: beregn fra dagplan-tons × 1000/kg_per_m2
-  const DEMO_TONS_I_DAG = 251        // t   — TODO: hent fra dagplan
   const DEMO_TYKKELSE = 45           // mm  — TODO: hent fra ordre.planlaegning.tykkelse
   const DEMO_ORDRE_TOTAL_AREAL = 4017 // m² — TODO: hent fra ordre
   const DEMO_ORDRE_TOTAL_TONS = 752   // t  — TODO: hent fra ordre
 
-  const { recept } = useRecept('82101H') // SMA 11S — TODO: Erstat med Supabase når klar
+  const { recept } = useRecept('82101H') // SMA 11S — TODO: Erstat med Supabase når klar — bruges i spec-grid
   const { vejesedler } = useVejesedler(DEMO_ORDRE_ID, DEMO_DATO)
-  const { tonsAnkommet, forventetUdlagtM2, faktiskRegistrering, gemFaktisk } = useDagsoverblik(
-    DEMO_ORDRE_ID,
-    DEMO_DATO,
-    recept
-  )
+  // Udlægning-state (tonsAnkommet, forventetUdlagtM2, faktiskRegistrering, gemFaktisk)
+  // er løftet til OrdrePlanScreen-root så AfregningContent kan bruge det direkte.
 
   const [underlaegsType, setUnderlaegsType] = useState<UnderlagType | ''>('asfalt')
   const [underlaegsAndet, setUnderlaegsAndet] = useState('')
@@ -3065,102 +3195,25 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
   const [ekstraLinjer, setEkstraLinjer] = useState<EkstraLinje[]>([])
   const [ekstraSent, setEkstraSent] = useState(false)
 
-  // ── Materiel / timeafregning state ──────────────────────────────────────────
-  // TODO: Fjernes — kun til demo. I produktion kommer feltet fra PLAN
-  const [timeafregningFraPlan, setTimeafregningFraPlan] = useState<TimeafregningFraPlan>('nej')
-  // Case A (nej): samlet timer for hele holdpakken
-  const [holdpakkeTimer, setHoldpakkeTimer] = useState<number>(7.5)
-  // Case A (nej): afkrydsning per anlæg — default alle anvendt
-  const [materielAnvendt, setMaterielAnvendt] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(MATERIEL_ENHEDER.map(e => [e.anlaegsNr, true]))
-  )
-  // Case B (ja): timer per anlæg
-  const [materielTimer, setMaterielTimer] = useState<Record<string, number>>(
-    () => ({ '5-0034': 8.5, '3-0112': 7.0, '7-0078': 2.0 })
-  )
+  // ── Samleordre per-ordre vejeseddel-state ────────────────────────────────────
+  // Kun aktiv i samleordre-mode: formanden kan logge temperatur + udlægger separat pr. ordre pr. vejeseddel.
+  // Default: anchor-ordre (første child med isAnchor). TODO: Erstat med Supabase når klar
+  const [vejeseddelSelectedOrdre, setVejeseddelSelectedOrdre] = useState<Record<string, string>>({})
+  const [vejeseddelTempPerOrdre, setVejeseddelTempPerOrdre] = useState<Record<string, Record<string, number>>>({})
+  const [vejeseddelUdlaeggerPerOrdre, setVejeseddelUdlaeggerPerOrdre] = useState<Record<string, Record<string, string>>>({})
 
-  // ── Afregning state ──────────────────────────────────────────────────────────
-  // Key: reg.nr (biler) eller chauffoer-navn (materiel)
-  const [afregningOpen, setAfregningOpen] = useState<Set<string>>(new Set())
+  /** Returnerer aktuelt valgt ordrenummer for en vejeseddel — fallback til anchor-child */
+  function getSelectedOrdreForVs(vsId: string): string {
+    return (
+      vejeseddelSelectedOrdre[vsId] ??
+      samleordreCtx?.children.find((c) => c.isAnchor)?.orderNumber ??
+      samleordreCtx?.children[0]?.orderNumber ??
+      ''
+    )
+  }
 
-  const [materielAfregningGodkendt, setMaterielAfregningGodkendt] = useState(false)
-
-  // ── Vejeseddel-fordeling state ───────────────────────────────────────────────
-  // TODO: Erstat med Supabase når klar — fordeling skrives til vejesedler[].fordeling[]
-  // Keyed by vejeseddel.id — initialiseres fra pre_fordeling
-  const [vejeseddelFordelinger, setVejeseddelFordelinger] = useState<Record<string, { ordre_id: string; tons: number }[]>>(() => {
-    const initial: Record<string, { ordre_id: string; tons: number }[]> = {}
-    const biler = INITIAL_VOGNMAND_BEKRAEFTELSER['d2-1']?.biler ?? []
-    for (const bil of biler) {
-      for (const vs of bil.vejesedler ?? []) {
-        if (vs.multilaes_flag) {
-          initial[vs.id] = vs.pre_fordeling.map(pf => ({ ordre_id: pf.ordre_id, tons: pf.tons }))
-        }
-      }
-    }
-    return initial
-  })
-  // Hvilke multilæs-vejesedler har åben fordeling-expander
-  const [vejeseddelExpanded, setVejeseddelExpanded] = useState<Set<string>>(new Set())
-  // Reg.nr'er hvor formand har bekræftet 1.5t-skift til timeløn
-  const [et5tBekraeftet, setEt5tBekraeftet] = useState<Set<string>>(new Set())
-
-  // Lokal kopi af afregnings-felter per chauffør-nøgle
-  const [afregningData, setAfregningData] = useState<Record<string, ChauffoerAfregning>>(() => {
-    // Initialiser fra mock — biler
-    // TODO: Erstat med Supabase når klar — afregning_type kommer fra vognmand.aftaler.chauffoerer[], timer fra chauffeur-app, tons fra plan_vejebilag-tabel
-    const initial: Record<string, ChauffoerAfregning> = {}
-    const bilerData = INITIAL_VOGNMAND_BEKRAEFTELSER['d2-1']?.biler ?? []
-    for (const bil of bilerData) {
-      if (bil.afregning) {
-        initial[bil.regnr] = {
-          chauffoer_navn: bil.chauffoer,
-          reg_nr: bil.regnr,
-          ...bil.afregning,
-        }
-      }
-    }
-    // Materiel-biler er nu en del af bilerData — ingen separat init nødvendig
-    // TODO: Erstat med Supabase når klar — afregning_type kommer fra vognmand.aftaler.chauffoerer[], timer fra chauffeur-app
-    return initial
-  })
-
-  const [visUdlaegningInput, setVisUdlaegningInput] = useState(false)
   // Mini-strip: om fuld spec-grid er åben
-  const [detailsExpanded, setDetailsExpanded] = useState(false)
-
-  function toggleAfregning(key: string) {
-    setAfregningOpen(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key); else next.add(key)
-      return next
-    })
-  }
-
-  function updateAfregningField(key: string, field: keyof ChauffoerAfregning, value: number | string | boolean | undefined) {
-    setAfregningData(prev => ({
-      ...prev,
-      [key]: { ...prev[key], [field]: value },
-    }))
-  }
-
-  function godkendAfregning(key: string) {
-    const now = new Date()
-    const tids = `${now.getDate()}. ${['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'][now.getMonth()]} · ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
-    setAfregningData(prev => ({
-      ...prev,
-      [key]: { ...prev[key], godkendt_af_formand: true, godkendt_tidspunkt: tids },
-    }))
-    setAfregningOpen(prev => { const next = new Set(prev); next.delete(key); return next })
-  }
-
-  function genaabnAfregning(key: string) {
-    setAfregningData(prev => ({
-      ...prev,
-      [key]: { ...prev[key], godkendt_af_formand: false, godkendt_tidspunkt: undefined },
-    }))
-    setAfregningOpen(prev => new Set([...prev, key]))
-  }
+  const [detailsExpanded, setDetailsExpanded] = useState(true)
 
   function addEkstraLinje() {
     setEkstraLinjer(prev => [...prev, { id: `el-${Date.now()}`, type: '', beskrivelse: '', antal: 1 }])
@@ -3205,57 +3258,91 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
 
   const antalBiler = vognmandBekraeftelse?.biler.length ?? 0
 
-  // Beregn alle udførelses-datoer på tværs af alle produkter
+  // Beregn ordrens start- og slutdato (union af alle produkter — matcher "Udføres i perioden"-cellen)
+  const orderStartDate = useMemo(() =>
+    products.reduce((min, p) => (p.startDate && (!min || p.startDate < min) ? p.startDate : min), '' as string),
+  [products])
+  const orderEndDate = useMemo(() =>
+    products.reduce((max, p) => (p.endDate && (!max || p.endDate > max) ? p.endDate : max), '' as string),
+  [products])
+
+  // Dato-piller: præcis orderStartDate..orderEndDate (inklusiv) — matcher Ordredetaljer-cellens range
   const udfoerselDays = useMemo(() => {
-    const allDates = new Set<string>()
-    for (const p of products) {
-      if (!p.startDate || !p.endDate) continue
-      const start = new Date(p.startDate + 'T00:00:00')
-      const end = new Date(p.endDate + 'T00:00:00')
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        allDates.add(d.toISOString().split('T')[0])
-      }
+    if (!orderStartDate || !orderEndDate) return [] as string[]
+    const out: string[] = []
+    let cur = new Date(orderStartDate + 'T00:00:00')
+    const end = new Date(orderEndDate + 'T00:00:00')
+    while (cur <= end) {
+      out.push(dateToString(cur))
+      cur = addDays(cur, 1)
     }
-    return Array.from(allDates).sort()
-  }, [products])
+    return out
+  }, [orderStartDate, orderEndDate])
 
   return (
     <div className="flex flex-col gap-[48px]">
 
-      {/* ── Dato-piller (Udførsel) — alt indkapslet i én pille ────────── */}
-      {/* "Udføres i perioden" label + datoer ligger i samme rounded-full container */}
-      {udfoerselDays.length > 0 && (
-        <div className="inline-flex items-center gap-xs bg-white border border-hairline rounded-full pl-md pr-xxxs py-xxxs self-start">
-          <span className="font-poppins font-semibold text-sm text-text-primary whitespace-nowrap">
-            Udføres i perioden
-          </span>
-          <div className="flex items-center gap-xxxs flex-wrap">
-            {udfoerselDays.map(ds => {
-              const isSelected = ds === selectedDate
-              // Overstået dag = rød skravering så formanden ser at den er passeret
-              const isPast = ds < dateToString(TODAY)
-              return (
-                <button
-                  key={ds}
-                  onClick={() => setSelectedDate(ds)}
-                  aria-pressed={isSelected}
-                  aria-label={`${formatLongDate(ds)}${isPast ? ' (overstået)' : ''}`}
-                  className={[
-                    'flex items-center gap-xxxs px-sm py-xs rounded-full font-poppins font-semibold text-sm transition-colors',
-                    isSelected
-                      ? 'bg-deep-teal text-white shadow-sm'
-                      : isPast
-                        ? 'bg-bad/15 text-bad hover:bg-bad/20'
-                        : 'bg-surface-2 text-text-muted hover:bg-soft-aqua hover:text-deep-teal',
-                  ].join(' ')}
-                >
-                  {formatLongDate(ds)}
-                </button>
-              )
-            })}
-          </div>
+      {/* ── Ordredetaljer-section — identisk med Planlægning-mode ───────
+          h2 + "Skjul/Vis detaljer"-knap ved siden af, og spec-grid'et med
+          tabs INDE I sig (når expanded) — matcher 1:1 layout fra Planlægning.
+          Tabs er KUN synlige når sectionen er expanded. */}
+      <section>
+        <div className="flex items-center gap-sm mb-md">
+          <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight">Ordredetaljer</h2>
+          <button
+            type="button"
+            onClick={() => setDetailsExpanded(e => !e)}
+            aria-expanded={detailsExpanded}
+            aria-label={detailsExpanded ? 'Skjul ordredetaljer' : 'Vis ordredetaljer'}
+            className="inline-flex items-center gap-xxxs px-sm py-xs font-inter text-xs font-medium text-dark-teal hover:text-deep-teal hover:bg-soft-aqua rounded-lg transition-colors"
+          >
+            {detailsExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {detailsExpanded ? 'Skjul detaljer' : 'Vis detaljer'}
+          </button>
         </div>
-      )}
+
+        {/* Spec-grid — tabs synlige som i Planlægning (hideTabs=false default) */}
+        {detailsExpanded && makeOrdredetaljerCard()}
+
+        {/* hr INDE i section — matcher Planlægning's struktur (hr er del af Ordredetaljer-section).
+            "Udføres i perioden" rykket IND i samme section som sibling til hr → så hr's mb-lg
+            (32px) er den eneste afstand til næste h2, præcis som Planlægning. */}
+        <hr className="my-lg border-t border-hairline" />
+
+        {/* ── "Udføres i perioden" — INDE i Ordredetaljer-section, ligesom Asfaltbestilling
+            sidder inde i sin section i Planlægning. Matcher spacing 1:1. */}
+        {udfoerselDays.length > 0 && (
+          <div>
+            <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight mb-sm">Udføres i perioden</h2>
+            {/* Dato-buttons direkte — ingen ydre container-pille (matcher pille-design andre steder) */}
+            <div className="flex items-center gap-xs flex-wrap">
+              {udfoerselDays.map(ds => {
+                const isSelected = ds === selectedDate
+                // Overstået dag = rød skravering så formanden ser at den er passeret
+                const isPast = ds < dateToString(TODAY)
+                return (
+                  <button
+                    key={ds}
+                    onClick={() => setSelectedDate(ds)}
+                    aria-pressed={isSelected}
+                    aria-label={`${formatLongDate(ds)}${isPast ? ' (overstået)' : ''}`}
+                    className={[
+                      'flex items-center gap-xxxs px-sm py-xs rounded-full font-poppins font-semibold text-sm transition-colors',
+                      isSelected
+                        ? 'bg-deep-teal text-white shadow-sm'
+                        : isPast
+                          ? 'bg-bad/15 text-bad hover:bg-bad/20'
+                          : 'bg-surface-2 text-text-muted hover:bg-soft-aqua hover:text-deep-teal',
+                    ].join(' ')}
+                  >
+                    {formatLongDate(ds)}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* ── Dagens overblik — status-bokse ───────────────────────────── */}
       {/* TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate) */}
@@ -3265,54 +3352,72 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
         {(() => {
           const fmtTal = (n: number, max = 0) =>
             new Intl.NumberFormat('da-DK', { maximumFractionDigits: max }).format(n)
-          const materielBekraeftet2 = !!(vognmandMaterielBekraeftelse && vognmandMaterielBekraeftelse.items.length > 0)
-          const antalMateriel2 = vognmandMaterielBekraeftelse?.items.length ?? 0
-          const forundersoegelseForetaget2 = underlaegsType && tilfredsstillende !== null && tilfredsstillende !== undefined
+
+          // Per-child værdier når i samleordre-mode — fallback til global state for enkelt-ordre
+          const activeChild = isSamleordreMode && samleordreCtx
+            ? samleordreCtx.children.find(c => c.orderNumber === samleordreTabOrderNr)
+            : undefined
+
+          const displayAntalBiler = activeChild !== undefined ? activeChild.antalBiler : antalBiler
+          const displayBilerBekraeftet = activeChild !== undefined ? activeChild.vognmandBekraeftet : !!vognmandBekraeftelse
+          const displayAntalMateriel = activeChild !== undefined ? activeChild.antalMateriel : (vognmandMaterielBekraeftelse?.items.length ?? 0)
+          const displayMaterielBekraeftet = activeChild !== undefined ? activeChild.materielBekraeftet : !!(vognmandMaterielBekraeftelse && vognmandMaterielBekraeftelse.items.length > 0)
+          const displayForundersoegelseOK = activeChild !== undefined
+            ? activeChild.forundersoegelseOK
+            : !!(underlaegsType && tilfredsstillende !== null && tilfredsstillende !== undefined)
+          const displayForundersoegelseStatus = activeChild !== undefined
+            ? activeChild.forundersoegelseStatus
+            : (underlaegsType && tilfredsstillende !== null && tilfredsstillende !== undefined ? 'OK' : 'MANGLER') as 'OK' | 'IKKE_OK' | 'MANGLER'
+
           // Hent mock-variation baseret på valgt produkt + dato
           const mockData = getMockDataForProductDate(selectedProductId, selectedDate)
           const selectedProductObj = products.find(p => p.id === selectedProductId)
           return (
             <div className={isSamleordreMode ? 'grid grid-cols-3 gap-xs auto-rows-fr' : 'grid grid-cols-3 xl:grid-cols-7 gap-xs auto-rows-fr'}>
-              {/* Biler */}
-              <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${vognmandBekraeftelse ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
+              {/* Biler — per-child i samleordre-mode, global i enkelt-ordre */}
+              <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${displayBilerBekraeftet ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
                 <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">
                   Biler
                 </span>
                 <div className="flex-1 flex items-end pb-xxxs">
                   <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
-                    {antalBiler}
+                    {displayAntalBiler}
                   </span>
                 </div>
                 <span className="font-inter text-xs text-text-muted min-h-[1em]">
-                  {vognmandBekraeftelse ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
+                  {displayBilerBekraeftet ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
                 </span>
               </div>
-              {/* Materiel transport */}
-              <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${materielBekraeftet2 ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
+              {/* Materiel transport — per-child i samleordre-mode, global i enkelt-ordre */}
+              <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${displayMaterielBekraeftet ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
                 <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">
                   Materiel transport
                 </span>
                 <div className="flex-1 flex items-end pb-xxxs">
                   <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
-                    {antalMateriel2}
+                    {displayAntalMateriel}
                   </span>
                 </div>
                 <span className="font-inter text-xs text-text-muted min-h-[1em]">
-                  {materielBekraeftet2 ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
+                  {displayMaterielBekraeftet ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
                 </span>
               </div>
-              {/* Forundersøgelse */}
-              <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${forundersoegelseForetaget2 ? 'bg-good-bg border-good/30' : 'bg-bad-bg border-bad/30'}`}>
-                <span className={`font-inter text-xxs font-medium tracking-widest uppercase ${forundersoegelseForetaget2 ? 'text-text-muted' : 'text-bad/70'}`}>
+              {/* Forundersøgelse — per-child i samleordre-mode, global i enkelt-ordre */}
+              <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${displayForundersoegelseOK ? 'bg-good-bg border-good/30' : 'bg-bad-bg border-bad/30'}`}>
+                <span className={`font-inter text-xxs font-medium tracking-widest uppercase ${displayForundersoegelseOK ? 'text-text-muted' : 'text-bad/70'}`}>
                   Forundersøgelse
                 </span>
                 <div className="flex-1 flex items-end pb-xxxs">
-                  <span className={`font-poppins font-semibold text-xl tabular-nums ${forundersoegelseForetaget2 ? 'text-text-primary' : 'text-bad'}`}>
-                    {forundersoegelseForetaget2 ? 'OK' : '–'}
+                  <span className={`font-poppins font-semibold text-xl tabular-nums ${displayForundersoegelseOK ? 'text-text-primary' : 'text-bad'}`}>
+                    {displayForundersoegelseStatus === 'OK' ? 'OK' : '–'}
                   </span>
                 </div>
-                <span className={`font-inter text-xs min-h-[1em] ${forundersoegelseForetaget2 ? 'text-text-muted' : 'text-bad/80'}`}>
-                  {forundersoegelseForetaget2 ? (tilfredsstillende ? 'Tilfredsstillende' : 'Ikke tilfredsstillende') : 'Mangler vurdering'}
+                <span className={`font-inter text-xs min-h-[1em] ${displayForundersoegelseOK ? 'text-text-muted' : 'text-bad/80'}`}>
+                  {displayForundersoegelseStatus === 'OK'
+                    ? 'Tilfredsstillende'
+                    : displayForundersoegelseStatus === 'IKKE_OK'
+                      ? 'Ikke tilfredsstillende'
+                      : 'Mangler vurdering'}
                 </span>
               </div>
               {/* 4 OrdreInfoCards — KUN for enkelt-ordre. Areal/Produkt/Tykkelse/Tons giver ikke mening
@@ -3358,59 +3463,19 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
         */}
       </div>
 
-      {/* ── Ordredetaljer mini-strip (collapsed) — placeret over Forundersøgelse ─── */}
-      {/* Collapsed label = "Ordredetaljer" (genvej til kontekst). Expander genbruger
-          ordredetaljerCard fra Planlægning-mode, så samleordre-tab-split også vises korrekt. */}
-      <div className="flex flex-col gap-xxxs">
-        <div className="flex items-center gap-sm bg-white border border-hairline rounded-lg px-sm py-xs">
-          <span className="font-inter text-xs font-semibold text-text-primary flex-shrink-0">
-            Ordredetaljer
-          </span>
-          {isSamleordreMode && samleordreCtx ? (
-            <>
-              <span className="inline-flex items-center gap-xxxs bg-warn-bg border border-yellow text-deep-teal font-inter font-semibold text-xxs px-xs py-xxxs rounded-md uppercase tracking-wider whitespace-nowrap">
-                Samleordre
-              </span>
-              <span className="font-inter text-xs text-text-primary truncate">
-                {samleordreCtx.children.map(c => c.stedLabel).join(' + ')}
-              </span>
-            </>
-          ) : (
-            <span className="font-inter text-xs text-text-primary truncate">
-              Søvej 6D, Nakskov
-            </span>
-          )}
-          {/* Produkt-badges */}
-          <div className="flex items-center gap-xxxs flex-wrap">
-            {products.map(p => (
-              <span
-                key={p.id}
-                className="bg-soft-aqua text-deep-teal font-inter text-xxs px-xs py-xxxs rounded-md"
-              >
-                {p.recipeCode} {p.tonsTotal}t
-              </span>
-            ))}
-          </div>
-          {/* Vis detaljer-knap */}
-          <button
-            onClick={() => setDetailsExpanded(e => !e)}
-            className="ml-auto flex items-center gap-xxxs font-inter text-xs font-medium text-dark-teal hover:text-deep-teal transition-colors flex-shrink-0"
-          >
-            {detailsExpanded ? 'Skjul' : 'Vis detaljer'}
-            {detailsExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-          </button>
-        </div>
-        {/* Expander: genbrug af ordredetaljerCard fra Planlægning-mode */}
-        {detailsExpanded && (
-          <div className="mt-xs">
-            {ordredetaljerCard}
-          </div>
-        )}
-      </div>
-
       {/* TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate) */}
       <section>
-        <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Forundersøgelse</h2>
+        {/* Header: vis aktiv child-sted i samleordre-mode så formanden ser hvilken ordre detaljer tilhører */}
+        <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">
+          Forundersøgelse
+          {isSamleordreMode && samleordreCtx && (() => {
+            const activeChildForHeader = samleordreCtx.children.find(c => c.orderNumber === samleordreTabOrderNr)
+            return activeChildForHeader ? (
+              <span className="font-inter text-sm font-normal text-text-muted ml-xs">— {activeChildForHeader.stedLabel}</span>
+            ) : null
+          })()}
+        </h2>
+        {/* Hint-banner fjernet — aktiv ordre er synlig via tabs på Ordredetaljer-rækken */}
         <div className={`w-full bg-surface border border-hairline rounded-2xl shadow-sm overflow-hidden mb-sm`}>
           <button
             type="button"
@@ -3418,44 +3483,62 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
             className="w-full flex items-start justify-between px-md py-sm cursor-pointer hover:border-hairline-2 transition-colors"
             aria-expanded={forundersoegelseOpen}
           >
-            <div className="flex flex-col gap-xxxs items-start">
-              {!forundersoegelseOpen && (
-                <div className="text-xs text-text-muted font-inter">
-                  {underlaegsType ? (
-                    <>
-                      <span className="font-semibold text-text-secondary">
-                        {underlaegsType === 'asfalt' ? 'Asfalt'
-                          : underlaegsType === 'beton' ? 'Beton'
-                          : underlaegsType === 'grus' ? 'Grus'
-                          : underlaegsType === 'andet' ? (underlaegsAndet || 'Andet')
-                          : underlaegsType}
-                      </span>
-                      {' · '}
-                      {tilfredsstillende === true ? 'Tilfredsstillende' : tilfredsstillende === false ? 'Ikke tilfredsstillende' : 'Tilstand ikke vurderet'}
-                      {' · '}
-                      {forundersoegelseFotos.length} {forundersoegelseFotos.length === 1 ? 'billede' : 'billeder'}
-                      {ekstraLinjer.length > 0 && <> · {ekstraLinjer.length} ekstraarbejde</>}
-                    </>
-                  ) : (
-                    <span className="italic">Ikke udfyldt endnu</span>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-xs">
-              {!forundersoegelseOpen && (
-                underlaegsType && tilfredsstillende !== null && tilfredsstillende !== undefined ? (
-                  <span className="inline-flex items-center px-sm py-xxxs rounded-full text-xxs font-medium bg-good-bg text-good border border-good/30">
-                    Vurderet
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center px-sm py-xxxs rounded-full text-xxs font-medium bg-bad-bg text-bad border border-bad/30">
-                    Mangler vurdering
-                  </span>
-                )
-              )}
-              {forundersoegelseOpen ? <ChevronUp size={20} className="text-text-muted" /> : <ChevronDown size={20} className="text-text-muted" />}
-            </div>
+            {/* Collapsed preview — per-child i samleordre-mode, global i enkelt-ordre */}
+            {(() => {
+              const activeChildForF = isSamleordreMode && samleordreCtx
+                ? samleordreCtx.children.find(c => c.orderNumber === samleordreTabOrderNr)
+                : undefined
+              const childDetails = activeChildForF?.forundersoegelseDetails
+              // I samleordre-mode bruger vi per-child details til preview; globale felter bruges kun i enkelt-ordre
+              const displayUnderlaegsType = childDetails !== undefined ? childDetails.underlaegsType : underlaegsType
+              const displayTilfredsstillende = childDetails !== undefined ? childDetails.tilfredsstillende : tilfredsstillende
+              const displayPhotoCount = childDetails !== undefined ? childDetails.photoCount : forundersoegelseFotos.length
+              const displayComment = childDetails !== undefined ? childDetails.besigtigelseComment : ''
+              const displayVurderet = displayUnderlaegsType !== null && displayUnderlaegsType !== undefined && displayUnderlaegsType !== ''
+                && displayTilfredsstillende !== null && displayTilfredsstillende !== undefined
+              return (
+                <>
+                  <div className="flex flex-col gap-xxxs items-start">
+                    {!forundersoegelseOpen && (
+                      <div className="text-xs text-text-muted font-inter">
+                        {displayUnderlaegsType ? (
+                          <>
+                            <span className="font-semibold text-text-secondary">
+                              {displayUnderlaegsType === 'asfalt' ? 'Asfalt'
+                                : displayUnderlaegsType === 'beton' ? 'Beton'
+                                : displayUnderlaegsType === 'grus' ? 'Grus'
+                                : displayUnderlaegsType}
+                            </span>
+                            {' · '}
+                            {displayTilfredsstillende === true ? 'Tilfredsstillende' : displayTilfredsstillende === false ? 'Ikke tilfredsstillende' : 'Tilstand ikke vurderet'}
+                            {' · '}
+                            {displayPhotoCount} {displayPhotoCount === 1 ? 'billede' : 'billeder'}
+                            {displayComment ? <> · {displayComment}</> : null}
+                            {!childDetails && ekstraLinjer.length > 0 && <> · {ekstraLinjer.length} ekstraarbejde</>}
+                          </>
+                        ) : (
+                          <span className="italic">Ikke udfyldt endnu</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-xs">
+                    {!forundersoegelseOpen && (
+                      displayVurderet ? (
+                        <span className="inline-flex items-center px-sm py-xxxs rounded-full text-xxs font-medium bg-good-bg text-good border border-good/30">
+                          Vurderet
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-sm py-xxxs rounded-full text-xxs font-medium bg-bad-bg text-bad border border-bad/30">
+                          Mangler vurdering
+                        </span>
+                      )
+                    )}
+                    {forundersoegelseOpen ? <ChevronUp size={20} className="text-text-muted" /> : <ChevronDown size={20} className="text-text-muted" />}
+                  </div>
+                </>
+              )
+            })()}
           </button>
 
         {forundersoegelseOpen && <div className="flex flex-col gap-sm p-md pt-sm">
@@ -3746,33 +3829,279 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
         </div>
       </section>
 
-      {/* ── Udlægning ────────────────────────────────────────────── */}
+      {/* ── Udlægning ── (flyttet til AfregningContent — vises under Afregning-mode) */}
+
+      {/* ── Vejesedler ──────────────────────────── */}
       {/* TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate) */}
-      {recept && (() => {
-        const tonsProgress = DEMO_TONS_I_DAG > 0 ? Math.round((tonsAnkommet / DEMO_TONS_I_DAG) * 100) : 0
-        const forventetProgress = DEMO_AREAL_I_DAG > 0 ? Math.round((forventetUdlagtM2 / DEMO_AREAL_I_DAG) * 100) : 0
+      <section>
+        <div className="flex items-center justify-between mb-sm">
+          <h2 className="font-poppins font-semibold text-xl text-text-primary">Vejesedler</h2>
+          {onNavigateToAfregning && (
+            <button
+              type="button"
+              onClick={onNavigateToAfregning}
+              className="font-inter text-xs text-dark-teal hover:text-deep-teal transition-colors"
+            >
+              Se afregning →
+            </button>
+          )}
+        </div>
+        <VejesedlerTable
+          vejesedler={vejesedler}
+          recepter={INITIAL_RECEPTER}
+          minTemperatur={recept?.min_temperatur ?? 140}
+          udlaeggerliste={INITIAL_UDLAEGGERE}
+          onTemperatur={(vsId, temp) => {
+            if (isSamleordreMode && samleordreCtx) {
+              // Samleordre-mode: skriv temperatur til den valgte ordre på denne vejeseddel
+              const ordreNr = getSelectedOrdreForVs(vsId)
+              setVejeseddelTempPerOrdre(prev => ({
+                ...prev,
+                [vsId]: { ...(prev[vsId] ?? {}), [ordreNr]: temp },
+              }))
+            }
+            // TODO (produktion): skriv retur til PLAN pr. ordre
+          }}
+          onUdlaegger={(vsId, materielNr) => {
+            if (isSamleordreMode && samleordreCtx) {
+              // Samleordre-mode: skriv udlægger-valg til den valgte ordre på denne vejeseddel
+              const ordreNr = getSelectedOrdreForVs(vsId)
+              setVejeseddelUdlaeggerPerOrdre(prev => ({
+                ...prev,
+                [vsId]: { ...(prev[vsId] ?? {}), [ordreNr]: materielNr },
+              }))
+            }
+            // TODO (produktion): opdater vejeseddel pr. ordre
+          }}
+          samleordreChildren={
+            isSamleordreMode && samleordreCtx && samleordreCtx.children.length > 1
+              ? samleordreCtx.children.map(c => ({ orderNumber: c.orderNumber, stedLabel: c.stedLabel }))
+              : undefined
+          }
+          vejeseddelSelectedOrdre={vejeseddelSelectedOrdre}
+          onSelectOrdreForVs={(vsId, orderNumber) =>
+            setVejeseddelSelectedOrdre(prev => ({ ...prev, [vsId]: orderNumber }))
+          }
+          vejeseddelTempPerOrdre={vejeseddelTempPerOrdre}
+          vejeseddelUdlaeggerPerOrdre={vejeseddelUdlaeggerPerOrdre}
+        />
+      </section>
+
+      {/* ── Bil- og tonsafregning + Materielafregning ─────────────────────────── */}
+      {/* Sektionerne er flyttet til AfregningContent nedenfor (Afregning-mode i toggle). */}
+
+    </div>
+  )
+}
+
+// ─── AfregningContent ─────────────────────────────────────────────────────────
+// Vises i Afregning-mode (tre-mode toggle). Indeholder Bil- og tonsafregning
+// + Materielafregning (klipset fra UdfoerselContent 2026-05-22).
+
+function AfregningContent({ vognmandBekraeftelse, todayDay, isSamleordreMode, samleordreCtx, samleordreTabOrderNr,
+  recept, tonsAnkommet, forventetUdlagtM2, faktiskRegistrering,
+  visUdlaegningInput, onSetVisUdlaegningInput, onGemFaktisk,
+  demoTonsIDag, demoArealIDag, demoTykkelse, makeOrdredetaljerCard,
+}: {
+  vognmandBekraeftelse?: VognmandBekraeftelse
+  /** Ubrugt nu — tilgængelig til fremtidig materiel-per-hold expansion */
+  vognmandMaterielBekraeftelse?: VognmandMaterielBekraeftelse
+  todayDay?: DayPlan
+  isSamleordreMode?: boolean
+  samleordreCtx?: SamleordreContext | null
+  samleordreTabOrderNr?: string
+  /** Recept-objekt fra useRecept — bruges til Udlægning-sektion */
+  recept?: ReturnType<typeof useRecept>['recept']
+  /** Ankomne tons — fra useDagsoverblik */
+  tonsAnkommet?: number
+  /** Forventet udlagt m² — fra useDagsoverblik */
+  forventetUdlagtM2?: number
+  /** Faktisk m²/tons-registrering — fra useDagsoverblik */
+  faktiskRegistrering?: DagsoverblikRegistrering | null
+  /** Viser Udlægning-inputfelter inline */
+  visUdlaegningInput?: boolean
+  onSetVisUdlaegningInput?: (vis: boolean) => void
+  /** Gem faktisk udlagt m² + tons */
+  onGemFaktisk?: (m2: number, tons: number) => void
+  /** Demo-konstanter — TODO: Erstat med Supabase når klar */
+  demoTonsIDag?: number
+  demoArealIDag?: number
+  demoTykkelse?: number
+  /** Renderer Ordredetaljer-spec-grid med tabs — identisk med Planlægning + Udførelse */
+  makeOrdredetaljerCard: (hideTabs?: boolean) => ReactNode
+}) {
+  // ── Ordredetaljer state (separat fra UdfoerselContent's detailsExpanded) ────
+  const [detailsExpandedAfregning, setDetailsExpandedAfregning] = useState(true)
+
+  // ── Afregning state ──────────────────────────────────────────────────────────
+  const [afregningOpen, setAfregningOpen] = useState<Set<string>>(new Set())
+  const [materielAfregningGodkendt, setMaterielAfregningGodkendt] = useState(false)
+
+  // ── Vejeseddel-fordeling state ───────────────────────────────────────────────
+  // TODO: Erstat med Supabase når klar
+  const [vejeseddelFordelinger, setVejeseddelFordelinger] = useState<Record<string, { ordre_id: string; tons: number }[]>>(() => {
+    const initial: Record<string, { ordre_id: string; tons: number }[]> = {}
+    const biler = vognmandBekraeftelse?.biler ?? []
+    for (const bil of biler) {
+      for (const vs of bil.vejesedler ?? []) {
+        if (vs.multilaes_flag) {
+          initial[vs.id] = vs.pre_fordeling.map(pf => ({ ordre_id: pf.ordre_id, tons: pf.tons }))
+        }
+      }
+    }
+    return initial
+  })
+  const [vejeseddelExpanded, setVejeseddelExpanded] = useState<Set<string>>(new Set())
+
+  // ── Timer-fordeling state ─────────────────────────────────────────────────────
+  // TODO: Erstat med Supabase når klar
+  const [bilTimerFordelinger, setBilTimerFordelinger] = useState<Record<string, Record<string, number>>>({})
+  const [bilTimerFordelingOpen, setBilTimerFordelingOpen] = useState<Set<string>>(new Set())
+
+  // ── Materiel timeafregning state ─────────────────────────────────────────────
+  const [timeafregningFraPlan, setTimeafregningFraPlan] = useState<TimeafregningFraPlan>('nej')
+  // Case A (nej): samlet timer for hele holdpakken
+  const [holdpakkeTimer, setHoldpakkeTimer] = useState<number>(7.5)
+  const [materielAnvendt, setMaterielAnvendt] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(MATERIEL_ENHEDER.map(e => [e.anlaegsNr, true]))
+  )
+  const [materielTimer, setMaterielTimer] = useState<Record<string, number>>(
+    () => ({ '5-0034': 8.5, '3-0112': 7.0, '7-0078': 2.0 })
+  )
+
+  // Lokal kopi af afregnings-felter per chauffør-nøgle
+  // TODO: Erstat med Supabase når klar
+  const [afregningData, setAfregningData] = useState<Record<string, ChauffoerAfregning>>(() => {
+    const initial: Record<string, ChauffoerAfregning> = {}
+    const bilerData = vognmandBekraeftelse?.biler ?? []
+    for (const bil of bilerData) {
+      if (bil.afregning) {
+        initial[bil.regnr] = {
+          chauffoer_navn: bil.chauffoer,
+          reg_nr: bil.regnr,
+          ...bil.afregning,
+        }
+      }
+    }
+    return initial
+  })
+
+  function toggleAfregning(key: string) {
+    setAfregningOpen(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
+
+  function updateAfregningField(key: string, field: keyof ChauffoerAfregning, value: number | string | boolean | undefined) {
+    setAfregningData(prev => ({
+      ...prev,
+      [key]: { ...prev[key], [field]: value },
+    }))
+  }
+
+  function godkendAfregning(key: string) {
+    const tids = formatTimestamp(new Date())
+    setAfregningData(prev => ({
+      ...prev,
+      [key]: { ...prev[key], godkendt_af_formand: true, godkendt_tidspunkt: tids },
+    }))
+    setAfregningOpen(prev => { const next = new Set(prev); next.delete(key); return next })
+  }
+
+  function genaabnAfregning(key: string) {
+    setAfregningData(prev => ({
+      ...prev,
+      [key]: { ...prev[key], godkendt_af_formand: false, godkendt_tidspunkt: undefined },
+    }))
+    setAfregningOpen(prev => new Set([...prev, key]))
+  }
+
+  return (
+    <div className="flex flex-col gap-[48px]">
+
+      {/* ── Ordredetaljer ────────────────────────────────────────────── */}
+      {/* Separat state (detailsExpandedAfregning) fra Udfoersel-mode — uafhængig toggle */}
+      <section>
+        <div className="flex items-center gap-sm mb-md">
+          <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight">Ordredetaljer</h2>
+          <button
+            type="button"
+            onClick={() => setDetailsExpandedAfregning(e => !e)}
+            aria-expanded={detailsExpandedAfregning}
+            aria-label={detailsExpandedAfregning ? 'Skjul ordredetaljer' : 'Vis ordredetaljer'}
+            className="inline-flex items-center gap-xxxs px-sm py-xs font-inter text-xs font-medium text-dark-teal hover:text-deep-teal hover:bg-soft-aqua rounded-lg transition-colors"
+          >
+            {detailsExpandedAfregning ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {detailsExpandedAfregning ? 'Skjul detaljer' : 'Vis detaljer'}
+          </button>
+        </div>
+        {/* Spec-grid — tabs synlige som i Planlægning og Udførelse (hideTabs=false default) */}
+        {detailsExpandedAfregning && makeOrdredetaljerCard()}
+
+        <hr className="my-lg border-t border-hairline" />
+
+        {/* ── Udlægning — INDE i Ordredetaljer-section som sibling til hr, matcher
+            Planlægning + Udførsel-pattern hvor "næste sektion" sidder inden i samme
+            section så hr's mb-lg styrer spacing. */}
+        {/* TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate) */}
+        {recept && (() => {
+        const TONS_I_DAG = demoTonsIDag ?? 0
+        const AREAL_I_DAG = demoArealIDag ?? 0
+        const TYKKELSE = demoTykkelse ?? 0
+        const tonsProgress = TONS_I_DAG > 0 ? Math.round(((tonsAnkommet ?? 0) / TONS_I_DAG) * 100) : 0
+        const forventetProgress = AREAL_I_DAG > 0 ? Math.round(((forventetUdlagtM2 ?? 0) / AREAL_I_DAG) * 100) : 0
         const faktiskUdlagtM2 = faktiskRegistrering?.faktiskM2 ?? null
-        const faktiskProgress = faktiskUdlagtM2 !== null && DEMO_AREAL_I_DAG > 0 ? Math.round((faktiskUdlagtM2 / DEMO_AREAL_I_DAG) * 100) : 0
-        const afvigelse = faktiskUdlagtM2 !== null ? Math.round(faktiskUdlagtM2 - forventetUdlagtM2) : undefined
+        const faktiskProgress = faktiskUdlagtM2 !== null && AREAL_I_DAG > 0 ? Math.round((faktiskUdlagtM2 / AREAL_I_DAG) * 100) : 0
+        const afvigelse = faktiskUdlagtM2 !== null ? Math.round(faktiskUdlagtM2 - (forventetUdlagtM2 ?? 0)) : undefined
         const faktiskVariant: 'good' | 'warn' | 'bad' = afvigelse !== undefined && afvigelse < 0 ? 'bad' : 'good'
         const fmtTal = (n: number, d = 0) => new Intl.NumberFormat('da-DK', { maximumFractionDigits: d }).format(n)
+        // Per-child udlægning i samleordre-mode
+        const activeChildForU = isSamleordreMode && samleordreCtx
+          ? samleordreCtx.children.find(c => c.orderNumber === samleordreTabOrderNr)
+          : undefined
+        const childUdlaegning = activeChildForU?.udlaegningDetails
         return (
-          <section>
-            <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Udlægning</h2>
+          <div>
+            <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">
+              Udlægning
+              {isSamleordreMode && activeChildForU && (
+                <span className="font-inter text-sm font-normal text-text-muted ml-xs">— {activeChildForU.stedLabel}</span>
+              )}
+            </h2>
+            {/* TODO: Udlægning per-child i samleordre-mode — statemodel er p.t. global for FremdriftCards */}
+            {/* Per-child noter vises som info-banner i samleordre-mode */}
+            {isSamleordreMode && childUdlaegning && (
+              <div className="flex items-center gap-xs bg-surface border border-hairline rounded-xl px-sm py-xs mb-xs">
+                <div className={`w-[8px] h-[8px] rounded-full flex-shrink-0 ${
+                  childUdlaegning.status === 'færdig' ? 'bg-good' :
+                  childUdlaegning.status === 'i-gang' ? 'bg-warning' : 'bg-text-muted'
+                }`} />
+                <span className="font-inter text-xs font-medium text-text-primary">
+                  {childUdlaegning.status === 'færdig' ? 'Færdig'
+                    : childUdlaegning.status === 'i-gang' ? `I gang${childUdlaegning.startTid ? ` · startet ${childUdlaegning.startTid}` : ''}`
+                    : 'Ikke startet'}
+                </span>
+                {childUdlaegning.noter && (
+                  <span className="font-inter text-xs text-text-muted">· {childUdlaegning.noter}</span>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-xs">
               <FremdriftCard
                 variant="tons-ankommet"
                 label="UDVEJET FABRIK"
-                value={fmtTal(tonsAnkommet, 1)}
+                value={fmtTal(tonsAnkommet ?? 0, 1)}
                 unit=""
-                subtekst={`á ${fmtTal(DEMO_TONS_I_DAG)} t dagens plan`}
+                subtekst={`á ${fmtTal(TONS_I_DAG)} t dagens plan`}
                 progress={tonsProgress}
                 progressVariant="good"
               />
               <FremdriftCard
                 variant="forventet-udlagt"
                 label="FORVENTET M2 UDLAGT"
-                value={fmtTal(forventetUdlagtM2)}
+                value={fmtTal(forventetUdlagtM2 ?? 0)}
                 unit=""
                 subtekst="beregnet fra tons × kg/m²"
                 progress={forventetProgress}
@@ -3785,7 +4114,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                 unit=""
                 subtekst={
                   faktiskRegistrering?.gemtTidspunkt
-                    ? `senest gemt ${faktiskRegistrering.gemtTidspunkt}`
+                    ? `senest gemt ${formatTimestamp(faktiskRegistrering.gemtTidspunkt)}`
                     : 'ikke registreret endnu'
                 }
                 progress={faktiskProgress}
@@ -3798,7 +4127,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                 <div className="flex justify-end">
                   <button
                     type="button"
-                    onClick={() => setVisUdlaegningInput(true)}
+                    onClick={() => onSetVisUdlaegningInput?.(true)}
                     className="bg-warning text-deep-teal font-inter font-medium text-sm px-sm py-xs rounded-lg min-h-[44px] hover:brightness-95 transition-all"
                   >
                     Registrer udlægning
@@ -3807,39 +4136,26 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
               ) : (
                 <FremdriftInputRow
                   densitet={recept.densitet}
-                  planTykkelse={DEMO_TYKKELSE}
+                  planTykkelse={TYKKELSE}
                   initial={
                     faktiskRegistrering
                       ? { faktiskM2: faktiskRegistrering.faktiskM2!, faktiskTons: faktiskRegistrering.faktiskTons! }
                       : undefined
                   }
                   onSave={({ faktiskM2, faktiskTons }) => {
-                    gemFaktisk(faktiskM2, faktiskTons)
-                    setVisUdlaegningInput(false)
+                    onGemFaktisk?.(faktiskM2, faktiskTons)
+                    onSetVisUdlaegningInput?.(false)
                   }}
                 />
               )}
             </div>
-          </section>
+          </div>
         )
       })()}
-
-      {/* ── Vejesedler ──────────────────────────── */}
-      {/* TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate) */}
-      <section>
-        <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Vejesedler</h2>
-        <VejesedlerTable
-          vejesedler={vejesedler}
-          recepter={INITIAL_RECEPTER}
-          minTemperatur={recept?.min_temperatur ?? 140}
-          udlaeggerliste={INITIAL_UDLAEGGERE}
-          onTemperatur={(_id, _temp) => { /* TODO: skriv retur til PLAN */ }}
-          onUdlaegger={(_id, _materielNr) => { /* TODO: opdater vejeseddel */ }}
-        />
       </section>
 
-      {/* ── Bestilte biler ────────────────────────────────────────── */}
-      {/* TODO (produktion): Sektion (Bilafregning) filtreres på (selectedProductId, selectedDate) */}
+      {/* ── Bestilte biler (Bil- og tonsafregning) ─────────────────── */}
+      {/* TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate) */}
       {todayDay && (
         <section>
           <div className="mb-sm">
@@ -3866,15 +4182,22 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                         const afrData = afregningData[afregKey]
                         const isOpen = afregningOpen.has(afregKey)
                         const isGodkendt = afrData?.godkendt_af_formand ?? false
-                        // Materiel-biler afregnes ALTID på time — akkord ikke relevant
-                        const effectiveType: AfregningType = bil.er_materiel_bil ? 'time' : (afrData?.afregning_type ?? 'time')
-                        const isLast = i === vognmandBekraeftelse.biler.length - 1
                         const bilVejesedlerCollapsed = bil.vejesedler ?? []
+                        // 1,5-times-reglen: akkord-bil der ikke er aflæsset inden 1,5t → HELE dagens kørsel er timebaseret.
+                        // Reglen er firm — ingen override. Flaget sidder på vejesedlerne (aflæsset_efter_1_5t).
+                        const isTimeForcedBy15Min = !bil.er_materiel_bil
+                          && (afrData?.afregning_type ?? 'time') === 'akkord'
+                          && bilVejesedlerCollapsed.some(vs => vs.aflæsset_efter_1_5t)
+                        // Materiel-biler afregnes ALTID på time. Akkord-biler med 1,5-times-overskridelse tvinges til time.
+                        const effectiveType: AfregningType =
+                          bil.er_materiel_bil || isTimeForcedBy15Min ? 'time' : (afrData?.afregning_type ?? 'time')
+                        const isLast = i === vognmandBekraeftelse.biler.length - 1
 
-                        // ── Læs-type og fordeling-blokering (collapsed) ──────────
+                        // ── Fordeling-blokering (collapsed) — Multilæs fjernet som visuel kategori ──────────
+                        // harMultilaes bevares til fordeling-logik (mangler fordeling) men vises IKKE som badge
                         const harMultilaes = bilVejesedlerCollapsed.some(vs => vs.multilaes_flag)
-                        const harPuljelaes = bilVejesedlerCollapsed.some(vs => vs.puljelaes_flag && !vs.multilaes_flag)
-                        // Mangler fordeling: mindst én multilæs-vejeseddel har sum != netto_tons
+                        const harPuljelaes = bilVejesedlerCollapsed.some(vs => vs.puljelaes_flag)
+                        // Mangler fordeling: mindst én vejeseddel med multilaes_flag har sum != netto_tons
                         const manglerFordeling = harMultilaes && bilVejesedlerCollapsed.some(vs => {
                           if (!vs.multilaes_flag) return false
                           const fordeling = vejeseddelFordelinger[vs.id]
@@ -3908,20 +4231,17 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                                   </span>
                                 )}
                               </td>
-                              {/* D. Læs-type kolonne — rød "Mangler fordeling" trumfer alt */}
+                              {/* D. Læs-type kolonne — rød "Mangler fordeling" trumfer alt.
+                                  Multilæs fjernet som visuel kategori — kolonne viser kun fordeling-status og "Samles på en bil" (puljelæs). */}
                               <td className="align-middle px-xs py-xs">
                                 {!isOpen && manglerFordeling ? (
                                   <span className="inline-flex items-center gap-xxxs bg-bad/10 border border-bad text-bad font-inter font-semibold text-xxs px-xs py-xxxs rounded-md">
                                     <AlertTriangle size={10} className="flex-shrink-0" aria-label="Mangler fordeling" />
                                     Mangler fordeling
                                   </span>
-                                ) : harMultilaes ? (
-                                  <span className="inline-flex items-center gap-xxxs bg-warn-bg text-text-secondary font-inter font-semibold text-xxs px-xs py-xxxs rounded-md uppercase tracking-wider">
-                                    Multilæs
-                                  </span>
                                 ) : harPuljelaes ? (
                                   <span className="inline-flex items-center gap-xxxs bg-soft-aqua text-deep-teal font-inter font-semibold text-xxs px-xs py-xxxs rounded-md uppercase tracking-wider">
-                                    Puljelæs
+                                    Samles på en bil
                                   </span>
                                 ) : null}
                               </td>
@@ -3946,12 +4266,10 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                               const bilVejesedler = bil.vejesedler ?? []
                               // Dagens kørte tons = sum af alle vejesedler på bilen
                               const inheritedTons = bilVejesedler.reduce((s, vs) => s + vs.netto_tons, 0)
-                              // 1.5t-reglen: mindst én vejeseddel har flaget + bil er akkord
-                              const has1_5tRule = effectiveType === 'akkord' && bilVejesedler.some(vs => vs.aflæsset_efter_1_5t)
-                              // Formand har bekræftet skift til timeløn for denne bil
-                              const er1_5tBekraeftet = et5tBekraeftet.has(bil.regnr)
-                              // Effective type inkl. 1.5t-override
-                              const displayType: AfregningType = (has1_5tRule && er1_5tBekraeftet) ? 'time' : effectiveType
+                              // 1,5-times-reglen er trådt i kraft hvis isTimeForcedBy15Min (beregnet i outer scope).
+                              // effectiveType er allerede 'time' i dette tilfælde — vi viser banneret baseret på flaget.
+                              const has1_5tRule = isTimeForcedBy15Min
+                              const displayType: AfregningType = effectiveType
 
                               // B. Fordelings-blokering for godkend-knap:
                               // Multilæs-vejesedler der mangler komplet fordeling (sum != netto_tons)
@@ -3970,40 +4288,12 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                                   <div className="bg-surface-2 rounded-lg p-sm mt-xxxs border border-hairline">
 
                                     {/* ── 1,5-times-regel banner (akkord-biler) ──────── */}
-                                    {has1_5tRule && !er1_5tBekraeftet && (
-                                      <div className="flex flex-wrap items-start gap-xs bg-warn-bg border border-yellow rounded-md p-xs mb-sm">
-                                        <AlertTriangle size={14} className="text-text-secondary flex-shrink-0 mt-[1px]" />
-                                        <div className="flex-1 min-w-0">
-                                          <span className="font-inter text-xs text-text-primary font-semibold block mb-xxxs">
-                                            1,5-times-reglen trådte i kraft for denne bil — foreslået skift til timeløn for hele dagen
-                                          </span>
-                                          <div className="flex flex-wrap items-center gap-xs mt-xxxs">
-                                            <button
-                                              type="button"
-                                              onClick={() => setEt5tBekraeftet(prev => new Set([...prev, bil.regnr]))}
-                                              className="inline-flex items-center gap-xxxs bg-warning text-deep-teal font-inter font-medium text-xs px-xs py-xxxs rounded-md hover:opacity-90 transition-opacity min-h-[28px]"
-                                            >
-                                              <CheckCircle2 size={11} />
-                                              Bekræft skift til timeløn
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                // Overstyr — marker som bekræftet men behold akkord visuelt (simpel toggle i prototypen)
-                                                // TODO: I produktion: skriv override-flag til afregning
-                                              }}
-                                              className="font-inter text-xs text-text-muted underline hover:text-text-primary transition-colors"
-                                            >
-                                              Overstyr (behold akkord)
-                                            </button>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
-                                    {has1_5tRule && er1_5tBekraeftet && (
-                                      <div className="flex items-center gap-xs bg-warn-bg border border-yellow rounded-md px-xs py-xxxs mb-sm">
-                                        <CheckCircle2 size={12} className="text-good flex-shrink-0" />
-                                        <span className="font-inter text-xs text-text-secondary">Skiftet til timeløn (1,5-times-reglen bekræftet)</span>
+                                    {has1_5tRule && (
+                                      <div className="inline-flex items-center gap-xs bg-warn-bg border border-yellow px-sm py-xs rounded-lg mb-sm">
+                                        <AlertTriangle size={14} className="text-warning flex-shrink-0" />
+                                        <span className="font-inter text-xs font-medium text-deep-teal">
+                                          1,5-times-reglen trådte i kraft for denne bil
+                                        </span>
                                       </div>
                                     )}
 
@@ -4129,8 +4419,116 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
 
                                     {/* A. "Beregnet beløb pr. ordre"-sektionen er fjernet — økonomi er ikke formands domæne */}
 
+                                    {/* ── Timer-fordeling (time-biler på samleordre med 2+ children) ── */}
+                                    {displayType === 'time' && isSamleordreMode && samleordreCtx && samleordreCtx.children.length >= 2 && (() => {
+                                      const bruttoTimer = (afrData?.koretimer ?? 0) + (afrData?.ventetid ?? 0) + (afrData?.pause ?? 0)
+                                      const isTimerOpen = bilTimerFordelingOpen.has(afregKey)
+                                      // Initialisér fordeling: alle timer på anchor, resten 0
+                                      const anchorChild = samleordreCtx.children.find(c => c.isAnchor) ?? samleordreCtx.children[0]
+                                      const currentFordeling: Record<string, number> = bilTimerFordelinger[afregKey]
+                                        ?? Object.fromEntries(samleordreCtx.children.map(c => [
+                                          c.orderNumber,
+                                          c.orderNumber === anchorChild.orderNumber ? bruttoTimer : 0,
+                                        ]))
+                                      const fordelingSum = Object.values(currentFordeling).reduce((s, t) => s + t, 0)
+                                      const timerRest = bruttoTimer - fordelingSum
+                                      const timerSumMatch = Math.abs(timerRest) < 0.05
+
+                                      return (
+                                        <div className="mt-sm border-t border-hairline pt-sm">
+                                          {/* Overskrift + toggle-knap — samme mønster som "Fordel tons"-knap på vejeseddel */}
+                                          <div className="flex items-center justify-between mb-xs">
+                                            <span className="font-inter text-xxs text-text-muted uppercase tracking-widest">
+                                              Fordel timer på ordrer
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => setBilTimerFordelingOpen(prev => {
+                                                const next = new Set(prev)
+                                                if (next.has(afregKey)) next.delete(afregKey); else next.add(afregKey)
+                                                return next
+                                              })}
+                                              className="inline-flex items-center gap-xxxs font-inter text-xs text-deep-teal font-semibold hover:opacity-80 transition-opacity whitespace-nowrap min-h-[28px] px-xs"
+                                            >
+                                              {isTimerOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                              {isTimerOpen ? 'Skjul' : 'Fordel timer'}
+                                            </button>
+                                          </div>
+
+                                          {isTimerOpen && (
+                                            <div className="bg-surface border border-hairline rounded-md overflow-hidden">
+                                              <div className="px-xs pb-xs pt-xs bg-surface-2">
+                                                <div className="flex flex-col gap-xs">
+                                                  {samleordreCtx.children
+                                                    .slice()
+                                                    .sort((a, b) => (a.isAnchor ? -1 : b.isAnchor ? 1 : 0))
+                                                    .map((child) => {
+                                                      const currentTimer = currentFordeling[child.orderNumber] ?? 0
+                                                      return (
+                                                        <div key={child.orderNumber} className="flex items-center gap-xs">
+                                                          {/* Anchor-markering: gul prik — præcis som tons-fordeling */}
+                                                          <div className={[
+                                                            'w-2 h-2 rounded-full flex-shrink-0',
+                                                            child.isAnchor ? 'bg-yellow' : 'bg-hairline-2',
+                                                          ].join(' ')} title={child.isAnchor ? 'Anchor-ordre' : ''} />
+                                                          <span className={[
+                                                            'font-inter text-xs flex-1 min-w-0 truncate',
+                                                            child.isAnchor ? 'font-semibold text-text-primary' : 'text-text-secondary',
+                                                          ].join(' ')}>
+                                                            {child.orderNumber} · {child.stedLabel}
+                                                          </span>
+                                                          {/* F. Input — ingen stepper-arrows, numeric-only filter (præcis som tons-fordeling) */}
+                                                          <input
+                                                            type="number"
+                                                            value={currentTimer}
+                                                            disabled={isGodkendt}
+                                                            step="0.5"
+                                                            pattern="[0-9]*[.,]?[0-9]*"
+                                                            onChange={e => {
+                                                              const raw = e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.')
+                                                              const newTimer = parseFloat(raw) || 0
+                                                              setBilTimerFordelinger(prev => {
+                                                                const current = prev[afregKey]
+                                                                  ?? Object.fromEntries(samleordreCtx.children.map(c => [
+                                                                    c.orderNumber,
+                                                                    c.orderNumber === anchorChild.orderNumber ? bruttoTimer : 0,
+                                                                  ]))
+                                                                return {
+                                                                  ...prev,
+                                                                  [afregKey]: { ...current, [child.orderNumber]: newTimer },
+                                                                }
+                                                              })
+                                                            }}
+                                                            className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-xs tabular-nums w-[90px] text-right focus:outline-none focus:border-dark-teal disabled:opacity-60 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                                            aria-label={`Timer til ${child.orderNumber} · ${child.stedLabel}`}
+                                                          />
+                                                          <span className="font-inter text-xs text-text-muted">t</span>
+                                                        </div>
+                                                      )
+                                                    })}
+                                                </div>
+                                                {/* E. Sum-counter: til højre under det sidste input-felt — præcis som tons-fordeling */}
+                                                <div className="flex justify-end mt-xs">
+                                                  <span className={[
+                                                    'font-inter text-xs tabular-nums font-semibold',
+                                                    timerSumMatch ? 'text-good' : 'text-bad',
+                                                  ].join(' ')}>
+                                                    {timerSumMatch ? (
+                                                      <>Sum: {fordelingSum.toFixed(1)}/{bruttoTimer.toFixed(1)}t</>
+                                                    ) : (
+                                                      <>Sum: {fordelingSum.toFixed(1)}/{bruttoTimer.toFixed(1)}t (rest {timerRest > 0 ? '+' : ''}{timerRest.toFixed(1)}t)</>
+                                                    )}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )
+                                    })()}
+
                                     {/* ── Vejesedler under afregnings-felterne ─────── */}
-                                    {/* Alle vejesedler rendres ens — badgen signalerer puljelæs/multilæs. Ingen gruppering. */}
+                                    {/* Alle vejesedler rendres ens — badgen signalerer "Samles på en bil" (puljelæs). Multilæs fjernet som visuel kategori. Ingen gruppering. */}
                                     {bilVejesedler.length > 0 && (
                                       <div className="mt-sm border-t border-hairline pt-sm">
                                         <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block mb-xs">Vejesedler</span>
@@ -4161,14 +4559,10 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                                                   </span>
                                                   {/* Badge alignet med "Indeholder"-kolonnen */}
                                                   <div className="w-fit">
-                                                    {vs.puljelaes_flag && !vs.multilaes_flag && (
+                                                    {/* Multilæs fjernet som visuel kategori — kun puljelæs ("Samles på en bil") vises */}
+                                                    {vs.puljelaes_flag && (
                                                       <span className="inline-flex items-center gap-xxxs bg-soft-aqua text-deep-teal font-inter font-semibold text-xxs px-xs py-xxxs rounded-md uppercase tracking-wider whitespace-nowrap">
-                                                        Puljelæs
-                                                      </span>
-                                                    )}
-                                                    {vs.multilaes_flag && (
-                                                      <span className="inline-flex items-center gap-xxxs bg-warn-bg text-text-secondary font-inter font-semibold text-xxs px-xs py-xxxs rounded-md uppercase tracking-wider whitespace-nowrap">
-                                                        Multilæs
+                                                        Samles på en bil
                                                       </span>
                                                     )}
                                                   </div>
@@ -4191,7 +4585,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                                                   </div>
                                                 </div>
 
-                                                {/* Fordeling-expander for multilæs */}
+                                                {/* Fordeling-expander — multilaes_flag er dataflag, badge er fjernet som visuel kategori */}
                                                 {vs.multilaes_flag && isVsExpanded && (
                                                   <div className="border-t border-hairline px-xs pb-xs pt-xs bg-surface-2">
                                                     <div className="flex flex-col gap-xs">
@@ -4205,7 +4599,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                                                               <div className={[
                                                                 'w-2 h-2 rounded-full flex-shrink-0',
                                                                 pf.is_anchor ? 'bg-yellow' : 'bg-hairline-2',
-                                                              ].join(' ')} title={pf.is_anchor ? 'Anchor-ordre' : ''} />
+                                                              ].join(' ')} title={pf.is_anchor ? 'Primær ordre' : ''} />
                                                               <span className={[
                                                                 'font-inter text-xs flex-1 min-w-0 truncate',
                                                                 idx === 0 ? 'font-semibold text-text-primary' : 'text-text-secondary',

@@ -87,7 +87,7 @@ function sortOrdrer(ordrer: Ordre[]): Ordre[] {
 
 const CELL_BAR_CLASS: Record<CellStatus, string> = {
   groen:   'bg-good',
-  orange:  'bg-orange-500',
+  orange:  'bg-warning',
   roed:    'bg-bad',
   gul:     'bg-yellow',
   neutral: 'bg-light-aqua/50',
@@ -95,7 +95,7 @@ const CELL_BAR_CLASS: Record<CellStatus, string> = {
 
 const BADGE_CLASS: Record<CellStatus, string> = {
   groen:   'bg-good text-white border-transparent',
-  orange:  'bg-orange-500 text-white border-transparent',
+  orange:  'bg-warn-bg text-deep-teal border-yellow/40',
   roed:    'bg-bad text-white border-transparent',
   gul:     'bg-yellow text-deep-teal border-yellow/40',
   neutral: 'bg-light-aqua/50 text-text-muted border-transparent',
@@ -332,10 +332,9 @@ export function VognmandGanttScreen() {
                           : 'neutral'
                         : null
 
-                      // Aften/nat: tidsvindue-farve overrider status-farve på hele baren
+                      // Nat: tidsvindue-farve overrider status-farve på hele baren
                       const barColorClass = inRange && status
-                        ? ordre.tidsvindue === 'aften' ? 'bg-warning'
-                        : ordre.tidsvindue === 'nat' ? 'bg-deep-teal'
+                        ? ordre.tidsvindue === 'nat' ? 'bg-deep-teal'
                         : CELL_BAR_CLASS[status]
                         : ''
 
@@ -414,11 +413,10 @@ export function VognmandGanttScreen() {
         <div className="flex items-center flex-wrap gap-4 mt-4 pl-1">
           {[
             { cls: 'bg-bad',        label: 'Ikke disponeret' },
-            { cls: 'bg-orange-500', label: 'Delvist disponeret' },
+            { cls: 'bg-warning',    label: 'Delvist disponeret' },
             { cls: 'bg-good',       label: 'Fuldt disponeret' },
             { cls: 'bg-yellow',     label: 'Ændret af formand' },
               { cls: 'bg-light-aqua/50', label: 'Ingen bestilling (weekend/fridag)' },
-            { cls: 'bg-warning',      label: 'Aften' },
             { cls: 'bg-deep-teal',    label: 'Nat' },
             { cls: 'bg-bad',          label: 'Weekend-udførelse' },
           ].map(({ cls, label }) => (

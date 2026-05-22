@@ -20,6 +20,29 @@ export interface VejesedlerTableProps {
   onTemperatur: (vejeseddelId: string, temp: number) => void
   /** Kald når formand vælger udlægger — bobles fra VejeseddelRow → UdlaeggerDropdown */
   onUdlaegger: (vejeseddelId: string, materielNr: string) => void
+  /**
+   * Samleordre-children — kun sat når i samleordre-kontekst med 2+ ordrer.
+   * Aktiverer ordre-dropdown på hver row.
+   * TODO: Erstat med Supabase når klar
+   */
+  samleordreChildren?: { orderNumber: string; stedLabel: string }[]
+  /**
+   * Aktuelt valgt ordrenummer per vejeseddel-id.
+   * Parent ejer state — TODO: Erstat med Supabase når klar
+   */
+  vejeseddelSelectedOrdre?: Record<string, string>
+  /** Kald når formand skifter ordre-dropdown på en vejeseddel-row */
+  onSelectOrdreForVs?: (vsId: string, orderNumber: string) => void
+  /**
+   * Per-ordre temperaturer: vejeseddelId → ordrenummer → temperatur.
+   * TODO: Erstat med Supabase når klar
+   */
+  vejeseddelTempPerOrdre?: Record<string, Record<string, number>>
+  /**
+   * Per-ordre udlægger-valg: vejeseddelId → ordrenummer → materielNr.
+   * TODO: Erstat med Supabase når klar
+   */
+  vejeseddelUdlaeggerPerOrdre?: Record<string, Record<string, string>>
 }
 
 /**
@@ -68,6 +91,11 @@ export function VejesedlerTable({
   fabriksNavne, // TODO: Videresend til VejeseddelRow når fabriks-opslag er implementeret
   onTemperatur,
   onUdlaegger,
+  samleordreChildren,
+  vejeseddelSelectedOrdre,
+  onSelectOrdreForVs,
+  vejeseddelTempPerOrdre,
+  vejeseddelUdlaeggerPerOrdre,
 }: VejesedlerTableProps) {
   void fabriksNavne
   const sorterteVejesedler = sorterVejesedler(vejesedler)
@@ -117,6 +145,11 @@ export function VejesedlerTable({
                 udlaeggerliste={udlaeggerliste}
                 onTemperatur={onTemperatur}
                 onUdlaegger={onUdlaegger}
+                samleordreChildren={samleordreChildren}
+                selectedOrdre={vejeseddelSelectedOrdre?.[vejeseddel.id]}
+                onSelectOrdre={onSelectOrdreForVs}
+                tempPerOrdre={vejeseddelTempPerOrdre?.[vejeseddel.id]}
+                udlaeggerPerOrdre={vejeseddelUdlaeggerPerOrdre?.[vejeseddel.id]}
               />
             ))}
           </tbody>

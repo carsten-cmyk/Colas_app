@@ -24,11 +24,12 @@ function getDagStatus(dag: DagDisponering, disponerede: string[]): DagStatus {
   return 'roed'
 }
 
+// Solid-tint pills uden border — matcher formand's status-pille-pattern (PATTERNS.md 1a)
 const STATUS_BADGE: Record<DagStatus, { cls: string; label: string }> = {
-  roed:   { cls: 'bg-bad/10 text-bad border border-bad/20',                      label: 'Ikke disponeret' },
-  orange: { cls: 'bg-orange-50 text-orange-600 border border-orange-200',         label: 'Delvist disponeret' },
-  groen:  { cls: 'bg-good/10 text-good border border-good/20',                    label: 'Fuldt disponeret' },
-  gul:    { cls: 'bg-yellow/20 text-deep-teal border border-yellow/40',            label: 'Ændret af formand' },
+  roed:   { cls: 'bg-bad/15 text-bad',                  label: 'Ikke disponeret' },
+  orange: { cls: 'bg-warn-bg text-deep-teal',           label: 'Delvist disponeret' },
+  groen:  { cls: 'bg-good-bg text-good',                label: 'Fuldt disponeret' },
+  gul:    { cls: 'bg-yellow/25 text-deep-teal',         label: 'Ændret af formand' },
 }
 
 function fmtDato(iso: string): string {
@@ -237,13 +238,13 @@ export function VognmandDisponeringsScreen() {
             <div className="flex flex-col gap-2 mt-6">
               <button
                 onClick={() => navigate('/prototyper/liste?tab=disponeret')}
-                className="w-full font-inter font-semibold text-sm px-6 py-3 rounded-xl bg-good text-white hover:bg-good/90 transition-all"
+                className="w-full font-poppins font-semibold text-xs px-md py-xs rounded-full bg-good text-white inline-flex items-center justify-center gap-xxxs hover:opacity-90 transition-opacity"
               >
                 Se disponerede ordrer
               </button>
               <button
                 onClick={() => navigate('/prototyper/liste?tab=aabne')}
-                className="w-full font-inter font-medium text-sm px-6 py-3 rounded-xl bg-white border border-box-outline text-text-secondary hover:bg-surface-2 transition-all"
+                className="w-full font-inter font-medium text-sm px-md py-xs rounded-full bg-white border border-hairline text-text-secondary hover:bg-surface-2 transition-colors"
               >
                 Tilbage til Åbne ordre
               </button>
@@ -345,7 +346,7 @@ export function VognmandDisponeringsScreen() {
           <div className="px-md pt-md pb-lg">
 
             {/* Ordrekort */}
-            <div className="bg-white rounded-xl border border-box-outline shadow-sm overflow-hidden">
+            <div className="bg-white rounded-2xl border border-hairline shadow-sm overflow-hidden">
 
               {/* Header — identisk med OrdreKort */}
               <div className="px-5 pt-5 pb-4 border-b border-box-outline">
@@ -471,7 +472,7 @@ export function VognmandDisponeringsScreen() {
                         </div>
 
                         <span className={[
-                          'font-inter text-[10px] font-semibold px-2 py-1 rounded-full text-center self-start mt-1',
+                          'font-inter text-xxs font-semibold px-xs py-xxxs rounded-full text-center self-start mt-1',
                           badge.cls,
                         ].join(' ')}>
                           {badge.label}
@@ -569,7 +570,7 @@ export function VognmandDisponeringsScreen() {
                 //   - Materiellevering: "Bekræftet af vognmand" badge per maskine
                 // Se .claude/docs/MATERIEL_FLOW.md for fuld spec.
                 onClick={handleGodkend}
-                  className="mt-4 w-full font-inter font-semibold text-sm px-6 py-3.5 rounded-xl bg-good text-white hover:bg-good/90 transition-all shadow-sm"
+                  className="mt-4 w-full font-poppins font-semibold text-xs px-md py-xs rounded-full bg-good text-white inline-flex items-center justify-center gap-xxxs hover:opacity-90 transition-opacity shadow-sm"
                 >
                   Godkend disponering og bekræft kørsel til formand
                 </button>

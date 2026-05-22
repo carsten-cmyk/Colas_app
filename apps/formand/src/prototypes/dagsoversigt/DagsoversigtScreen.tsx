@@ -12,10 +12,13 @@ import {
   MapPin,
   Layers,
   Check,
+  Plus,
+  X,
 } from 'lucide-react'
 import { TopBar } from '@/components/layout/TopBar'
 import { BottomTabBar } from '@/components/layout/BottomTabBar'
 import type { TabName } from '@/types/navigation'
+import { formatDateRange } from '@/utils/date'
 
 // ─── Types (inline — prototype) ──────────────────────────────────────────────
 
@@ -47,6 +50,59 @@ interface MockOrder {
 interface MockSamleordre {
   id: string
   orderIds: string[]
+}
+
+// Shape for navigation til Ordre-plan med nye samleordre-children.
+// Spejler SamleordreChild i OrdrePlanScreen.tsx — defineret inline da prototyper
+// ikke deler typer på tværs af mapper. Holder en stilfærdig kontrakt mellem skærmene.
+interface SamleordreChildShape {
+  orderNumber: string
+  jobnummer: string
+  udfoerelseSted: string
+  stedLabel: string
+  isAnchor: boolean
+  products: {
+    id: string
+    recipeCode: string
+    recipeName: string
+    tonsTotal: number
+  }[]
+  resources: never[]
+  projektleder: string
+  projektlederTlf: string
+  fabrik: string
+  fabrikTlf: string
+  kundeVirksomhed: string
+  kundekontakt: string
+  kundekontaktTlf: string
+  /** Antal biler planlagt for denne ordre */
+  antalBiler: number
+  /** Om vognmand har bekræftet biler for denne ordre */
+  vognmandBekraeftet: boolean
+  /** Antal materiel-stykker til transport for denne ordre */
+  antalMateriel: number
+  /** Om vognmand har bekræftet materiel-transport for denne ordre */
+  materielBekraeftet: boolean
+  /** Om forundersøgelse er foretaget OG tilfredsstillende */
+  forundersoegelseOK: boolean
+  /** Status for forundersøgelse */
+  forundersoegelseStatus: 'OK' | 'IKKE_OK' | 'MANGLER'
+  /** Per-child Forundersøgelse-detaljer — vises i Udførsel-mode */
+  // TODO: Erstat med Supabase når klar — hent fra forundersoegelse-tabel pr. ordre
+  forundersoegelseDetails?: {
+    underlaegsType: 'asfalt' | 'beton' | 'grus' | null
+    tilfredsstillende: boolean | null
+    besigtigelseComment: string
+    photoCount: number
+  }
+  /** Per-child Udlægning-detaljer — vises i Udførsel-mode */
+  // TODO: Erstat med Supabase når klar — hent fra udlaegning-tabel pr. ordre
+  udlaegningDetails?: {
+    status: 'ikke-startet' | 'i-gang' | 'færdig'
+    startTid?: string
+    sluttId?: string
+    noter: string
+  }
 }
 
 // ─── Frozen prototype date ───────────────────────────────────────────────────
@@ -216,6 +272,13 @@ const INITIAL_SAMLEORDRER: MockSamleordre[] = [
   { id: 'samle-001', orderIds: ['ord-2', 'ord-3'] },
 ]
 
+// Module-level mutable store så samleordrer overlever navigation væk fra Dagsoversigt.
+// Dagsoversigt læser herfra ved mount og synker back hver gang state opdateres.
+// TODO: Erstat med Supabase når klar — server-side persistens på samleordre_children
+let samleordrerStore: MockSamleordre[] = INITIAL_SAMLEORDRER
+function getSamleordrerStore(): MockSamleordre[] { return samleordrerStore }
+function setSamleordrerStore(next: MockSamleordre[]): void { samleordrerStore = next }
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function daysBetween(start: string, end: string): number {
@@ -238,6 +301,53 @@ function isMultiDay(order: MockOrder): boolean {
   return order.startDate !== order.endDate
 }
 
+// recipeName → recipeCode mapping. Spejler de koder OrdrePlanScreen forventer
+// så nye samleordre-children fra Dagsoversigt grupperes korrekt i bestillings-rækken.
+// TODO: Erstat med Supabase når klar — recipeCode kommer fra produkter-tabellen
+const RECIPE_CODE_MAP: Record<string, string> = {
+  'SMA 11S': '82101H',
+  'SMA 8S': '83001',
+  'GAB I': '23001B',
+  'GAB 0/16': '23016',
+  'ABB 11': 'ABB11',
+  'ABB 16': 'ABB16',
+}
+
+function recipeCodeFor(recipeName: string): string {
+  return RECIPE_CODE_MAP[recipeName] ?? recipeName.replace(/\s+/g, '')
+}
+
+function orderToChildShape(order: MockOrder): SamleordreChildShape {
+  return {
+    orderNumber: order.orderNumber,
+    jobnummer: order.jobnummer,
+    udfoerelseSted: `${order.address}, ${order.postalCode} ${order.city}`,
+    stedLabel: order.address.split(' ')[0],
+    isAnchor: false,
+    products: order.products.map((p, i) => ({
+      id: `${order.id}-p${i + 1}`,
+      recipeCode: recipeCodeFor(p.recipeName),
+      recipeName: p.recipeName,
+      tonsTotal: p.tons,
+    })),
+    resources: [],
+    projektleder: order.projektleder,
+    projektlederTlf: order.projektlederTlf,
+    fabrik: order.factoryName,
+    fabrikTlf: '55 66 77 88', // TODO: Erstat med Supabase når klar — fabrik-telefon findes ikke i MockOrder
+    kundeVirksomhed: 'Kunde A/S', // TODO: Erstat med Supabase når klar — kundekontakt-data findes ikke i MockOrder
+    kundekontakt: 'Kontaktperson', // TODO: Erstat med Supabase når klar
+    kundekontaktTlf: '33 44 55 66', // TODO: Erstat med Supabase når klar
+    // TODO: Erstat med Supabase når klar — per-child dagsoverblik-data
+    antalBiler: 0,
+    vognmandBekraeftet: false,
+    antalMateriel: 0,
+    materielBekraeftet: false,
+    forundersoegelseOK: false,
+    forundersoegelseStatus: 'MANGLER',
+  }
+}
+
 function ordersForDate(date: string): MockOrder[] {
   return MOCK_ORDERS.filter(o => {
     const start = o.startDate
@@ -246,22 +356,8 @@ function ordersForDate(date: string): MockOrder[] {
   })
 }
 
-// TODO: Erstat med Supabase når klar — startDate/endDate skal komme fra ordre-rækken (orders.start_date, orders.end_date)
-function formatDateRange(start: string, end: string): string {
-  const s = new Date(start + 'T00:00:00')
-  const e = new Date(end + 'T00:00:00')
-  const monthShort = (d: Date) =>
-    d.toLocaleDateString('da-DK', { month: 'short' }).replace('.', '')
-  if (start === end) {
-    return `${s.getDate()}. ${monthShort(s)}`
-  }
-  // Samme måned: "16.–20. mar"
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${s.getDate()}.–${e.getDate()}. ${monthShort(e)}`
-  }
-  // Forskellige måneder: "28. feb–3. mar"
-  return `${s.getDate()}. ${monthShort(s)}–${e.getDate()}. ${monthShort(e)}`
-}
+// Date-format helpers er centraliseret i @/utils/date — SINGLE SOURCE OF TRUTH.
+// formatDateRange importeres fra utils/date (samme helper bruges af OrdrePlanScreen).
 
 function isWeekend(d: Date): boolean {
   const dow = d.getDay()
@@ -593,10 +689,34 @@ export function DagsoversigtScreen() {
 
   // Oprettede samleordrer: { id, orderIds }[]
   // TODO: Erstat med Supabase når klar
-  const [samleordrer, setSamleordrer] = useState<MockSamleordre[]>(INITIAL_SAMLEORDRER)
+  const [samleordrer, setSamleordrerLocal] = useState<MockSamleordre[]>(() => getSamleordrerStore())
+
+  // Synker både local state og module store ved hver mutation
+  function updateSamleordrer(updater: (prev: MockSamleordre[]) => MockSamleordre[]) {
+    setSamleordrerLocal(prev => {
+      const next = updater(prev)
+      setSamleordrerStore(next)
+      return next
+    })
+  }
+
+  // Lokal add-mode: aktiveres via "+ Tilføj ordre"-knap på Connected Box (uden URL-param)
+  const [localAddModeSamleordreId, setLocalAddModeSamleordreId] = useState<string | null>(null)
 
   // Bekræftelses-modal når formanden kombinerer ordrer
   const [showConfirmKombiner, setShowConfirmKombiner] = useState(false)
+
+  // Add-mode: aktiveres når brugeren kommer fra Ordre-plan med
+  // ?addToSamleordreId=samle-001 (URL-mode), ELLER når brugeren klikker
+  // "+ Tilføj ordre" på en Connected Box (lokal-mode via localAddModeSamleordreId).
+  // Skifter FAB-label + confirm-flow så valgte ordrer tilføjes til den eksisterende
+  // samleordre i stedet for at oprette en ny.
+  const isAddModeFromUrl = !!searchParams.get('addToSamleordreId')
+  const addToSamleordreId = searchParams.get('addToSamleordreId') ?? localAddModeSamleordreId
+  const isAddMode = !!addToSamleordreId
+  const targetSamleordre = isAddMode
+    ? samleordrer.find(s => s.id === addToSamleordreId)
+    : null
 
   function handleTabPress(tab: TabName) {
     if (tab === 'mine-opgaver') { navigate('/prototyper/gantt'); return }
@@ -638,19 +758,51 @@ export function DagsoversigtScreen() {
   }
 
   function handleKombiner() {
-    if (selectedOrderIds.size < 2) return
+    // Add-mode kræver kun 1 valgt; normal mode kræver 2+
+    if (isAddMode ? selectedOrderIds.size < 1 : selectedOrderIds.size < 2) return
     setShowConfirmKombiner(true)
   }
 
   function confirmKombiner() {
+    if (isAddMode && targetSamleordre) {
+      const selectedArray = Array.from(selectedOrderIds)
+      // Opdater samleordrer-state + module store — sker i BÅDE URL-mode og lokal-mode
+      updateSamleordrer(prev => prev.map(s =>
+        s.id === targetSamleordre.id
+          ? { ...s, orderIds: [...s.orderIds, ...selectedArray] }
+          : s
+      ))
+
+      if (isAddModeFromUrl) {
+        // URL-mode: navigér tilbage til Ordre-plan med addedChildren (current behavior)
+        const selectedOrders = selectedArray
+          .map(id => todayOrders.find(o => o.id === id))
+          .filter((o): o is MockOrder => o !== undefined)
+        const addedChildren: SamleordreChildShape[] = selectedOrders.map(orderToChildShape)
+        setShowConfirmKombiner(false)
+        setSelectedOrderIds(new Set())
+        navigate(
+          `/prototyper/ordre-plan?samleordreId=${encodeURIComponent(targetSamleordre.id)}&date=${encodeURIComponent(selectedDate)}`,
+          { state: { addedChildren } }
+        )
+        return
+      }
+
+      // Lokal-mode: bliv på Dagsoversigt, exit add-mode
+      setShowConfirmKombiner(false)
+      setSelectedOrderIds(new Set())
+      setLocalAddModeSamleordreId(null)
+      return
+    }
+    // Normal mode: opret ny samleordre
     const selectedArray = Array.from(selectedOrderIds)
     const newId = `samle-${Date.now()}`
-    setSamleordrer(prev => [...prev, { id: newId, orderIds: selectedArray }])
+    updateSamleordrer(prev => [...prev, { id: newId, orderIds: selectedArray }])
     setSelectedOrderIds(new Set())
     setShowConfirmKombiner(false)
   }
 
-  const canKombiner = selectedOrderIds.size >= 2
+  const canKombiner = isAddMode ? selectedOrderIds.size >= 1 : selectedOrderIds.size >= 2
 
   // ─── Render-logik: gruppér ordrer for valgt dato ──────────────────────────
 
@@ -681,15 +833,54 @@ export function DagsoversigtScreen() {
         {/* Rettelse 5: w-[80%] mx-auto erstatter max-w-2xl */}
         <div className="w-[80%] mx-auto px-sm py-md">
 
+          {/* ─── Add-mode banner: vises KUN i URL-mode (brugeren kommer fra Ordre-plan).
+              I lokal-mode (klikket "+ Tilføj ordre" på Connected Box) er den inline pille
+              tilstrækkelig kontekst, og top-banneret ville være redundant. */}
+          {isAddMode && targetSamleordre && isAddModeFromUrl && (
+            <div className="mb-md flex items-center justify-between gap-sm bg-soft-aqua border border-deep-teal/20 rounded-xl px-md py-sm">
+              <div className="flex items-center gap-sm min-w-0">
+                <span className="flex items-center justify-center w-8 h-8 bg-dark-teal rounded-full flex-shrink-0">
+                  <Layers size={16} className="text-yellow" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest">
+                    Tilføj til samleordre
+                  </p>
+                  <p className="font-poppins font-semibold text-sm text-deep-teal leading-tight truncate">
+                    Vælg ordrer der skal med i samleordren — bekræft via knappen nederst
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isAddModeFromUrl) {
+                    navigate(
+                      `/prototyper/ordre-plan?samleordreId=${encodeURIComponent(targetSamleordre.id)}&date=${encodeURIComponent(selectedDate)}`
+                    )
+                  } else {
+                    // Lokal-mode: bare exit add-mode, ingen navigation
+                    setLocalAddModeSamleordreId(null)
+                    setSelectedOrderIds(new Set())
+                  }
+                }}
+                className="flex items-center gap-xxxs px-sm py-xs font-inter text-xs font-medium text-dark-teal hover:text-deep-teal hover:bg-white rounded-lg transition-colors flex-shrink-0"
+              >
+                <ChevronLeft size={14} />
+                Annullér
+              </button>
+            </div>
+          )}
+
           {/* ─── Page header + controls i én flex-row — Gantt-pattern (GanttScreen linje 215-285) ─── */}
           {/* Title til venstre, pille-toggle + navigationspilar + I dag til højre */}
           <div className="mb-sm flex items-center justify-between flex-wrap gap-sm">
             <div>
               <p className="font-inter text-xs font-medium text-text-muted uppercase tracking-wide">
-                Opgaver
+                {isAddMode ? 'Tilføj ordre' : 'Opgaver'}
               </p>
               <h1 className="font-poppins font-semibold text-xl text-deep-teal leading-tight">
-                Dagsoversigt
+                {isAddMode ? 'Vælg ordre til samleordre' : 'Dagsoversigt'}
               </h1>
             </div>
 
@@ -863,9 +1054,9 @@ export function DagsoversigtScreen() {
                     className="bg-white rounded-2xl border border-hairline shadow-sm overflow-hidden"
                   >
                     <div className="flex items-stretch">
-                      {/* Venstre dark-teal strip — matcher standalone-card pattern (linje 909-927) */}
-                      <div className="bg-dark-teal px-md flex items-center justify-center">
-                        <Layers size={16} className="text-white/40" aria-hidden="true" />
+                      {/* Venstre grå strip — subtil visuel anker (skiftet fra bg-dark-teal til bg-surface-2 for at reducere dominans) */}
+                      <div className="bg-surface-2 px-md flex items-center justify-center border-r border-hairline">
+                        <Layers size={16} className="text-text-muted/60" aria-hidden="true" />
                       </div>
 
                       {/* Højre: child-ordrer + bundknap stacked vertikalt */}
@@ -880,14 +1071,50 @@ export function DagsoversigtScreen() {
                           </div>
                         ))}
 
-                        {/* Bundlinje: én delt Planlæg-knap — toggle-stil */}
-                        <div className="border-t border-hairline px-sm py-xs flex justify-end">
+                        {/* Bundlinje: "+ Tilføj ordre" (sekundær) + Planlæg-knap (primær) — toggle-stil
+                            Knappen får en aktiv "pille"-tilstand når denne samleordre er i lokal add-mode,
+                            så formanden tydeligt kan se at han nu skal vælge ordrer at tilføje. */}
+                        <div className="border-t border-hairline px-sm py-xs flex justify-end gap-xs items-center">
+                          {/* Sekundær: tilføj ordre lokalt fra Dagsoversigt */}
+                          {isAddMode && !isAddModeFromUrl && targetSamleordre?.id === samle.id ? (
+                            // Aktiv-tilstand: pille der spejler stilen på top-banneret
+                            <div
+                              className="flex items-center gap-xs bg-soft-aqua border border-deep-teal/20 rounded-full pl-xxs pr-sm py-xxs"
+                              role="status"
+                              aria-label="Tilføj-ordre-tilstand aktiv — vælg ordrer nedenfor"
+                            >
+                              <span className="flex items-center justify-center w-6 h-6 bg-dark-teal rounded-full flex-shrink-0">
+                                <Layers size={12} className="text-yellow" aria-hidden="true" />
+                              </span>
+                              <span className="font-inter text-xs font-semibold text-deep-teal">
+                                Vælg ordrer nedenfor
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => { setLocalAddModeSamleordreId(null); setSelectedOrderIds(new Set()) }}
+                                aria-label="Annullér tilføj ordre"
+                                className="flex items-center justify-center w-5 h-5 rounded-full text-text-muted hover:text-deep-teal hover:bg-white/60 transition-colors"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setLocalAddModeSamleordreId(samle.id)}
+                              aria-label={`Tilføj ordre til samleordre ${samleNr}`}
+                              className="bg-white border border-dashed border-hairline-2 text-dark-teal hover:bg-soft-aqua hover:text-deep-teal hover:border-deep-teal/40 rounded-full px-sm py-xs font-poppins font-semibold text-xs inline-flex items-center gap-xxxs transition-colors"
+                            >
+                              <Plus size={14} />
+                              Tilføj ordre
+                            </button>
+                          )}
                           {(() => {
                             const someChildPlanned = childOrders.some(o => o.status === 'planlagt' || o.status === 'aktiv')
                             return (
                               <button
                                 onClick={() => navigate(`/prototyper/ordre-plan?samleordreId=${encodeURIComponent(samle.id)}&date=${encodeURIComponent(selectedDate)}`)}
-                                className="bg-deep-teal text-white font-poppins font-semibold text-sm px-lg py-sm rounded-full inline-flex items-center gap-xxxs hover:opacity-90 transition-opacity"
+                                className="bg-deep-teal text-white font-poppins font-semibold text-xs px-md py-xs rounded-full inline-flex items-center gap-xxxs hover:opacity-90 transition-opacity"
                                 aria-label={`${someChildPlanned ? 'Ret planlægning for' : 'Planlæg'} samleordre ${samleNr}`}
                               >
                                 {someChildPlanned ? 'Ret planlægning' : 'Planlæg samleordre'} <ChevronRight size={14} />
@@ -913,8 +1140,8 @@ export function DagsoversigtScreen() {
                     className="bg-white rounded-2xl border border-hairline shadow-sm overflow-hidden"
                   >
                     <div className="flex items-stretch">
-                      {/* TEST: dark-teal venstre-strip — anchor-stribe på standalone-cards */}
-                      <div className="flex items-center justify-center px-md bg-dark-teal border-r border-dark-teal">
+                      {/* Grå venstre-strip — subtil visuel anker (skiftet fra bg-dark-teal til bg-surface-2) */}
+                      <div className="flex items-center justify-center px-md bg-surface-2 border-r border-hairline">
                         <button
                           onClick={() => toggleOrderSelected(order.id, multiDay)}
                           disabled={multiDay}
@@ -923,10 +1150,10 @@ export function DagsoversigtScreen() {
                           className={[
                             'w-[22px] h-[22px] rounded-md border-2 flex items-center justify-center transition-colors',
                             multiDay
-                              ? 'cursor-not-allowed opacity-40 border-white/20 bg-white/5'
+                              ? 'cursor-not-allowed opacity-40 border-hairline bg-white'
                               : isChecked
                               ? 'bg-yellow border-yellow'
-                              : 'bg-white/10 border-white/40 hover:border-yellow',
+                              : 'bg-white border-hairline-2 hover:border-deep-teal/40',
                           ].join(' ')}
                         >
                           {isChecked && <Check size={12} className="text-deep-teal" strokeWidth={3} />}
@@ -943,7 +1170,7 @@ export function DagsoversigtScreen() {
                             onClick={() =>
                               navigate(`/prototyper/ordre-plan?orderId=${encodeURIComponent(order.id)}&date=${encodeURIComponent(selectedDate)}`)
                             }
-                            className="bg-deep-teal text-white font-poppins font-semibold text-sm px-lg py-sm rounded-full inline-flex items-center gap-xxxs hover:opacity-90 transition-opacity"
+                            className="bg-deep-teal text-white font-poppins font-semibold text-xs px-md py-xs rounded-full inline-flex items-center gap-xxxs hover:opacity-90 transition-opacity"
                             aria-label={`${order.status === 'planlagt' || order.status === 'aktiv' ? 'Ret planlægning for' : 'Planlæg'} ordre ${order.orderNumber}`}
                           >
                             {order.status === 'planlagt' || order.status === 'aktiv' ? 'Ret planlægning' : 'Planlæg'} <ChevronRight size={14} />
@@ -961,18 +1188,23 @@ export function DagsoversigtScreen() {
         </div>
       </main>
 
-      {/* Floating kombiner-knap — vises når 2+ ordrer valgt, følger scroll */}
+      {/* Floating kombiner-knap — vises når valg-tærskel nået, følger scroll.
+          Normal mode: ≥2 ordrer = "Kombiner". Add-mode: ≥1 ordre = "Tilføj til samleordre". */}
       {canKombiner && (
         <button
           onClick={handleKombiner}
-          aria-label={`Kombiner ${selectedOrderIds.size} ordrer til samleordre`}
+          aria-label={isAddMode
+            ? `Tilføj ${selectedOrderIds.size} ordre${selectedOrderIds.size > 1 ? 'r' : ''} til samleordre`
+            : `Kombiner ${selectedOrderIds.size} ordrer til samleordre`}
           className="fixed bottom-[84px] right-md z-30 flex items-center gap-xs bg-yellow text-deep-teal rounded-full pl-sm pr-md py-sm font-poppins font-semibold text-sm hover:opacity-90 transition-colors shadow-lg"
           // 84px = 70px BottomTabBar + 14px luft
         >
           <span className="flex items-center justify-center w-6 h-6 bg-deep-teal/20 rounded-full">
             <Layers size={16} aria-hidden="true" />
           </span>
-          Kombiner {selectedOrderIds.size} ordrer
+          {isAddMode
+            ? `Tilføj til samleordre (${selectedOrderIds.size})`
+            : `Kombiner ${selectedOrderIds.size} ordrer`}
         </button>
       )}
 
@@ -998,10 +1230,16 @@ export function DagsoversigtScreen() {
                 id="kombiner-modal-title"
                 className="font-poppins font-semibold text-lg text-deep-teal leading-tight"
               >
-                Kombiner {selectedOrderIds.size} ordrer til samleordre?
+                {isAddMode
+                  ? `Tilføj ${selectedOrderIds.size} ordre${selectedOrderIds.size > 1 ? 'r' : ''} til samleordren?`
+                  : `Kombiner ${selectedOrderIds.size} ordrer til samleordre?`}
               </h2>
               <p className="font-inter text-sm text-text-secondary leading-relaxed">
-                Ordrerne samles til én samleordre der kan håndteres som en enhed. Du kan ophæve samleordren igen ved at fjerne fluebenene.
+                {isAddMode
+                  ? isAddModeFromUrl
+                    ? 'Ordrerne tilføjes til den eksisterende samleordre. Du kommer tilbage til ordreplanen efter bekræftelse.'
+                    : 'Ordrerne tilføjes til samleordren. Du forbliver på Dagsoversigt efter bekræftelse.'
+                  : 'Ordrerne samles til én samleordre der kan håndteres som en enhed. Du kan ophæve samleordren igen ved at fjerne fluebenene.'}
               </p>
             </div>
             <div className="flex items-center justify-end gap-xs">

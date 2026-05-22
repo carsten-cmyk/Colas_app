@@ -21,6 +21,31 @@ export interface VejeseddelRowProps {
   onTemperatur: (vejeseddelId: string, temperatur: number) => void
   /** Kald når formand vælger udlægger */
   onUdlaegger: (vejeseddelId: string, materielNr: string) => void
+  /**
+   * Samleordre-children — kun sat når visning er i samleordre-kontekst med 2+ ordrer.
+   * Når sat vises en dropdown som lader formanden vælge hvilken ordre raden logger for.
+   * TODO: Erstat med Supabase når klar
+   */
+  samleordreChildren?: { orderNumber: string; stedLabel: string }[]
+  /**
+   * Aktuelt valgt ordrenummer for denne vejeseddel-row.
+   * Styrer hvilken ordres temperatur + udlægger der vises og redigeres.
+   */
+  selectedOrdre?: string
+  /** Kald når formand skifter ordre i dropdown — parent opdaterer vejeseddelSelectedOrdre */
+  onSelectOrdre?: (vejeseddelId: string, orderNumber: string) => void
+  /**
+   * Per-ordre temperaturer keyed by ordrenummer.
+   * Bruges i stedet for vejeseddel.temperatur når i samleordre-mode.
+   * TODO: Erstat med Supabase når klar
+   */
+  tempPerOrdre?: Record<string, number>
+  /**
+   * Per-ordre udlægger-valg keyed by ordrenummer.
+   * Bruges i stedet for vejeseddel.valgtUdlaeggerMaterielNr når i samleordre-mode.
+   * TODO: Erstat med Supabase når klar
+   */
+  udlaeggerPerOrdre?: Record<string, string>
 }
 
 /** Vis "–" i muted-farve for tomme værdier */
@@ -33,16 +58,19 @@ function StatusKolonne({
   vejeseddel,
   minTemperatur,
   onTemperatur,
+  /** Overskriver vejeseddel.temperatur — bruges i samleordre-mode til per-ordre temperatur */
+  temperaturOverride,
 }: {
   vejeseddel: Vejeseddel
   minTemperatur: number
   onTemperatur: (vejeseddelId: string, temperatur: number) => void
+  temperaturOverride?: number | null
 }) {
   switch (vejeseddel.status) {
     case 'ankommet':
       return (
         <TemperaturBadge
-          temperatur={vejeseddel.temperatur}
+          temperatur={temperaturOverride !== undefined ? temperaturOverride : vejeseddel.temperatur}
           minTemperatur={minTemperatur}
           onSave={(temp) => onTemperatur(vejeseddel.id, temp)}
         />
@@ -77,21 +105,17 @@ function ProduktCelle({
   return <Dash />
 }
 
-/** Læs-type badge — markerer multilæs (gul, kræver fordeling) eller puljelæs (blå, ingen fordeling) */
-function LaesTypeBadge({ multilaes, puljelaes }: { multilaes?: boolean; puljelaes?: boolean }) {
-  if (multilaes) {
-    return (
-      <span className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-md bg-warn-bg border border-yellow text-deep-teal font-inter font-semibold text-xxs uppercase tracking-wider">
-        <Layers size={10} />
-        Multilæs
-      </span>
-    )
-  }
+/** Læs-type badge — markerer "Samles på en bil" (puljelæs, blå, ingen fordeling).
+ * Multilæs fjernet som visuel kategori — det er implicit i samleordre-kontekst.
+ * multilaes-prop bevares i signaturen men vises ikke — feltet eksisterer stadig i Vejeseddel-typen.
+ */
+function LaesTypeBadge({ puljelaes }: { multilaes?: boolean; puljelaes?: boolean }) {
+  // multilaes: Bevares som dataprop men ikke længere brugt visuelt — kontekstuelt indlejret i samleordre-mode
   if (puljelaes) {
     return (
       <span className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-md bg-soft-aqua border border-dark-teal/30 text-deep-teal font-inter font-semibold text-xxs uppercase tracking-wider">
         <Layers size={10} />
-        Puljelæs
+        Samles på en bil
       </span>
     )
   }
@@ -105,8 +129,22 @@ export function VejeseddelRow({
   udlaeggerliste,
   onTemperatur,
   onUdlaegger,
+  samleordreChildren,
+  selectedOrdre,
+  onSelectOrdre,
+  tempPerOrdre,
+  udlaeggerPerOrdre,
 }: VejeseddelRowProps) {
   const erAnkommet = vejeseddel.status === 'ankommet'
+
+  // Samleordre-mode: brug per-ordre værdier hvis tilgængeligt, ellers fallback til vejeseddel-felter
+  const erSamleordreMode = !!(samleordreChildren && samleordreChildren.length > 1)
+  const temperaturVis = erSamleordreMode && selectedOrdre
+    ? (tempPerOrdre?.[selectedOrdre] ?? null)
+    : vejeseddel.temperatur
+  const udlaeggerValgt = erSamleordreMode && selectedOrdre
+    ? (udlaeggerPerOrdre?.[selectedOrdre] ?? null)
+    : vejeseddel.valgtUdlaeggerMaterielNr
 
   return (
     <tr className="border-b border-hairline hover:bg-surface-2 transition-colors">
@@ -125,7 +163,7 @@ export function VejeseddelRow({
         {vejeseddel.chauffoerNavn}
       </td>
 
-      {/* Produkt + læs-type badge (multilæs/puljelæs) */}
+      {/* Produkt + læs-type badge (puljelæs = "Samles på en bil") */}
       <td className="font-inter text-xs text-text-primary px-xs py-xs">
         <div className="flex items-center gap-xs flex-wrap">
           <ProduktCelle recept={recept} receptkode={vejeseddel.receptkode} />
@@ -143,14 +181,30 @@ export function VejeseddelRow({
         {vejeseddel.tons !== null ? vejeseddel.tons : <Dash />}
       </td>
 
-      {/* Udlægger */}
+      {/* Udlægger — med ordre-dropdown over feltet i samleordre-mode */}
       <td className="px-xs py-xs">
-        <UdlaeggerDropdown
-          materielListe={udlaeggerliste}
-          selected={vejeseddel.valgtUdlaeggerMaterielNr}
-          onChange={(materielNr) => onUdlaegger(vejeseddel.id, materielNr)}
-          disabled={!erAnkommet}
-        />
+        <div className="flex flex-col gap-xxxs">
+          {erSamleordreMode && (
+            <select
+              value={selectedOrdre ?? ''}
+              onChange={(e) => onSelectOrdre?.(vejeseddel.id, e.target.value)}
+              className="font-inter text-xs text-deep-teal bg-white border border-hairline rounded-md px-xs py-xxxs hover:border-deep-teal/40 focus:outline-none focus:border-deep-teal transition-colors"
+              aria-label="Vælg ordre for denne vejeseddel"
+            >
+              {samleordreChildren!.map((c) => (
+                <option key={c.orderNumber} value={c.orderNumber}>
+                  {c.stedLabel}
+                </option>
+              ))}
+            </select>
+          )}
+          <UdlaeggerDropdown
+            materielListe={udlaeggerliste}
+            selected={udlaeggerValgt}
+            onChange={(materielNr) => onUdlaegger(vejeseddel.id, materielNr)}
+            disabled={!erAnkommet}
+          />
+        </div>
       </td>
 
       {/* Status/Temp */}
@@ -159,6 +213,7 @@ export function VejeseddelRow({
           vejeseddel={vejeseddel}
           minTemperatur={minTemperatur}
           onTemperatur={onTemperatur}
+          temperaturOverride={erSamleordreMode ? temperaturVis : undefined}
         />
       </td>
     </tr>

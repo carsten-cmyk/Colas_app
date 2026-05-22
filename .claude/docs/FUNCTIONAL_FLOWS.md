@@ -13,8 +13,13 @@ Opdateres manuelt når forretningsregler beskrives der ikke fremgår af kode.
 ### Trin 1 — Formand planlægger
 **App:** formand
 **Komponent:** `OrdrePlanScreen` → asfalt-kørsel sektion
-**Handling:** Formand udfylder km og kommentar per dag
-**Skriver til:** `orders.asfalt_koersel[].planlagt = true`, `orders.asfalt_koersel[].kommentar`
+**Handling:** Formand udfylder km, **kommentar til chauffør** OG **forventet tidspunkt for første læs på udlægning** per dag. Sidstnævnte er kritisk for fabrik-notifikation (se Trin 5b).
+
+**Første-læs-regel (LÅST 2026-05-22):** Den FØRSTE bil formanden tilføjer til asfalt-kørselsbestillingen er pr. definition "første-læs"-bilen. Rækkefølgen i bestillingen er semantisk — første bil = første læs, anden bil = andet læs osv. Formanden behøver ikke vælge eksplicit. Information forventes synlig overfor vognmanden i hans disponerings-view (se Trin 3).
+
+**Kommentar til chauffør (LÅST 2026-05-22):** Feltet i bunden af bilbestillingen er omdøbt fra "Kommentar til formanden" → **"Kommentar til chauffør"**. Indholdet skal sendes sammen med ordren TIL CHAUFFØREN (synlig i chauffeur-appen — se Trin 8 / Flow 3). Formand bruger feltet til at give kørselsspecifikke instruktioner: "Brug bagvejen", "Lav støj-restriktion efter 22", "Aflæsningssted er flyttet 50m mod vest" osv.
+
+**Skriver til:** `orders.asfalt_koersel[].planlagt = true`, `orders.asfalt_koersel[].kommentar_til_chauffoer`, `orders.asfalt_koersel[].foerste_laes_udlaegning_tid`, `orders.asfalt_koersel[].biler[]` (ordnet array — index 0 = første læs)
 
 ### Trin 2 — Formand ser afventende status
 **App:** formand
@@ -22,11 +27,18 @@ Opdateres manuelt når forretningsregler beskrives der ikke fremgår af kode.
 **Viser:** Gult "Afventer vognmand" badge når kørsel er planlagt men ikke bekræftet
 **Læser:** `orders.asfalt_koersel[].confirmed_vehicles` (tom = afventer)
 
-### Trin 3 — Vognmand ser bestilling
+### Trin 3 — Vognmand ser bestilling med "1. læs"-markering
 **App:** vognmand
 **Komponent:** `OrdreKort` (liste-view), `DisponeringsView` (gantt/kalender)
-**Viser:** Ordre med asfalt-kørsel linjer, åben/disponeret status
+**Viser:** Ordre med asfalt-kørsel linjer, åben/disponeret status. Den FØRSTE bil-række (index 0 i `biler[]`) har en tydelig **"1. læs"-markering + mødetid fabrik** så vognmanden ved hvilken bil der har første prioritet og hvornår den skal være på fabrik.
 **Læser:** `orders` WHERE `asfalt_koersel[].planlagt = true`
+
+**Visuel markering (LÅST 2026-05-22):**
+- Tekst: **"1. læs"** (genbruger gul anchor-prik-mønster fra samleordre — se [[project-unified-planning-model]])
+- Inkluderet: **"Mødetid fabrik [kl.]"** — fx "Mødetid fabrik 06:54" — som er det beregnede `afhentnings_tid_fabrik` (se Trin 5b)
+- Eksempel-rendering: `● 1. læs · Mødetid fabrik 06:54`
+- Bil-rækken med markøren skal stå ØVERST i listen for visuel klarhed
+- Efterfølgende biler (2. læs, 3. læs osv.) får ikke samme prominente markering — kun "1. læs" er kritisk-info
 
 ### Trin 4 — Vognmand disponerer bil
 **App:** vognmand
@@ -37,6 +49,28 @@ Opdateres manuelt når forretningsregler beskrives der ikke fremgår af kode.
 **App:** vognmand
 **Komponent:** `GodkendFlow` — bekræftelsesside
 **Skriver til:** `orders.asfalt_koersel[].bekraeftet_af_vognmand = true`
+
+### Trin 5b — Fabrik notificeres om afhentningstidspunkt (LÅST 2026-05-22)
+**App:** (fabrik-system / integration)
+**Trigger:** Formand sender bil-bestilling (eller vognmand bekræfter) — afhængigt af hvor langt fremme i flowet fabrikken skal vide besked.
+**Beregning:**
+- `afhentnings_tid_fabrik = foerste_laes_udlaegning_tid − drive_time_fabrik_til_udlaegning`
+- `drive_time` hentes fra `orders.factory.driveTimeMinutes` (allerede i datamodellen — beregnet ud fra afstand fabrik ↔ udførselssted)
+- Eksempel: forventet første læs på plads kl. 07:30, drive time 36 min → fabrik notificeres om afhentning kl. 06:54
+
+**Skriver til:** fabrik-system får:
+  - `pickup_time_fabrik` (beregnet)
+  - `reg_nr` (fra confirmed_vehicles)
+  - `chauffoer_navn`
+  - `produkter[]` med tons (fra morgen-bestilling)
+  - `samles_paa_en_bil_flag` hvis relevant (signaler at bilen henter flere produkter — se Flow 12)
+
+**Hvorfor:** Fabrik skal kunne planlægge produktion + tilberedning så asfalten er klar når chauffør ankommer. Uden eksplicit afhentnings-tid kan fabrik ikke optimere timing eller advare om kapacitet.
+
+**🟡 ÅBNE SPØRGSMÅL:**
+- Hvilket fabrik-system integreres der med (Danvægt? Anden ERP)? Eller skal det være en simpel webhook/API-call?
+- Skal beregningen kompenseres for læsse-tid på fabrik (fx +10 min buffer)?
+- Hvad sker der hvis chauffør ankommer tidligere/senere end planlagt — re-notifikation eller bare ETA-update?
 
 ### Trin 6 — Formand ser bekræftelse
 **App:** formand
@@ -53,10 +87,57 @@ Opdateres manuelt når forretningsregler beskrives der ikke fremgår af kode.
 ### Trin 8 — Chauffør modtager ordre
 **App:** chauffeur (React Native)
 **Komponent:** `TaskCard`, `TaskDetailScreen`
-**Viser:** Ordredetaljer, lokation, kontakt
-**Læser:** `assigned_tasks` WHERE `driver_phone = auth.user.phone` OR `truck_plate = chauffeur.plate`
+**Viser:** Ordredetaljer, lokation, kontakt OG **kommentar til chauffør** (`kommentar_til_chauffoer` fra bilbestillingen — kørselsspecifikke instruktioner fra formand som "Brug bagvejen", "Aflæsningssted flyttet" osv.)
+**Læser:** `assigned_tasks` WHERE `driver_phone = auth.user.phone` OR `truck_plate = chauffeur.plate`, inkl. `kommentar_til_chauffoer`-feltet
 **Note:** Chauffør identificeres via tlf-nummer og nummerplade — ikke login
 **TBD:** Distributions-mekanisme — push-notifikation, polling, eller event på reg.nr? Skal afklares før prod.
+
+### Variant: "Egen bil"-flow (LÅST 2026-05-22) — Formand → Chauffør (uden vognmand)
+
+**Trigger:** Formanden vælger **"Egen bil"** som biltype i biltype-dropdown'en under Asfaltbestilling (allerede første option i listen — se [[project_dagsoversigt_business_rules]]). Egen bil = holdets/projektets egen bil, IKKE en bil fra vognmandens flåde.
+
+**Forskelle fra standard-flow:**
+- **Trin 3-6 (vognmand) SPRINGES OVER** — vognmanden modtager IKKE en bestilling, fordi bilen ikke skal disponeres af vognmand
+- Bestillingen sendes DIREKTE fra formand til chauffør
+- `orders.asfalt_koersel[].egen_bil = true` (nyt data-flag)
+- `orders.asfalt_koersel[].bekraeftet_af_vognmand` er N/A — bestillingen er auto-bekræftet ved formand-send
+- Vognmand-badge i formand-UI viser "Egen bil" (ikke "Afventer vognmand" eller "Bekræftet af vognmand")
+- Trin 5b (fabrik-notifikation) gælder STADIG — fabrik skal vide hvornår egen bil ankommer, samme beregning, kun chauffør-data udfyldes fra formand i stedet for vognmand
+
+**Trin EB-1 — Formand vælger Egen bil + chauffør**
+**App:** formand
+**Komponent:** `OrdrePlanScreen` → Asfaltbestilling biltype-dropdown
+**Handling:** Formand vælger "Egen bil" + vælger/tilknytter chauffør. Felter til reg.nr + chauffør dukker op når Egen bil er valgt — bestillingen kan ikke disponeres af vognmand.
+**Skriver til:** `orders.asfalt_koersel[].egen_bil = true`, `orders.asfalt_koersel[].confirmed_vehicles[]` med `{ reg_nr, chauffoer_navn, tlf, bil_type: 'egen_bil' }` (auto-fyldt selvom vognmand ikke er involveret).
+
+**🟡 SPØRGSMÅL TIL IMPLEMENTERING:** Skal egne chauffører **oprettes manuelt af formand** ELLER **arves automatisk fra holdpakken** (ordrens tilknyttede medarbejdere — se Flow 2 Trin 0)? Brugeren afklarer dette inden Egen-bil-flow implementeres. **HUSK at spørge ved start af implementering.**
+
+**Trin EB-2 — Ordren sendes direkte til chauffør-app**
+**App:** chauffeur (React Native)
+**Komponent:** `TaskCard`, `TaskDetailScreen` (samme som Trin 8)
+**Distribution:** Push-notifikation direkte til chauffør-tlf — ingen vognmand-disponering imellem.
+**Læser:** `assigned_tasks` WHERE `driver_phone = auth.user.phone` AND `egen_bil = true`
+**Viser:** Identisk task-UI som vognmand-disponeret bil, men med eventuel "Egen bil"-indikator hvis relevant (TBD om dette er nødvendigt — chaufføren ved jo at det er hans egen bil).
+**Forudsætning (LÅST 2026-05-22):** App er ALTID installeret hos egne chauffører (forretningskrav). Ingen verifikation eller fallback-flow nødvendigt.
+
+**Trin EB-3 — Resten af flowet kører normalt, med ÉN forskel: afregning altid på timer**
+Fabrik-notifikation (Trin 5b), Ankomst til fabrik (Flow 3) fungerer som normalt.
+
+**Afregning (LÅST 2026-05-22):** Egen bil afregnes **ALTID på timer** — IKKE akkord. Ingen 1,5-times-regel relevant fordi der ikke er en akkord-aftale med en ekstern vognmand at beskytte. Bilen er intern, så timeregistrering er den eneste afregningsform.
+
+Konkret i `BilAfregning`-expanderen (Udførelse-mode):
+- `effectiveType = 'time'` hardcoded for `egen_bil = true`-biler
+- Ingen toggle eller selector — afregningstypen er ikke valgbar
+- Timer registreres normalt af chauffør (Flow 4 Trin 1-2), formand godkender (Flow 4 Trin 5)
+- Time-fordeling på samleordre-ordrer fungerer som normalt for time-biler (se [[project-unified-planning-model]])
+
+**Datamodel-tilføjelse:**
+```
+orders.asfalt_koersel[].egen_bil: boolean (default false)
+```
+
+**🟡 ÅBENT SPØRGSMÅL (skal stilles ved implementering):**
+- **Chauffør-kilde:** Oprettes manuelt af formand vs. arves fra holdpakken? Brugeren afklarer.
 
 ---
 
@@ -678,11 +759,18 @@ vejesedler
 
 ---
 
-## Flow 12: Puljelæs ekstra-bestilling — Formand → Vognmand → Chauffør → Vejning
+## Flow 12: "Samles på en bil" (tidligere Puljelæs) — Formand → Vognmand → Chauffør → Vejning
 
-**Trigger:** Formand opretter en ekstra-bestilling med puljelæs ON i Ordre-plan (samme bil, flere produkter, samme ordre). Eller — på ordre-niveau — formand sætter puljelæs ON i morgen-bestilling så ordrens flere produkter pakkes på 1 bil.
+**Terminologi-update 2026-05-22:** "Puljelæs" er omdøbt til **"Samles på en bil"** i UI. Datamodel-felter (`puljelaesFlag`, `pulje_laes`) bevares som identifikatorer i database/typer, men UI-tekst bruger den nye terminologi konsekvent.
 
-**Søsterflow til Flow 11 (multilæs).** Forskellen er at puljelæs har 1 destination — ingen fordeling kræves.
+**Trigger:** Formand sætter "Samles på en bil"-checkbox PÅ ET PRODUKT (ProductBoxV2) eller PÅ EN EKSTRA-BESTILLING (EkstraBestillingBox) i Asfaltbestilling-rækken. Markøren betyder: "dette produkts tons skal pakkes på SAMME bil som andre produkter der også er markeret samme dag — samme ordre eller samme samleordre".
+
+**Vigtig forskel fra tidligere model:** Puljelæs var en ordre-niveau-checkbox der pakkede ALLE ordrens produkter på én bil. Nu er det per-produkt på alle produkter — også ekstra-bestillinger. Formanden kan derfor have:
+- Originalprodukt A + originalprodukt B på samme bil (klassisk puljelæs-pattern)
+- Ekstra-bestilling C der samkøres med original A
+- Op til 3 produkter på samme bil hvis bilens kompartmenter tillader det
+
+**Søsterflow til Flow 11 (multilæs/samleordre).** Forskellen er at samles-på-en-bil typisk har 1 destination (én ordre) — eller op til samleordrens stop hvis det er kombineret med samleordre-flow.
 
 ### Trin 1 — Formand opretter puljelæs-bestilling
 **App:** formand
@@ -695,20 +783,37 @@ vejesedler
 **Komponent:** `OrdrePlanScreen` → bekræftelses-modal
 **Skriver til:** `ekstra_bestillinger.sent = true`.
 
-### Trin 3 — Vognmand modtager bil-bestilling
+### Trin 3 — Vognmand modtager bil-bestilling med "Samles på en bil"-markering
 **App:** vognmand
 **Komponent:** `OrdreKort` / `DisponeringsView`
 **Viser:** Bil-bestilling med:
-  - "Puljelæs (N produkter)"-badge
-  - Én udførselsadresse (ordrens udførselssted)
+  - **"Samles på en bil"-markering (TBD design)** — info-only for vognmanden så han ved at bilen skal kunne håndtere flere produkter. Han ændrer IKKE rækkefølgen, men kan bruge info'en til at vælge en bil med flere kompartmenter (op til 3 produkter samtidig)
+  - Én eller flere udførselsadresser (afhænger af om det er kombineret med samleordre)
   - Liste over produkter med hver deres tons
-**Vognmand booker bil/chauffør** — ingen rækkefølge-beslutning nødvendig.
+**Vognmand booker bil/chauffør** — ingen rækkefølge-beslutning nødvendig på vognmand-niveau.
 
-### Trin 4 — Chauffør får standard task med puljelæs-badge
+**🟡 ÅBENT DESIGN-SPØRGSMÅL:** Hvordan markeres "Samles på en bil" overfor vognmanden visuelt? Forslag: en chip/badge "Samles på en bil · 3 produkter" på bil-kortet, evt. med liste over kompartmenter når man åbner. Skal designes som del af vognmand-prototypens disponerings-view.
+
+### Trin 4 — Chauffør får udvidet fabrik-task med multi-produkt-loading-flow
 **App:** chauffeur
-**Viser:** Task med ÉN destination + puljelæs-badge der signalerer:
-  - Skal vejes tom → læs produkt 1 → vej → tara → læs produkt 2 → vej (én vejeseddel pr. produkt)
-**Læser:** `assigned_tasks` med `puljelaes_products[]`.
+**Viser:** Task med ÉN eller flere destinationer + "Samles på en bil"-markering der signalerer multi-produkt-loading-flow ved fabrik.
+
+**Detaljeret fabrik-flow ved geofence-ankomst (LÅST 2026-05-22):**
+Når chauffør krydser geofence ved fabrik for en "Samles på en bil"-task, kører chauffør-appen et struktureret loading-flow med vejning mellem hvert produkt:
+
+1. **Velkomst** — "Velkommen Jens. Du har 3 produkter at hente på samme bil."
+2. **Vej tom** — "Kør på vægten og vej bilen tom."
+3. **Last produkt 1** — "Last [produktnavn 1] — [tons]t."
+4. **Vej efter produkt 1** — "Kør på vægten og vej."
+5. **Last produkt 2** — "Last [produktnavn 2] — [tons]t."
+6. **Vej efter produkt 2** — "Kør på vægten og vej."
+7. **Last produkt 3** (hvis relevant) — "Last [produktnavn 3] — [tons]t."
+8. **Vej efter produkt 3** — "Kør på vægten og vej."
+9. **Afgang** — "Kør til udførselssted: [adresse]."
+
+Hver vejning genererer én vejeseddel pr. produkt (via fabrik-system). Chaufføren behøver ikke holde regnskab med tons selv — appen guider gennem trinene.
+
+**Læser:** `assigned_tasks` med `samles_paa_en_bil_products[]` (array af produkter med tons) eller fortsat `puljelaes_products[]` som data-felt.
 
 ### Trin 5 — Vejning pr. produkt
 **App:** (fabrik-system)

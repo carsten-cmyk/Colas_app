@@ -69,11 +69,12 @@ function fmtDatoKort(iso: string): string {
   return d.toLocaleDateString('da-DK', { day: 'numeric', month: 'numeric' })
 }
 
+// Solid-tint pills uden border — matcher formand's status-pille-pattern (PATTERNS.md 1a)
 const STATUS_BADGE: Record<OrdreStatus, { cls: string; label: string }> = {
-  roed:   { cls: 'bg-bad/10 text-bad border border-bad/20',                       label: 'Ikke disponeret' },
-  orange: { cls: 'bg-orange-50 text-orange-600 border border-orange-200',          label: 'Delvist disponeret' },
-  groen:  { cls: 'bg-good/10 text-good border border-good/20',                     label: 'Fuldt disponeret' },
-  gul:    { cls: 'bg-yellow/20 text-deep-teal border border-yellow/40',             label: 'Ændret af formand' },
+  roed:   { cls: 'bg-bad/15 text-bad',                  label: 'Ikke disponeret' },
+  orange: { cls: 'bg-warn-bg text-deep-teal',           label: 'Delvist disponeret' },
+  groen:  { cls: 'bg-good-bg text-good',                label: 'Fuldt disponeret' },
+  gul:    { cls: 'bg-yellow/25 text-deep-teal',         label: 'Ændret af formand' },
 }
 
 
@@ -90,7 +91,7 @@ function OrdreKort({ ordre, onDisponer }: OrdreKortProps) {
   const visibleDage = ordre.dage.filter(d => d.bestilteBiler > 0).sort((a, b) => a.dato.localeCompare(b.dato))
 
   return (
-    <div className="bg-white rounded-xl border border-box-outline shadow-sm overflow-hidden">
+    <div className="bg-white rounded-2xl border border-hairline shadow-sm overflow-hidden">
 
       {/* Header */}
       <div className="px-5 pt-5 pb-4 border-b border-box-outline">
@@ -113,7 +114,7 @@ function OrdreKort({ ordre, onDisponer }: OrdreKortProps) {
             </p>
           </div>
           <button
-            className="flex-shrink-0 font-inter text-xs font-semibold px-4 py-2 rounded-lg bg-good text-white hover:bg-good/90 transition-colors"
+            className="flex-shrink-0 font-poppins text-xs font-semibold px-md py-xs rounded-full bg-good text-white inline-flex items-center gap-xxxs hover:opacity-90 transition-opacity"
             onClick={() => onDisponer(ordre.id)}
           >
             {erFuldt ? 'Se disponering' : 'Disponer'}
@@ -183,7 +184,7 @@ function OrdreKort({ ordre, onDisponer }: OrdreKortProps) {
                 </span>
 
                 {/* Status badge */}
-                <span className={`w-36 flex-shrink-0 text-[10px] font-inter font-semibold px-2 py-1 rounded-full text-center ${dagBadge.cls}`}>
+                <span className={`w-36 flex-shrink-0 text-xxs font-inter font-semibold px-xs py-xxxs rounded-full text-center ${dagBadge.cls}`}>
                   {dagBadge.label}
                 </span>
 
