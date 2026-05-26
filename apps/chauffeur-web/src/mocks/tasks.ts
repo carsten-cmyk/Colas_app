@@ -6,7 +6,7 @@ export const mockTasks: Task[] = [
     id: '1',
     orderNumber: '1212343',
     ton: 75,
-    produkt: '82101H',
+    produkt: 'SMA 11S',
     runder: 3,
     timer: 4,
     locations: [
@@ -32,28 +32,14 @@ export const mockTasks: Task[] = [
       },
       {
         id: '2',
-        name: 'Ole Jensen',
+        name: 'Lars Hansen',
         role: 'Formand',
-        phone: '2399 1443',
+        phone: '+45 22 33 44 55',
         imageUrl: 'https://i.pravatar.cc/150?img=53',
       },
     ],
-    alerts: [
-      {
-        id: '1',
-        message:
-          'Der er registreret en trafikulykke på ruten. Forvent forsinkelser og følg anvisninger fra vejmyndighed.',
-        type: 'traffic',
-        active: true,
-      },
-      {
-        id: '2',
-        message: 'Dagens læs er klar på fabrikken. Husk at tjekke ind ved ankomst.',
-        type: 'other',
-        active: true,
-      },
-    ],
-    state: 'active',
+    alerts: [],
+    state: 'idle',
     formandNote: 'Husk: mødetid ved vægten kl. 05.30. Kontakt Lars ved forsinkelse.',
   },
   {

@@ -3,7 +3,7 @@
  * Simulerer QR-scanning flow. Må ikke importeres i produktionskode.
  */
 import { useState } from 'react'
-import { Camera, X, CheckCircle } from 'lucide-react'
+import { Camera, X } from 'lucide-react'
 import { BottomTabBar } from '../components/BottomTabBar'
 import type { TabName } from '../components/BottomTabBar'
 
@@ -11,7 +11,8 @@ import type { TabName } from '../components/BottomTabBar'
 const MOCK = {
   orderNumber: '1212343',
   silo: 'Silo 3',
-  produkt: '82101H',
+  ton: 75,
+  produkt: 'SMA 11S',
   pickup: { name: 'Køge Asfaltfabrik' },
 }
 
@@ -21,7 +22,7 @@ export interface AnkommetFabrikScreenProps {
   messageCount?: number
 }
 
-type SubScreen = 'ankomst' | 'qr-scan' | 'bekraeft' | 'udvejet'
+type SubScreen = 'ankomst' | 'indvejet' | 'qr-scan' | 'bekraeft' | 'udvejet' | 'udvejet-bekraeft'
 
 // ─── Farver (Colas tokens) ────────────────────────────────────────────────────
 const C = {
@@ -94,29 +95,44 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
           paddingLeft: 20,
           paddingRight: 20,
           paddingTop: 8,
-          paddingBottom: 16,
+          paddingBottom: 57,
           display: 'flex',
           flexDirection: 'column',
           gap: 12,
-          justifyContent: subScreen === 'ankomst' ? 'flex-start' : 'center',
+          justifyContent: 'center',
         }}
       >
         {subScreen === 'ankomst' && (
           <>
             {/* Velkomsttekst */}
-            <p
-              style={{
-                fontFamily: 'Poppins, sans-serif',
-                fontWeight: 600,
-                fontSize: 20,
-                color: C.deepTeal,
-                margin: 0,
-                textAlign: 'center',
-                lineHeight: 1.3,
-              }}
-            >
-              Velkommen til<br />{MOCK.pickup.name}
-            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <p
+                style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 28,
+                  color: C.deepTeal,
+                  margin: 0,
+                  textAlign: 'center',
+                  lineHeight: 1.3,
+                }}
+              >
+                Hej Jens,
+              </p>
+              <p
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontWeight: 400,
+                  fontSize: 15,
+                  color: C.textMuted,
+                  margin: 0,
+                  textAlign: 'center',
+                  lineHeight: 1.3,
+                }}
+              >
+                Velkommen til {MOCK.pickup.name}
+              </p>
+            </div>
 
             {/* Instruktionskort 1 — Vægten */}
             <div
@@ -136,12 +152,56 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
               <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Kør til vægten
               </p>
-              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0, textAlign: 'center' }}>
-                Bil indvejes tom
+              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0, textAlign: 'center', lineHeight: 1.4 }}>
+                Din bil skal indvejes tom. Kør til vægten og scan displayet med din app
               </p>
             </div>
 
-            {/* Instruktionskort 2 — Silo */}
+            {/* Simuler indvejning — gul pill */}
+            <button
+              onClick={() => setSubScreen('indvejet')}
+              style={{
+                backgroundColor: C.yellow,
+                border: 'none',
+                borderRadius: 50,
+                height: 52,
+                cursor: 'pointer',
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: 15,
+                color: C.deepTeal,
+              }}
+            >
+              Simuler indvejning
+            </button>
+          </>
+        )}
+
+        {subScreen === 'indvejet' && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              justifyContent: 'center',
+            }}
+          >
+            {/* Heading */}
+            <p
+              style={{
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: 20,
+                color: C.deepTeal,
+                margin: 0,
+                textAlign: 'center',
+                lineHeight: 1.3,
+              }}
+            >
+              Din bil er indvejet tom
+            </p>
+
+            {/* Instruktionskort — Silo */}
             <div
               style={{
                 backgroundColor: C.white,
@@ -217,7 +277,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 Tryk på kamera-ikonet og scan QR-kode for at bekræfte produkt
               </p>
             </div>
-          </>
+          </div>
         )}
 
         {subScreen === 'qr-scan' && (
@@ -287,7 +347,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
             </button>
 
             <button
-              onClick={() => setSubScreen('ankomst')}
+              onClick={() => setSubScreen('indvejet')}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -317,7 +377,6 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 gap: 12,
               }}
             >
-              <CheckCircle size={56} color={C.good} />
               <p
                 style={{
                   fontFamily: 'Poppins, sans-serif',
@@ -344,6 +403,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
             >
               {[
                 { label: 'Silo', value: MOCK.silo },
+                { label: 'Antal tons', value: `${MOCK.ton}` },
                 { label: 'Produkt', value: MOCK.produkt },
               ].map((row, i, arr) => (
                 <div
@@ -437,6 +497,105 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
             </div>
 
             <button
+              onClick={() => setSubScreen('udvejet-bekraeft')}
+              style={{
+                backgroundColor: C.green,
+                border: 'none',
+                borderRadius: 50,
+                height: 52,
+                cursor: 'pointer',
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: 15,
+                color: C.white,
+                width: '100%',
+              }}
+            >
+              Simuler udvejning
+            </button>
+          </div>
+        )}
+
+        {subScreen === 'udvejet-bekraeft' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Success banner */}
+            <div
+              style={{
+                backgroundColor: C.goodBg,
+                borderRadius: 12,
+                padding: '24px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              <p
+                style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 700,
+                  fontSize: 24,
+                  color: C.deepTeal,
+                  margin: 0,
+                  textAlign: 'center',
+                  lineHeight: 1.2,
+                }}
+              >
+                Udvejning bekræftet
+              </p>
+            </div>
+
+            {/* Bekræftelseskort */}
+            <div
+              style={{
+                backgroundColor: C.white,
+                borderRadius: 12,
+                border: `1px solid ${C.border}`,
+                overflow: 'hidden',
+              }}
+            >
+              {[
+                { label: 'Silo', value: MOCK.silo },
+                { label: 'Antal tons', value: `${MOCK.ton}` },
+                { label: 'Produkt', value: MOCK.produkt },
+              ].map((row, i, arr) => (
+                <div
+                  key={row.label}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '14px 16px',
+                    borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none',
+                  }}
+                >
+                  <p
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: 13,
+                      color: C.textMuted,
+                      margin: 0,
+                    }}
+                  >
+                    {row.label}
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: 'Poppins, sans-serif',
+                      fontWeight: 600,
+                      fontSize: 15,
+                      color: C.deepTeal,
+                      margin: 0,
+                    }}
+                  >
+                    {row.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Afslut tur */}
+            <button
               onClick={onClose}
               style={{
                 backgroundColor: C.green,
@@ -451,7 +610,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 width: '100%',
               }}
             >
-              Udvejet og på vej til udførselssted
+              Afslut vejning
             </button>
           </div>
         )}

@@ -1,9 +1,30 @@
 /**
- * PROTOTYPE — Opgave-detaljeskærm (bund-ark over dashboard)
- * Viser ordre-metrics, lokationer, info/kontaktkort og handlingsknapper.
+ * PROTOTYPE — Opgave-detaljeskærm (fuld-skærms-layout)
+ * Viser ordre-metrics, lokationer, information, formand-kontakt og handlingsknapper.
  */
-import { X, MapPin, ArrowDown, ArrowUp, Phone } from 'lucide-react'
+import { useState } from 'react'
+import { X, MapPin, ArrowDown, ArrowUp } from 'lucide-react'
 import type { Task, TaskState } from '@/types/task'
+
+// ─── Farver (Colas tokens) ────────────────────────────────────────────────────
+const C = {
+  deepTeal: '#0E4764',
+  white: '#FFFFFF',
+  bg: '#F8F8F8',
+  border: '#EDEDED',
+  textPrimary: '#1D1D1D',
+  textMuted: '#717182',
+  danger: '#C8372D',
+  dangerBg: '#FBECEA',
+  dangerBorder: '#F4C5C2',
+  pickupBg: '#F0F7FA',
+  deliveryIconColor: '#1F8A5B',
+  deliveryBg: '#E7F4EE',
+  avatarBg: '#A0C7D7',
+  handleBar: '#C4C4C4',
+  green: '#1F8A5B',
+  yellow: '#FEEE32',
+}
 
 export interface TaskDetailScreenProps {
   task: Task
@@ -22,604 +43,520 @@ export function TaskDetailScreen({
   onPause,
   onComplete,
 }: TaskDetailScreenProps) {
+  const [pauseConfirmOpen, setPauseConfirmOpen] = useState(false)
   const [pickup, delivery] = task.locations
   const infoAlerts = task.alerts.filter(a => a.type !== 'traffic')
   const dangerAlerts = task.alerts.filter(a => a.type === 'traffic')
+  const hasAlerts = !!task.formandNote || infoAlerts.length > 0 || dangerAlerts.length > 0
+
+  // Find formand — fallback til første kontakt
+  const formandContact =
+    task.contacts.find(c => c.role.toLowerCase().includes('formand')) ??
+    task.contacts[0] ??
+    null
+
+  // ─── Delte stil-konstanter ──────────────────────────────────────────────────
+  const sectionLabel: React.CSSProperties = {
+    fontFamily: 'Inter, sans-serif',
+    fontWeight: 600,
+    fontSize: 11,
+    color: C.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    margin: 0,
+  }
+
+  const card: React.CSSProperties = {
+    backgroundColor: C.white,
+    borderRadius: 20,
+    border: `1px solid ${C.border}`,
+    padding: 16,
+  }
 
   return (
+    // ─── Root — fuld skærm (matcher AnkommetFabrikScreen / TimeRegistrationScreen) ──
     <div
       style={{
         position: 'absolute',
         inset: 0,
-        zIndex: 50,
+        backgroundColor: C.bg,
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'flex-end',
       }}
     >
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundColor: 'rgba(0,0,0,0.45)',
-        }}
-      />
+      {/* Handle bar — 59px Dynamic Island safe area */}
+      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 59, paddingBottom: 4 }}>
+        <div style={{ width: 36, height: 4, backgroundColor: C.handleBar, borderRadius: 2 }} />
+      </div>
 
-      {/* Sheet */}
+      {/* Header */}
       <div
         style={{
-          position: 'relative',
-          backgroundColor: '#F8F8F8',
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          maxHeight: '85%',
           display: 'flex',
-          flexDirection: 'column',
-          animation: 'slideUp 0.3s ease',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingLeft: 20,
+          paddingRight: 16,
+          paddingBottom: 12,
         }}
       >
-        {/* Handle */}
-        <div
+        <p
           style={{
-            display: 'flex',
-            justifyContent: 'center',
-            paddingTop: 10,
-            paddingBottom: 4,
+            fontFamily: 'Poppins, sans-serif',
+            fontWeight: 600,
+            fontSize: 14,
+            color: C.textPrimary,
+            margin: 0,
           }}
         >
-          <div
-            style={{
-              width: 36,
-              height: 4,
-              backgroundColor: '#C4C4C4',
-              borderRadius: 2,
-            }}
-          />
-        </div>
-
-        {/* Header */}
-        <div
+          Ordrenummer {task.orderNumber}
+        </p>
+        <button
+          onClick={onClose}
+          aria-label="Luk"
           style={{
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            backgroundColor: C.border,
+            border: 'none',
+            cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingLeft: 20,
-            paddingRight: 16,
-            paddingBottom: 12,
+            justifyContent: 'center',
           }}
         >
-          <p
-            style={{
-              fontFamily: 'Poppins, sans-serif',
-              fontWeight: 600,
-              fontSize: 14,
-              color: '#1D1D1D',
-              margin: 0,
-            }}
-          >
-            Ordrenummer {task.orderNumber}
-          </p>
-          <button
-            onClick={onClose}
-            aria-label="Luk"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              backgroundColor: '#EDEDED',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <X size={16} color="#1D1D1D" />
-          </button>
-        </div>
+          <X size={16} color={C.textPrimary} />
+        </button>
+      </div>
 
-        {/* Scrollable body */}
+      {/* Scrollable body */}
+      <div
+        className="scrollbar-hide"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          paddingLeft: 20,
+          paddingRight: 20,
+          paddingTop: 8,
+          paddingBottom: 16,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+        }}
+      >
+        {/* Order metrics — 2 rækker: Ton+Produkt øverst, Formand fuld bredde nederst */}
         <div
-          className="scrollbar-hide"
           style={{
-            flex: 1,
-            overflowY: 'auto',
-            paddingLeft: 20,
-            paddingRight: 20,
-            paddingBottom: 8,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 16,
+            backgroundColor: C.white,
+            borderRadius: 12,
+            border: `1px solid ${C.border}`,
+            overflow: 'hidden',
           }}
         >
-          {/* Order metrics */}
-          <div
-            style={{
-              backgroundColor: '#FFFFFF',
-              borderRadius: 12,
-              border: '1px solid #EDEDED',
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              overflow: 'hidden',
-            }}
-          >
-            {[
-              { label: 'Ton', value: String(task.ton) },
-              { label: 'Produkt', value: task.produkt },
-              { label: 'Runder', value: String(task.runder) },
-              { label: 'Timer', value: String(task.timer) },
-            ].map((metric, i) => (
-              <div
-                key={metric.label}
-                style={{
-                  padding: '14px 13px',
-                  borderRight: i % 2 === 0 ? '1px solid #EDEDED' : 'none',
-                  borderBottom: i < 2 ? '1px solid #EDEDED' : 'none',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                }}
-              >
-                <p
-                  style={{
-                    fontFamily: 'Inter, sans-serif',
-                    fontSize: 11,
-                    color: '#717182',
-                    margin: '0 0 2px 0',
-                    textAlign: 'center',
-                  }}
-                >
-                  {metric.label}
-                </p>
-                <p
-                  style={{
-                    fontFamily: 'Poppins, sans-serif',
-                    fontWeight: 600,
-                    fontSize: 22,
-                    color: '#1D1D1D',
-                    margin: 0,
-                    lineHeight: 1.2,
-                    textAlign: 'center',
-                  }}
-                >
-                  {metric.value}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          {/* Locations */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {/* Pickup */}
-            {pickup && (
-              <div
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  borderRadius: 12,
-                  border: '1px solid #EDEDED',
-                  padding: '14px',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 12,
-                }}
-              >
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: '50%',
-                    backgroundColor: '#F0F7FA',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <MapPin size={16} color="#0E4764" />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <p
-                    style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase' as const,
-                      color: '#717182',
-                      margin: '0 0 2px 0',
-                    }}
-                  >
-                    Afhenting
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontWeight: 600,
-                      fontSize: 15,
-                      color: '#1D1D1D',
-                      margin: '0 0 2px 0',
-                    }}
-                  >
-                    {pickup.name}
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
-                      color: '#717182',
-                      margin: 0,
-                    }}
-                  >
-                    {pickup.address}
-                  </p>
-                </div>
-                {pickup.meetingTime && (
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <p
-                      style={{
-                        fontFamily: 'Inter, sans-serif',
-                        fontSize: 11,
-                        color: '#717182',
-                        margin: '0 0 2px 0',
-                      }}
-                    >
-                      Mødetid
-                    </p>
-                    <p
-                      style={{
-                        fontFamily: 'Poppins, sans-serif',
-                        fontWeight: 600,
-                        fontSize: 20,
-                        color: '#1D1D1D',
-                        margin: 0,
-                      }}
-                    >
-                      {pickup.meetingTime}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Transport icon — runder frem og tilbage */}
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <div
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: '50%',
-                  backgroundColor: '#EDEDED',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 2,
-                }}
-              >
-                <ArrowUp size={12} color="#717182" />
-                <ArrowDown size={12} color="#717182" />
-              </div>
-            </div>
-
-            {/* Delivery */}
-            {delivery && (
-              <div
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  borderRadius: 12,
-                  border: '1px solid #EDEDED',
-                  padding: '14px',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 12,
-                }}
-              >
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: '50%',
-                    backgroundColor: '#E7F4EE',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <MapPin size={16} color="#1F8A5B" />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <p
-                    style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase' as const,
-                      color: '#717182',
-                      margin: '0 0 2px 0',
-                    }}
-                  >
-                    Udførselssted
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontWeight: 600,
-                      fontSize: 15,
-                      color: '#1D1D1D',
-                      margin: '0 0 2px 0',
-                    }}
-                  >
-                    {delivery.name}
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
-                      color: '#717182',
-                      margin: 0,
-                    }}
-                  >
-                    {delivery.address}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Info/contact/alert cards (horizontal swiper) */}
-          {(infoAlerts.length > 0 || task.contacts.length > 0 || dangerAlerts.length > 0) && (
+          {/* Række 1: Ton | Produkt */}
+          <div style={{ display: 'flex' }}>
+            {/* Ton */}
             <div
-              className="scrollbar-hide"
               style={{
+                flex: 1,
+                padding: '14px 13px',
+                borderRight: `1px solid ${C.border}`,
                 display: 'flex',
-                flexDirection: 'row',
-                gap: 7,
-                overflowX: 'auto',
-                scrollSnapType: 'x mandatory',
-                marginLeft: -20,
-                marginRight: -20,
-                paddingLeft: 20,
-                paddingRight: 20,
+                flexDirection: 'column',
+                alignItems: 'center',
               }}
             >
-              {/* Info cards */}
-              {infoAlerts.map(alert => (
-                <div
-                  key={alert.id}
-                  style={{
-                    width: 309,
-                    height: 158,
-                    flexShrink: 0,
-                    scrollSnapAlign: 'start',
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: 20,
-                    border: '1px solid #EDEDED',
-                    padding: 16,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 8,
-                  }}
-                >
-                  <p
-                    style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase' as const,
-                      color: '#717182',
-                      margin: 0,
-                    }}
-                  >
-                    Information
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
-                      color: '#1D1D1D',
-                      margin: 0,
-                      lineHeight: 1.5,
-                      overflow: 'hidden',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 5,
-                      WebkitBoxOrient: 'vertical',
-                    }}
-                  >
-                    {alert.message}
-                  </p>
-                </div>
-              ))}
+              <p
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: 11,
+                  color: C.textMuted,
+                  margin: '0 0 2px 0',
+                  textAlign: 'center',
+                }}
+              >
+                Ton
+              </p>
+              <p
+                style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 22,
+                  color: C.textPrimary,
+                  margin: 0,
+                  lineHeight: 1.2,
+                  textAlign: 'center',
+                }}
+              >
+                {String(task.ton)}
+              </p>
+            </div>
 
-              {/* Contacts card */}
-              {task.contacts.length > 0 && (
-                <div
-                  style={{
-                    width: 309,
-                    height: 158,
-                    flexShrink: 0,
-                    scrollSnapAlign: 'start',
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: 20,
-                    border: '1px solid #EDEDED',
-                    display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 16,
-                    padding: '16px 24px',
-                  }}
-                >
-                  {task.contacts.map((contact, i) => (
-                    <div key={contact.id} style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                      {i > 0 && (
-                        <div
-                          style={{
-                            width: 1,
-                            height: 80,
-                            backgroundColor: '#EDEDED',
-                            marginRight: 16,
-                            flexShrink: 0,
-                          }}
-                        />
-                      )}
-                      <div
-                        style={{
-                          flex: 1,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          gap: 6,
-                        }}
-                      >
-                        {contact.imageUrl ? (
-                          <img
-                            src={contact.imageUrl}
-                            alt={contact.name}
-                            style={{
-                              width: 52,
-                              height: 52,
-                              borderRadius: '50%',
-                              objectFit: 'cover',
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: 52,
-                              height: 52,
-                              borderRadius: '50%',
-                              backgroundColor: '#A0C7D7',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontFamily: 'Inter, sans-serif',
-                              fontWeight: 700,
-                              fontSize: 18,
-                              color: '#0E4764',
-                            }}
-                          >
-                            {contact.name[0]}
-                          </div>
-                        )}
-                        <div style={{ textAlign: 'center' }}>
-                          <p
-                            style={{
-                              fontFamily: 'Inter, sans-serif',
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: '#1D1D1D',
-                              margin: '0 0 1px 0',
-                              lineHeight: 1.3,
-                            }}
-                          >
-                            {contact.name}
-                          </p>
-                          <p
-                            style={{
-                              fontFamily: 'Inter, sans-serif',
-                              fontSize: 11,
-                              color: '#717182',
-                              margin: 0,
-                            }}
-                          >
-                            {contact.role}
-                          </p>
-                        </div>
-                        <a
-                          href={`tel:${contact.phone.replace(/\s/g, '')}`}
-                          aria-label={`Ring til ${contact.name}`}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            textDecoration: 'none',
-                            color: '#0E4764',
-                            minHeight: 36,
-                          }}
-                        >
-                          <Phone size={12} color="#0E4764" />
-                          <span
-                            style={{
-                              fontFamily: 'Inter, sans-serif',
-                              fontSize: 12,
-                              color: '#0E4764',
-                            }}
-                          >
-                            {contact.phone}
-                          </span>
-                        </a>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+            {/* Produkt */}
+            <div
+              style={{
+                flex: 1,
+                padding: '14px 13px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+              }}
+            >
+              <p
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: 11,
+                  color: C.textMuted,
+                  margin: '0 0 2px 0',
+                  textAlign: 'center',
+                }}
+              >
+                Produkt
+              </p>
+              <p
+                style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 22,
+                  color: C.textPrimary,
+                  margin: 0,
+                  lineHeight: 1.2,
+                  textAlign: 'center',
+                }}
+              >
+                {task.produkt}
+              </p>
+            </div>
+          </div>
 
-              {/* Danger/traffic alerts */}
-              {dangerAlerts.map(alert => (
-                <div
-                  key={alert.id}
-                  style={{
-                    width: 309,
-                    height: 158,
-                    flexShrink: 0,
-                    scrollSnapAlign: 'start',
-                    backgroundColor: '#FBECEA',
-                    borderRadius: 20,
-                    border: '1px solid #F4C5C2',
-                    padding: 16,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 8,
-                  }}
-                >
-                  <p
-                    style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase' as const,
-                      color: '#C8372D',
-                      margin: 0,
-                    }}
-                  >
-                    Trafikvarsel
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
-                      color: '#C8372D',
-                      margin: 0,
-                      lineHeight: 1.5,
-                      overflow: 'hidden',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 5,
-                      WebkitBoxOrient: 'vertical',
-                    }}
-                  >
-                    {alert.message}
-                  </p>
-                </div>
-              ))}
+          {/* Række 2: Formand — fuld bredde med horisontal divider over */}
+          {/* Typografi 1:1 fra TimeRegistrationScreen linje ~213-253 */}
+          {formandContact && (
+            <div
+              style={{
+                borderTop: `1px solid ${C.border}`,
+                padding: '14px 12px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 2,
+              }}
+            >
+              {/* Label — TimeRegistrationScreen: Inter 11, textMuted */}
+              <span
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: 11,
+                  color: C.textMuted,
+                }}
+              >
+                Formand
+              </span>
+              {/* Navn — TimeRegistrationScreen: Poppins 600, 16, textPrimary */}
+              <span
+                style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 16,
+                  color: C.textPrimary,
+                  textAlign: 'center',
+                }}
+              >
+                {formandContact.name}
+              </span>
+              {/* Tlf — TimeRegistrationScreen: Inter 13, deepTeal, klikbar tel: */}
+              <a
+                href={`tel:${formandContact.phone.replace(/\s/g, '')}`}
+                aria-label={`Ring til ${formandContact.name}`}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: 13,
+                  color: C.deepTeal,
+                  textDecoration: 'none',
+                  textAlign: 'center',
+                }}
+              >
+                {formandContact.phone}
+              </a>
             </div>
           )}
         </div>
 
-        {/* Action buttons */}
+        {/* Locations */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Pickup */}
+          {pickup && (
+            <div
+              style={{
+                backgroundColor: C.white,
+                borderRadius: 12,
+                border: `1px solid ${C.border}`,
+                padding: '14px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  backgroundColor: C.pickupBg,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <MapPin size={16} color={C.deepTeal} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <p
+                  style={{
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase' as const,
+                    color: C.textMuted,
+                    margin: '0 0 2px 0',
+                  }}
+                >
+                  Afhenting
+                </p>
+                <p
+                  style={{
+                    fontFamily: 'Inter, sans-serif',
+                    fontWeight: 600,
+                    fontSize: 15,
+                    color: C.textPrimary,
+                    margin: '0 0 2px 0',
+                  }}
+                >
+                  {pickup.name}
+                </p>
+                <p
+                  style={{
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: 13,
+                    color: C.textMuted,
+                    margin: 0,
+                  }}
+                >
+                  {pickup.address}
+                </p>
+              </div>
+              {pickup.meetingTime && (
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <p
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: 11,
+                      color: C.textMuted,
+                      margin: '0 0 2px 0',
+                    }}
+                  >
+                    Mødetid
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: 'Poppins, sans-serif',
+                      fontWeight: 600,
+                      fontSize: 20,
+                      color: C.textPrimary,
+                      margin: 0,
+                    }}
+                  >
+                    {pickup.meetingTime}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Transport icon */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                backgroundColor: C.border,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 2,
+              }}
+            >
+              <ArrowUp size={12} color={C.textMuted} />
+              <ArrowDown size={12} color={C.textMuted} />
+            </div>
+          </div>
+
+          {/* Delivery */}
+          {delivery && (
+            <div
+              style={{
+                backgroundColor: C.white,
+                borderRadius: 12,
+                border: `1px solid ${C.border}`,
+                padding: '14px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  backgroundColor: C.deliveryBg,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <MapPin size={16} color={C.deliveryIconColor} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <p
+                  style={{
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase' as const,
+                    color: C.textMuted,
+                    margin: '0 0 2px 0',
+                  }}
+                >
+                  Udførselssted
+                </p>
+                <p
+                  style={{
+                    fontFamily: 'Inter, sans-serif',
+                    fontWeight: 600,
+                    fontSize: 15,
+                    color: C.textPrimary,
+                    margin: '0 0 2px 0',
+                  }}
+                >
+                  {delivery.name}
+                </p>
+                <p
+                  style={{
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: 13,
+                    color: C.textMuted,
+                    margin: 0,
+                  }}
+                >
+                  {delivery.address}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ─── Boks 1 — Information (stationær, fuld bredde) ──────────────────────
+            Viser formandNote (neutral, øverst) + infoAlerts (neutral) + dangerAlerts (rød).
+            Skjules hvis hverken formandNote, infoAlerts eller dangerAlerts er til stede. */}
+        {hasAlerts && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <p style={sectionLabel}>Information</p>
+            <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* formandNote — neutral grå, vises øverst hvis defineret */}
+              {task.formandNote && (
+                <div>
+                  <p
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: 13,
+                      color: C.textPrimary,
+                      margin: 0,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {task.formandNote}
+                  </p>
+                  {(infoAlerts.length > 0 || dangerAlerts.length > 0) && (
+                    <div style={{ height: 1, backgroundColor: C.border, marginTop: 10 }} />
+                  )}
+                </div>
+              )}
+              {infoAlerts.map((alert, i) => (
+                <div key={alert.id}>
+                  {i > 0 && (
+                    <div style={{ height: 1, backgroundColor: C.border, marginBottom: 10 }} />
+                  )}
+                  <p
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: 13,
+                      color: C.textPrimary,
+                      margin: 0,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {alert.message}
+                  </p>
+                </div>
+              ))}
+              {dangerAlerts.length > 0 && infoAlerts.length > 0 && (
+                <div style={{ height: 1, backgroundColor: C.border }} />
+              )}
+              {dangerAlerts.map((alert, i) => (
+                <div key={alert.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  {i > 0 && (
+                    <div style={{ height: 1, backgroundColor: C.dangerBorder, marginBottom: 10 }} />
+                  )}
+                  {/* Rød dot som type-indikator for trafikvarsel */}
+                  <div
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      backgroundColor: C.danger,
+                      flexShrink: 0,
+                      marginTop: 5,
+                    }}
+                  />
+                  <p
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: 13,
+                      color: C.danger,
+                      margin: 0,
+                      lineHeight: 1.5,
+                      flex: 1,
+                    }}
+                  >
+                    {alert.message}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Formand-boks fjernet — kontaktinfo nu i metrics-cardet ovenfor */}
+
+        {/* Action-knapper (i bunden af scroll-body — samme mønster som TimeRegistrationScreen) */}
         <div
           style={{
-            padding: '12px 20px 20px',
             display: 'flex',
             flexDirection: 'column',
             gap: 8,
-            borderTop: '1px solid #EDEDED',
-            backgroundColor: '#F8F8F8',
+            marginTop: 4,
+            paddingBottom: 8,
           }}
         >
           {taskState === 'idle' && (
@@ -627,8 +564,8 @@ export function TaskDetailScreen({
               onClick={onStart}
               style={{
                 height: 52,
-                backgroundColor: '#0E4764',
-                color: '#fff',
+                backgroundColor: C.green,
+                color: C.white,
                 borderRadius: 12,
                 border: 'none',
                 cursor: 'pointer',
@@ -643,12 +580,12 @@ export function TaskDetailScreen({
           {taskState === 'active' && (
             <div style={{ display: 'flex', gap: 8 }}>
               <button
-                onClick={onPause}
+                onClick={() => setPauseConfirmOpen(true)}
                 style={{
                   flex: 1,
                   height: 52,
-                  backgroundColor: '#EDEDED',
-                  color: '#1D1D1D',
+                  backgroundColor: C.border,
+                  color: C.textPrimary,
                   borderRadius: 12,
                   border: 'none',
                   cursor: 'pointer',
@@ -664,8 +601,8 @@ export function TaskDetailScreen({
                 style={{
                   flex: 1,
                   height: 52,
-                  backgroundColor: '#1F8A5B',
-                  color: '#fff',
+                  backgroundColor: C.green,
+                  color: C.white,
                   borderRadius: 12,
                   border: 'none',
                   cursor: 'pointer',
@@ -674,7 +611,7 @@ export function TaskDetailScreen({
                   fontSize: 15,
                 }}
               >
-                Færdig
+                Afslut opgave
               </button>
             </div>
           )}
@@ -683,8 +620,8 @@ export function TaskDetailScreen({
               onClick={onStart}
               style={{
                 height: 52,
-                backgroundColor: '#0E4764',
-                color: '#fff',
+                backgroundColor: C.yellow,
+                color: C.deepTeal,
                 borderRadius: 12,
                 border: 'none',
                 cursor: 'pointer',
@@ -693,11 +630,84 @@ export function TaskDetailScreen({
                 fontSize: 15,
               }}
             >
-              Genoptag
+              Genoptag opgave
             </button>
           )}
         </div>
       </div>
+
+      {/* Pause-bekræftelses-modal — unified pattern fra TimeRegistrationScreen linje 682-752 */}
+      {pauseConfirmOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 24px',
+          }}
+          onClick={() => setPauseConfirmOpen(false)}
+        >
+          <div
+            style={{
+              backgroundColor: C.white,
+              borderRadius: 24,
+              padding: 20,
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 12,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, textAlign: 'center' }}>
+              Pause?
+            </span>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.textMuted, textAlign: 'center' }}>
+              Bekræft at du tager en pause. Tryk Genoptag når du er klar til at fortsætte.
+            </span>
+            <div style={{ display: 'flex', gap: 10, marginTop: 4, width: '100%' }}>
+              <button
+                onClick={() => setPauseConfirmOpen(false)}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  border: `1px solid ${C.deepTeal}`,
+                  borderRadius: 50,
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  color: C.deepTeal,
+                }}
+              >
+                Annuller
+              </button>
+              <button
+                onClick={() => { onPause(); setPauseConfirmOpen(false) }}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  backgroundColor: C.green,
+                  border: 'none',
+                  borderRadius: 50,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  color: C.white,
+                }}
+              >
+                Pause
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

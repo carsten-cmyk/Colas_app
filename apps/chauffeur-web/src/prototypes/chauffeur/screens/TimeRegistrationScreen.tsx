@@ -3,7 +3,7 @@
  * Må ikke importeres i produktionskode.
  */
 import { useState, useRef } from 'react'
-import { X, Pencil, Mic, Moon, CheckCircle, ChevronDown, ChevronUp, Check } from 'lucide-react'
+import { X, Pencil, Mic, ChevronDown, ChevronUp, Check } from 'lucide-react'
 import { BottomTabBar } from '../components/BottomTabBar'
 import type { TabName } from '../components/BottomTabBar'
 
@@ -13,9 +13,8 @@ const MOCK = {
   projectName: 'Uddannelsescenter Syd, Lolland',
   address: 'Rødby Landevej 12, 4900 Nakskov',
   orderNumber: '1212343',
-  rounds: 3,
-  distanceKm: 76,
   tons: 73,
+  formand: { name: 'Lars Hansen', phone: '+45 22 33 44 55' },
 }
 
 const INITIAL_ENTRIES = [
@@ -29,7 +28,7 @@ const REASONS = ['GPS-fejl', 'Ventetid fejlregistreret', 'Glemt pause', 'Teknisk
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Entry = { id: string; category: string; minutes: number; modified?: boolean }
 type EditState = { entry: Entry; hours: string; minutes: string; reason: string; freeText: string }
-type ConfirmType = 'dag' | 'opgave' | null
+// ConfirmType reduceret — kun én sti (opgave)
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatTime(minutes: number): string {
@@ -66,7 +65,8 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
   const [comment, setComment] = useState('')
   const [editing, setEditing] = useState<EditState | null>(null)
   const [showReasonList, setShowReasonList] = useState(false)
-  const [confirm, setConfirm] = useState<ConfirmType>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [completed, setCompleted] = useState(false)
 
   const handleEdit = (entry: Entry) => {
     setEditing({
@@ -87,8 +87,8 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
   }
 
   const handleConfirm = () => {
-    setConfirm(null)
-    onClose()
+    setConfirmOpen(false)
+    setCompleted(true)
   }
 
   return (
@@ -117,34 +117,42 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
           paddingBottom: 12,
         }}
       >
-        <p
-          style={{
-            fontFamily: 'Poppins, sans-serif',
-            fontWeight: 600,
-            fontSize: 18,
-            color: C.deepTeal,
-            margin: 0,
-          }}
-        >
-          Tidsregistrering
-        </p>
-        <button
-          onClick={onClose}
-          aria-label="Luk"
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: '50%',
-            backgroundColor: C.border,
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <X size={16} color={C.textPrimary} />
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <p
+            style={{
+              fontFamily: 'Poppins, sans-serif',
+              fontWeight: 600,
+              fontSize: 18,
+              color: C.deepTeal,
+              margin: 0,
+            }}
+          >
+            Tidsregistrering
+          </p>
+          <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 12, color: C.textMuted }}>
+            {MOCK.date}
+          </span>
+        </div>
+        {/* X-knap skjules i completed-state */}
+        {!completed && (
+          <button
+            onClick={onClose}
+            aria-label="Luk"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              backgroundColor: C.border,
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <X size={16} color={C.textPrimary} />
+          </button>
+        )}
       </div>
 
       {/* Scrollable body */}
@@ -163,10 +171,82 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
           position: 'relative',
         }}
       >
-        {/* Dato + projektnavn + adresse */}
+        {/* Bekræftelses-VIEW — vises efter modal-bekræft */}
+        {completed && (
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              paddingTop: 60,
+              paddingBottom: 40,
+            }}
+          >
+            <p
+              style={{
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: 24,
+                color: C.deepTeal,
+                textAlign: 'center',
+                margin: 0,
+              }}
+            >
+              Opgaven er afsluttet
+            </p>
+            <p
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                fontWeight: 400,
+                fontSize: 14,
+                color: C.textMuted,
+                textAlign: 'center',
+                margin: 0,
+              }}
+            >
+              Timerne er sendt til formanden
+            </p>
+            <button
+              onClick={onClose}
+              style={{
+                marginTop: 24,
+                backgroundColor: C.yellow,
+                border: 'none',
+                borderRadius: 50,
+                height: 52,
+                width: '100%',
+                maxWidth: 280,
+                alignSelf: 'center',
+                cursor: 'pointer',
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: 15,
+                color: C.deepTeal,
+              }}
+            >
+              Til forsiden
+            </button>
+          </div>
+        )}
+
+        {/* Udførselssted — projektnavn + adresse */}
+        {!completed && (
+        <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.textMuted }}>
-            {MOCK.date}
+          <span
+            style={{
+              fontFamily: 'Inter, sans-serif',
+              fontWeight: 600,
+              fontSize: 11,
+              color: C.textMuted,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+            }}
+          >
+            Udførselssted
           </span>
           <span
             style={{
@@ -186,7 +266,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
           </span>
         </div>
 
-        {/* Summary card — 3 kolonner */}
+        {/* Summary card — 2 kolonner: Formand + Tons */}
         <div
           style={{
             backgroundColor: C.white,
@@ -197,45 +277,80 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
             overflow: 'hidden',
           }}
         >
-          {[
-            { value: MOCK.rounds, label: 'Runder' },
-            { value: MOCK.distanceKm, label: 'KM' },
-            { value: MOCK.tons, label: 'Tons' },
-          ].map((item, i) => (
-            <div
-              key={item.label}
+          {/* Kolonne 1: Formand */}
+          <div
+            style={{
+              flex: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 2,
+              padding: '14px 12px',
+            }}
+          >
+            <span
               style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 2,
-                padding: '14px 0',
-                borderLeft: i > 0 ? `1px solid ${C.border}` : 'none',
+                fontFamily: 'Inter, sans-serif',
+                fontSize: 11,
+                color: C.textMuted,
               }}
             >
-              <span
-                style={{
-                  fontFamily: 'Poppins, sans-serif',
-                  fontWeight: 600,
-                  fontSize: 18,
-                  color: C.textPrimary,
-                }}
-              >
-                {item.value}
-              </span>
-              <span
-                style={{
-                  fontFamily: 'Inter, sans-serif',
-                  fontSize: 11,
-                  color: C.textMuted,
-                }}
-              >
-                {item.label}
-              </span>
-            </div>
-          ))}
+              Formand
+            </span>
+            <span
+              style={{
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: 16,
+                color: C.textPrimary,
+              }}
+            >
+              {MOCK.formand.name}
+            </span>
+            <span
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                fontSize: 13,
+                color: C.deepTeal,
+              }}
+            >
+              {MOCK.formand.phone}
+            </span>
+          </div>
+          {/* Kolonne 2: Tons */}
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 2,
+              padding: '14px 0',
+              borderLeft: `1px solid ${C.border}`,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: 18,
+                color: C.textPrimary,
+              }}
+            >
+              {MOCK.tons}
+            </span>
+            <span
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                fontSize: 11,
+                color: C.textMuted,
+              }}
+            >
+              Tons
+            </span>
+          </div>
         </div>
 
         {/* Sektion-label */}
@@ -374,7 +489,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
         {/* Knapper */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
           <button
-            onClick={() => setConfirm('dag')}
+            onClick={() => setConfirmOpen(true)}
             style={{
               backgroundColor: C.green,
               border: 'none',
@@ -387,25 +502,11 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
               color: C.white,
             }}
           >
-            Afslut dag
-          </button>
-          <button
-            onClick={() => setConfirm('opgave')}
-            style={{
-              backgroundColor: C.deepTeal,
-              border: 'none',
-              borderRadius: 50,
-              height: 52,
-              cursor: 'pointer',
-              fontFamily: 'Poppins, sans-serif',
-              fontWeight: 600,
-              fontSize: 15,
-              color: C.white,
-            }}
-          >
-            Afslut opgave
+            Afslut opgave og send timer
           </button>
         </div>
+        </>
+        )}
       </div>
 
       {/* Bottom tab bar */}
@@ -415,7 +516,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
         messageCount={messageCount}
       />
 
-      {/* Redigerings-overlay — behold som den er */}
+      {/* Redigerings-overlay */}
       {editing && (
         <div
           style={{
@@ -428,150 +529,185 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
           }}
           onClick={() => setEditing(null)}
         >
+          {/*
+            Sheet er opdelt i tre niveauer:
+            1. Header (titel) — fast
+            2. Scrollbart indhold — vokser med Årsag-liste + fritekst
+            3. Footer (Annuller/Gem) — sticky i bunden af sheeten
+            maxHeight: 85vh sikrer at footer ALDRIG skubbes under viewport
+          */}
           <div
             style={{
               backgroundColor: C.white,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
-              padding: '20px 16px 24px',
+              maxHeight: '85vh',
               display: 'flex',
               flexDirection: 'column',
-              gap: 12,
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 17, color: C.deepTeal }}>
-              Rediger {editing.entry.category.toLowerCase()}
-            </span>
-
-            {/* Time inputs */}
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.textMuted }}>Timer</span>
-                <input
-                  type="number"
-                  value={editing.hours}
-                  onChange={(e) => setEditing(prev => prev ? { ...prev, hours: e.target.value } : null)}
-                  maxLength={2}
-                  style={{
-                    width: 80,
-                    backgroundColor: C.softAqua,
-                    border: 'none',
-                    borderRadius: 8,
-                    padding: '10px 0',
-                    textAlign: 'center',
-                    fontFamily: 'Inter, sans-serif',
-                    fontWeight: 500,
-                    fontSize: 18,
-                    color: C.deepTeal,
-                    outline: 'none',
-                  }}
-                />
-              </div>
-              <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, paddingBottom: 8 }}>:</span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.textMuted }}>Minutter</span>
-                <input
-                  type="number"
-                  value={editing.minutes}
-                  onChange={(e) => setEditing(prev => prev ? { ...prev, minutes: e.target.value } : null)}
-                  maxLength={2}
-                  style={{
-                    width: 80,
-                    backgroundColor: C.softAqua,
-                    border: 'none',
-                    borderRadius: 8,
-                    padding: '10px 0',
-                    textAlign: 'center',
-                    fontFamily: 'Inter, sans-serif',
-                    fontWeight: 500,
-                    fontSize: 18,
-                    color: C.deepTeal,
-                    outline: 'none',
-                  }}
-                />
-              </div>
+            {/* Header — fast */}
+            <div style={{ padding: '20px 16px 0' }}>
+              {/* fontSize 18 matcher bekræftelses-modalen (Poppins 600 18) */}
+              <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal }}>
+                Rediger {editing.entry.category.toLowerCase()}
+              </span>
             </div>
 
-            {/* Årsag */}
-            <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.textMuted }}>Årsag</span>
-            <button
-              onClick={() => setShowReasonList(v => !v)}
+            {/* Scrollbart indhold */}
+            <div
               style={{
-                backgroundColor: C.softAqua,
-                border: 'none',
-                borderRadius: 8,
+                flex: 1,
+                overflowY: 'auto',
                 padding: '12px 16px',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'pointer',
+                flexDirection: 'column',
+                gap: 12,
               }}
             >
-              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 14, color: editing.reason ? C.deepTeal : C.textMuted }}>
-                {editing.reason || 'Vælg årsag...'}
-              </span>
-              {showReasonList ? <ChevronUp size={16} color={C.deepTeal} /> : <ChevronDown size={16} color={C.deepTeal} />}
-            </button>
-
-            {showReasonList && (
-              <div style={{ backgroundColor: C.softAqua, borderRadius: 8, overflow: 'hidden' }}>
-                {REASONS.map(r => (
-                  <button
-                    key={r}
-                    onClick={() => {
-                      setEditing(prev => prev ? { ...prev, reason: r, freeText: r !== 'Andet' ? '' : prev.freeText } : null)
-                      setShowReasonList(false)
-                    }}
+              {/* Time inputs */}
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.textMuted }}>Timer</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={editing.hours}
+                    onChange={(e) => setEditing(prev => prev ? { ...prev, hours: e.target.value } : null)}
+                    maxLength={2}
                     style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '12px 16px',
+                      width: 80,
+                      backgroundColor: C.softAqua,
                       border: 'none',
-                      borderBottom: `1px solid ${C.boxOutline}`,
-                      background: 'transparent',
-                      cursor: 'pointer',
+                      borderRadius: 8,
+                      padding: '10px 0',
+                      textAlign: 'center',
+                      fontFamily: 'Inter, sans-serif',
+                      fontWeight: 500,
+                      fontSize: 18,
+                      color: C.deepTeal,
+                      outline: 'none',
                     }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: 'Inter, sans-serif',
-                        fontSize: 14,
-                        color: editing.reason === r ? C.deepTeal : C.textPrimary,
-                        fontWeight: editing.reason === r ? 500 : 400,
-                      }}
-                    >
-                      {r}
-                    </span>
-                    {editing.reason === r && <Check size={14} color={C.deepTeal} />}
-                  </button>
-                ))}
+                  />
+                </div>
+                <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, paddingBottom: 8 }}>:</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.textMuted }}>Minutter</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={editing.minutes}
+                    onChange={(e) => setEditing(prev => prev ? { ...prev, minutes: e.target.value } : null)}
+                    maxLength={2}
+                    style={{
+                      width: 80,
+                      backgroundColor: C.softAqua,
+                      border: 'none',
+                      borderRadius: 8,
+                      padding: '10px 0',
+                      textAlign: 'center',
+                      fontFamily: 'Inter, sans-serif',
+                      fontWeight: 500,
+                      fontSize: 18,
+                      color: C.deepTeal,
+                      outline: 'none',
+                    }}
+                  />
+                </div>
               </div>
-            )}
 
-            {editing.reason === 'Andet' && (
-              <textarea
-                placeholder="Beskriv årsag..."
-                value={editing.freeText}
-                onChange={(e) => setEditing(prev => prev ? { ...prev, freeText: e.target.value } : null)}
+              {/* Årsag */}
+              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.textMuted }}>Årsag</span>
+              <button
+                onClick={() => setShowReasonList(v => !v)}
                 style={{
                   backgroundColor: C.softAqua,
                   border: 'none',
                   borderRadius: 8,
                   padding: '12px 16px',
-                  minHeight: 60,
-                  fontFamily: 'Inter, sans-serif',
-                  fontSize: 14,
-                  color: C.textPrimary,
-                  outline: 'none',
-                  resize: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
                 }}
-              />
-            )}
+              >
+                <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 14, color: editing.reason ? C.deepTeal : C.textMuted }}>
+                  {editing.reason || 'Vælg årsag...'}
+                </span>
+                {showReasonList ? <ChevronUp size={16} color={C.deepTeal} /> : <ChevronDown size={16} color={C.deepTeal} />}
+              </button>
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              {showReasonList && (
+                <div style={{ backgroundColor: C.softAqua, borderRadius: 8, overflow: 'hidden', border: `1px solid ${C.boxOutline}` }}>
+                  {REASONS.map(r => (
+                    <button
+                      key={r}
+                      onClick={() => {
+                        setEditing(prev => prev ? { ...prev, reason: r, freeText: r !== 'Andet' ? '' : prev.freeText } : null)
+                        setShowReasonList(false)
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        border: 'none',
+                        borderBottom: `1px solid ${C.boxOutline}`,
+                        background: 'transparent',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: 'Inter, sans-serif',
+                          fontSize: 14,
+                          color: editing.reason === r ? C.deepTeal : C.textPrimary,
+                          fontWeight: editing.reason === r ? 500 : 400,
+                        }}
+                      >
+                        {r}
+                      </span>
+                      {editing.reason === r && <Check size={14} color={C.deepTeal} />}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {editing.reason === 'Andet' && (
+                <textarea
+                  placeholder="Beskriv årsag..."
+                  value={editing.freeText}
+                  onChange={(e) => setEditing(prev => prev ? { ...prev, freeText: e.target.value } : null)}
+                  style={{
+                    backgroundColor: C.softAqua,
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '12px 16px',
+                    minHeight: 60,
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: 14,
+                    color: C.textPrimary,
+                    outline: 'none',
+                    resize: 'none',
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Footer — sticky i bunden af sheeten, altid synlig */}
+            <div
+              style={{
+                padding: '8px 16px 24px',
+                borderTop: `1px solid ${C.border}`,
+                display: 'flex',
+                gap: 10,
+                backgroundColor: C.white,
+              }}
+            >
               <button
                 onClick={() => setEditing(null)}
                 style={{
@@ -587,7 +723,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
                   color: C.deepTeal,
                 }}
               >
-                Afbryd
+                Annuller
               </button>
               <button
                 onClick={handleSave}
@@ -611,8 +747,8 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
         </div>
       )}
 
-      {/* Bekræftelses-dialog — behold som den er */}
-      {confirm && (
+      {/* Bekræftelses-dialog */}
+      {confirmOpen && (
         <div
           style={{
             position: 'absolute',
@@ -623,7 +759,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
             justifyContent: 'center',
             padding: '0 24px',
           }}
-          onClick={() => setConfirm(null)}
+          onClick={() => setConfirmOpen(false)}
         >
           <div
             style={{
@@ -638,23 +774,15 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ marginBottom: 4 }}>
-              {confirm === 'dag'
-                ? <Moon size={36} color={C.deepTeal} />
-                : <CheckCircle size={36} color={C.error} />
-              }
-            </div>
             <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, textAlign: 'center' }}>
-              {confirm === 'dag' ? 'Afslut dag?' : 'Afslut opgave?'}
+              Afslut opgave?
             </span>
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.textMuted, textAlign: 'center' }}>
-              {confirm === 'dag'
-                ? 'Dagens timer gemmes. Opgaven fortsætter i morgen.'
-                : 'Opgaven afsluttes og sendes til godkendelse.'}
+              Er du sikker på du vil afslutte og sende data til formanden?
             </span>
             <div style={{ display: 'flex', gap: 10, marginTop: 4, width: '100%' }}>
               <button
-                onClick={() => setConfirm(null)}
+                onClick={() => setConfirmOpen(false)}
                 style={{
                   flex: 1,
                   height: 44,
@@ -675,17 +803,17 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
                 style={{
                   flex: 1,
                   height: 44,
-                  backgroundColor: confirm === 'opgave' ? C.error : C.yellow,
+                  backgroundColor: C.green,
                   border: 'none',
                   borderRadius: 50,
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
                   fontSize: 14,
-                  color: confirm === 'opgave' ? C.white : C.deepTeal,
+                  color: C.white,
                 }}
               >
-                {confirm === 'dag' ? 'Afslut dag' : 'Afslut opgave'}
+                Afslut opgave
               </button>
             </div>
           </div>

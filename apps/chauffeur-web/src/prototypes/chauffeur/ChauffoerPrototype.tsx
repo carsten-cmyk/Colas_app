@@ -60,6 +60,7 @@ export function ChauffoerPrototype() {
     if (!selectedTask) return
     setTaskStates(prev => ({ ...prev, [selectedTask.id]: 'completed' }))
     setSelectedTaskId(null)
+    setPrototypeSubScreen('timereg')
   }
 
   if (screen === 'splash') {
@@ -222,8 +223,14 @@ export function ChauffoerPrototype() {
       {isPrototyperTab && prototypeSubScreen === 'ankomst' && (
         <AnkommetFabrikScreen onClose={() => setPrototypeSubScreen(null)} messageCount={MESSAGE_COUNT} />
       )}
-      {isPrototyperTab && prototypeSubScreen === 'timereg' && (
-        <TimeRegistrationScreen onClose={() => setPrototypeSubScreen(null)} messageCount={MESSAGE_COUNT} />
+      {prototypeSubScreen === 'timereg' && (
+        <TimeRegistrationScreen
+          onClose={() => {
+            setPrototypeSubScreen(null)
+            setActiveTab('start')
+          }}
+          messageCount={MESSAGE_COUNT}
+        />
       )}
       {isPrototyperTab && prototypeSubScreen === 'opgaveliste' && (
         <TaskListScreen onClose={() => setPrototypeSubScreen(null)} messageCount={MESSAGE_COUNT} />

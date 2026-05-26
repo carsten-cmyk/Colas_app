@@ -241,6 +241,19 @@ export function DashboardScreen({
                 }}
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontWeight: 600,
+                      fontSize: 10,
+                      color: '#717182',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      margin: 0,
+                    }}
+                  >
+                    Udførselssted
+                  </span>
                   <p
                     style={{
                       fontFamily: 'Poppins, sans-serif',
@@ -273,42 +286,101 @@ export function DashboardScreen({
                     </p>
                   )}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', width: '100%', gap: 0 }}>
-                  {[
-                    { label: 'Ton', value: String(task.ton) },
-                    { label: 'Produkt', value: task.produkt ?? 'Asfalt' },
-                    { label: 'Runder', value: String(task.runder ?? '12') },
-                    { label: 'Timer', value: String(task.timer ?? '3.5t') },
-                  ].map((metric) => (
+                {(() => {
+                  const formandContact = task.contacts.find((c) =>
+                    c.role.toLowerCase().includes('formand')
+                  ) ?? task.contacts[0]
+                  return (
                     <div
-                      key={metric.label}
-                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: formandContact ? '1fr 1fr 2fr' : '1fr 1fr',
+                        width: '100%',
+                        gap: 0,
+                      }}
                     >
-                      <p
-                        style={{
-                          fontFamily: 'Inter, sans-serif',
-                          fontSize: 10,
-                          color: '#717182',
-                          margin: '0 0 2px 0',
-                          fontWeight: 500,
-                        }}
-                      >
-                        {metric.label}
-                      </p>
-                      <p
-                        style={{
-                          fontFamily: 'Inter, sans-serif',
-                          fontSize: 14,
-                          fontWeight: 700,
-                          color: '#1D1D1D',
-                          margin: 0,
-                        }}
-                      >
-                        {metric.value}
-                      </p>
+                      {[
+                        { label: 'Ton', value: String(task.ton) },
+                        { label: 'Produkt', value: task.produkt ?? 'Asfalt' },
+                      ].map((metric) => (
+                        <div
+                          key={metric.label}
+                          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}
+                        >
+                          <p
+                            style={{
+                              fontFamily: 'Inter, sans-serif',
+                              fontSize: 10,
+                              color: '#717182',
+                              margin: '0 0 2px 0',
+                              fontWeight: 500,
+                            }}
+                          >
+                            {metric.label}
+                          </p>
+                          <p
+                            style={{
+                              fontFamily: 'Inter, sans-serif',
+                              fontSize: 14,
+                              fontWeight: 700,
+                              color: '#1D1D1D',
+                              margin: 0,
+                            }}
+                          >
+                            {metric.value}
+                          </p>
+                        </div>
+                      ))}
+                      {formandContact && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            textAlign: 'center',
+                          }}
+                        >
+                          <p
+                            style={{
+                              fontFamily: 'Inter, sans-serif',
+                              fontSize: 10,
+                              color: '#717182',
+                              margin: '0 0 2px 0',
+                              fontWeight: 500,
+                            }}
+                          >
+                            Formand
+                          </p>
+                          <p
+                            style={{
+                              fontFamily: 'Inter, sans-serif',
+                              fontSize: 14,
+                              fontWeight: 700,
+                              color: '#1D1D1D',
+                              margin: 0,
+                            }}
+                          >
+                            {formandContact.name}
+                          </p>
+                          <a
+                            href={`tel:${formandContact.phone}`}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              fontFamily: 'Inter, sans-serif',
+                              fontSize: 11,
+                              fontWeight: 500,
+                              color: '#0E4764',
+                              margin: 0,
+                              textDecoration: 'none',
+                            }}
+                          >
+                            {formandContact.phone}
+                          </a>
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  )
+                })()}
                 {task.formandNote && (
                   <>
                     <div style={{ width: '100%', height: 1, backgroundColor: 'rgba(0,0,0,0.08)' }} />

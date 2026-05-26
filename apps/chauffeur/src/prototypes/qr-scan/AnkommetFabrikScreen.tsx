@@ -17,7 +17,8 @@ import { theme } from '@/config/theme';
 const MOCK = {
   orderNumber: '1212343',
   silo: 'Silo 3',
-  produkt: '82101H',
+  ton: 75,
+  produkt: 'SMA 11S',
   pickup: { name: 'Køge Asfaltfabrik' },
 };
 
@@ -65,6 +66,11 @@ export function AnkommetFabrikScreen({ onClose }: AnkommetFabrikScreenProps) {
         <Text style={styles.ankommetLabel}>Du er ankommet til {MOCK.pickup.name}</Text>
         <Text style={styles.siloHeading}>Kør til {MOCK.silo}</Text>
 
+        <View style={styles.tonsBlock}>
+          <Text style={styles.tonsLabel}>Antal tons</Text>
+          <Text style={styles.tonsValue}>{MOCK.ton}</Text>
+        </View>
+
         <View style={styles.produktBlock}>
           <Text style={styles.produktLabel}>Produkt</Text>
           <Text style={styles.produktValue}>{MOCK.produkt}</Text>
@@ -95,7 +101,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.lg,
   },
   ankommetLabel: {
     fontFamily: theme.fonts.poppinsMedium,
@@ -108,6 +113,21 @@ const styles = StyleSheet.create({
     fontSize: 36,
     color: theme.colors.deepTeal,
     textAlign: 'center',
+  },
+  tonsBlock: {
+    alignItems: 'center',
+    gap: 2,
+    marginTop: theme.spacing.xs,
+  },
+  tonsLabel: {
+    fontFamily: theme.fonts.poppinsMedium,
+    fontSize: theme.fontSizes.md,
+    color: theme.colors.deepTeal,
+  },
+  tonsValue: {
+    fontFamily: theme.fonts.poppinsSemiBold,
+    fontSize: 36,
+    color: theme.colors.deepTeal,
   },
   produktBlock: {
     alignItems: 'center',

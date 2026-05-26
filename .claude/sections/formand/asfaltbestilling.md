@@ -2,16 +2,16 @@
 section: asfaltbestilling
 app: formand
 tab: planlaegning
-current_phase: prototype
+current_phase: dev
 owner: Carsten
 created: 2026-05-25
-last_updated: 2026-05-25
+last_updated: 2026-05-26
 ---
 
 # Section Manifest — Asfaltbestilling
 
 > **Hvad denne fil ER:** Lifecycle-tracker for Asfaltbestilling-sektionen på Formand's Planlægning-tab. Single index over alle artefakter.
-> **Hvad denne fil IKKE er:** Forretnings-scope (kickoff) eller accept-kriterier (contract).
+> **Hvad denne fil IKKE er:** Forretnings-scope (kickoff), datafelter (`DATA_FIELDS.md`), UX-flows (`FLOWS_Asfaltbestilling.md`) eller accept-kriterier (`CONTRACT_Asfaltbestilling.md`).
 
 ---
 
@@ -19,49 +19,54 @@ last_updated: 2026-05-25
 
 | Phase | Status | Dato | Notes |
 |---|---|---|---|
-| Prototype | godkendt-UX-ikke-låst | 2026-05-22 | V3 design låst, men cross-cutting blockers åbne |
-| Dev | ikke-startet | — | Blokkeret af cross-cutting beslutninger |
+| Prototype | klar-til-dev | 2026-05-22 | V3 design låst — interview gennemført |
+| Interview | færdig (alle 4 faser) | 2026-05-26 | Alle faser accepteret af Carsten |
+| Dev | signed-klar-til-architect | 2026-05-26 | `CONTRACT_Asfaltbestilling.md` = SIGNED-2026-05-26 FROZEN — architect kan dispatches via `/develop-screen` |
 | Test | ikke-startet | — | |
 | Live | ikke-startet | — | |
 
 **Cross-cutting blockers tjekket:**
-- [ ] Status-vokabular låst — sendt/afventer/aflyst skal blive Supabase-enum
-- [ ] Datoformat låst — påvirker dato-pillerne ("16. marts 2026")
-- [ ] Multi-produkt-på-bil låst — 7 åbne kunde-spørgsmål (se `Docs/Formand/AFKLARING_Multi-produkt_OPFOLGNING.md`)
+- [x] Status-vokabular låst 2026-05-26 — se `.claude/docs/STATUS_VOKABULAR.md` (`TransportOrderStatus`, `AflysningsAarsag`, `ProduktTilstand`)
+- [x] Datoformat låst 2026-05-26 — se `.claude/docs/DATOFORMAT.md` (`formatLongDateWithDay` på dato-piller)
+- [~] Multi-produkt-på-bil — kerne låst 2026-05-19, 4 opfølgnings-spg. som `TBD-refinement` i CONTRACT (MP-1..MP-4, ikke blocker)
+- [N/A] Auth/RLS — ingen rolle-differentiering inde i sektionen (kun formand ser den). App-level auth dækker.
 
-> **Dev-fase kan IKKE starte før alle tre er låst.**
+> **Dev-fase aktiveret** 2026-05-26 — kontrakt signed. Næste: `/develop-screen asfaltbestilling formand` for architect-handoff.
 
 ---
 
 ## Prototype-reference
 
-- **Fil:** `apps/formand/src/prototypes/ordre-plan/OrdrePlanScreen.tsx#L1440-L1640`
+- **Fil:** `apps/formand/src/prototypes/ordre-plan/OrdrePlanScreen.tsx#L1440-L1640` + handlers `L957-L1046` + send-modal `L2480-L2545`
 - **Live URL:** https://formandsapp.netlify.app/ (vælg ordre → Planlægning-tab)
-- **Screenshots:** `.claude/screenshots/asfaltbestilling/` *(ikke vedlagt endnu)*
+- **Screenshots:** `.claude/screenshots/asfaltbestilling/Screenshot 2026-05-26 at 09.46.50.png` (+ baselines genereres ved første e2e-run)
 
 ---
 
 ## Komponent-scope
 
-> Identificeret ved manuel inspektion af prototypen. Bekræftes/justeres af interviewer Fase A.
+> Bekræftet i interview-Fase A. 10 komponenter (8 presentere/container + 2 hooks) — opdateret fra oprindelige 8 efter Fase A-beslutninger om at ekstrahere `SendBekraeftelsesModal` og `EkstraBestillingCTA` som egne komponenter.
 > **Rolle-konvention:** Container ejer state via hook(s). Presenter modtager props ind, sender callbacks ud (ingen direkte hook-import).
 
-| Komponent | Rolle | Prototype-source | Status | SPEC | Handoff |
-|---|---|---|---|---|---|
-| `AsfaltbestillingSection` | Container | `OrdrePlanScreen.tsx#L1440-L1640` | not-started | `Docs/Formand/SPEC_AsfaltbestillingSection.md` | — |
-| `DatePillsRow` | Presenter | `OrdrePlanScreen.tsx#L1451-L1484` | not-started | `Docs/Formand/SPEC_DatePillsRow.md` | — |
-| `ProductBoxV2` | Presenter | `OrdrePlanScreen.tsx#L2595-L2793` | not-started | `Docs/Formand/SPEC_ProductBoxV2.md` | — |
-| `EkstraBestillingBox` | Presenter | `OrdrePlanScreen.tsx#L2801-L2916` | not-started | `Docs/Formand/SPEC_EkstraBestillingBox.md` | — |
-| `StatusPill` | Presenter | `OrdrePlanScreen.tsx#L2564-L2588` | not-started | `Docs/Formand/SPEC_StatusPill.md` | — |
-| `SendTilFabrikCTA` | Presenter | `OrdrePlanScreen.tsx#L1582-L1630` | not-started | `Docs/Formand/SPEC_SendTilFabrikCTA.md` | — |
-| `useAsfaltbestilling` | Hook | (logik spredt i OrdrePlanScreen — skal samles) | not-started | `Docs/Formand/SPEC_useAsfaltbestilling.md` | — |
-| `useEkstraBestilling` | Hook | (logik spredt i OrdrePlanScreen) | not-started | `Docs/Formand/SPEC_useEkstraBestilling.md` | — |
+| # | Komponent | Rolle | Prototype-source | Status | SPEC | Handoff |
+|---|---|---|---|---|---|---|
+| 1 | `AsfaltbestillingSection` | Container | `OrdrePlanScreen.tsx#L1440-L1640` | not-started | `Docs/Formand/SPEC_AsfaltbestillingSection.md` | — |
+| 2 | `DatePillsRow` | Presenter | `OrdrePlanScreen.tsx#L1451-L1484` | not-started | `Docs/Formand/SPEC_DatePillsRow.md` | — |
+| 3 | `ProductBoxV2` | Presenter | `OrdrePlanScreen.tsx#L2595-L2793` | not-started | `Docs/Formand/SPEC_ProductBoxV2.md` | — |
+| 4 | `EkstraBestillingBox` | Presenter | `OrdrePlanScreen.tsx#L2801-L2916` | not-started | `Docs/Formand/SPEC_EkstraBestillingBox.md` | — |
+| 5 | `StatusPill` | Presenter | `OrdrePlanScreen.tsx#L2564-L2588` | not-started | `Docs/Formand/SPEC_StatusPill.md` | — |
+| 6 | `EkstraBestillingCTA` | Presenter (NY ekstraktion) | `OrdrePlanScreen.tsx#L1565-L1580` | not-started | `Docs/Formand/SPEC_EkstraBestillingCTA.md` | — |
+| 7 | `SendTilFabrikCTA` | Presenter | `OrdrePlanScreen.tsx#L1582-L1630` | not-started | `Docs/Formand/SPEC_SendTilFabrikCTA.md` | — |
+| 8 | `SendBekraeftelsesModal` | Presenter (NY ekstraktion) | `OrdrePlanScreen.tsx#L2480-L2545` | not-started | `Docs/Formand/SPEC_SendBekraeftelsesModal.md` | — |
+| 9 | `useAsfaltbestilling` | Hook | (logik spredt i OrdrePlanScreen — skal samles, inkl. `sendAlleForSelectedDate`-orkestrering) | not-started | `Docs/Formand/SPEC_useAsfaltbestilling.md` | — |
+| 10 | `useEkstraBestilling` | Hook | (logik spredt i OrdrePlanScreen + `markSent`-callback til atomic batch fra useAsfaltbestilling) | not-started | `Docs/Formand/SPEC_useEkstraBestilling.md` | — |
 
-**Sub-sektioner / sub-flows:**
-- Aflys-årsag picker (inde i ProductBoxV2 — `L2635-L2664`)
-- Vejr-toggle (inde i ProductBoxV2 — `L2681-L2701`)
-- Send-bekræftelses-modal (med kommentar-felt — separat komponent eller del af SendTilFabrikCTA?)
-- "Samles på en bil"-checkbox (per produkt+dag og per ekstra-bestilling)
+**Sub-sektioner / sub-flows (interne modes — IKKE separate komponenter):**
+- Aflys-årsag picker — intern mode i `ProductBoxV2` (Reason-picker), styret af container-state `cancellingDayId` (se C2-flow i `FLOWS_Asfaltbestilling.md`)
+- Vejr-toggle — sub-element inde i `ProductBoxV2` Default-mode (styret af `day.weatherActive`, callback `onToggleWeather`)
+- "Samles på en bil"-checkbox — sub-element i både `ProductBoxV2` og `EkstraBestillingBox` (styret af `day.samlesPaaEnBil` / `ekstra.samlesPaaEnBil`)
+- Empty-state `"Ingen produkter denne dag"` — rendres direkte i container (ikke egen komponent jf. Fase A-beslutning)
+- Sum-warning i `SendBekraeftelsesModal` — internt UI-element når `sum(tonsPlanned) > tonsTotal` (jf. C12-default)
 
 ---
 
@@ -69,41 +74,46 @@ last_updated: 2026-05-25
 
 ```
 Round 1 (foundation — parallel):
-  - shared/types/produkt.ts          → MockProduct, DayPlan, CancelReason, EkstraBestilling
-  - shared/types/ordre.ts            → Ordre, OrderStatus
+  - shared/types/produkt.ts          → MockProduct, DayPlan, AflysningsAarsag, EkstraBestilling, TransportOrder
+  - shared/types/ordre.ts            → Ordre, TransportOrderStatus
   - apps/formand/src/mocks/asfaltbestilling.ts
-  - apps/formand/src/hooks/useAsfaltbestilling.ts
-  - apps/formand/src/hooks/useEkstraBestilling.ts
+  - apps/formand/src/hooks/useAsfaltbestilling.ts (inkl. sendAlleForSelectedDate-orkestrering)
+  - apps/formand/src/hooks/useEkstraBestilling.ts (inkl. markSent-callback)
 
 Round 2 (atomic presentere — parallel):
-  - StatusPill                       (ingen deps udover types)
+  - StatusPill                       (deps: types)
   - DatePillsRow                     (deps: types)
+  - EkstraBestillingCTA              (deps: ingen)
 
 Round 3 (komplekse presentere — parallel):
-  - ProductBoxV2                     (deps: types, CancelReason-enum)
+  - ProductBoxV2                     (deps: types, AflysningsAarsag-enum)
   - EkstraBestillingBox              (deps: types)
   - SendTilFabrikCTA                 (deps: types)
+  - SendBekraeftelsesModal           (deps: types, sum-warning prop)
 
 Round 4 (container — sidste):
   - AsfaltbestillingSection          (wirer alle Round 2+3 sammen via Round 1's hooks)
 ```
 
-**Gate per round:** lint + typecheck + tests grønne FØR næste round.
+**Gate per round:** lint + typecheck + tests grønne FØR næste round. Architect skriver SPECs round-for-round.
 
 ---
 
 ## Cross-section dependencies
 
-| Type | Sektion | Relation |
-|---|---|---|
-| reads-from | `ordre-detaljer` | ordre-nr, projektleder, recept-data (recipeCode, recipeName, thicknessMm) |
-| reads-from | `samleordre` | hvilke ordrer der er samlet → ordre-tags på produkt-bokse |
-| writes-to | `udfoersel-dagsoverblik` | morgenTons bliver default for "faktisk udlagt" |
-| writes-to | `vognmand-disponering` | sendte bestillinger → vognmand modtager opgaver (cross-app via FUNCTIONAL_FLOWS) |
-| writes-to | `fabrik-bestillinger` | sendte bestillinger → fabrik ser ordre-køen |
-| blocks | `afregning` | afregning kan ikke køre før produkter er sendt + leveret |
+| Type | Sektion | App | Relation |
+|---|---|---|---|
+| reads-from | `ordre-detaljer` | Formand | ordre-nr, projektleder, recipe-data (recipeCode, recipeName, thicknessMm, tonsTotal, factory.code) |
+| reads-from | `samleordre` | Formand | hvilke ordrer er samlet → ordre-tags på produkt-bokse i samleordre-mode |
+| writes-to | `udfoersel-dagsoverblik` | Formand | morgenTons bliver default for "faktisk udlagt" (ABE-3) |
+| writes-to | `asfalt-koersel` | Formand | "Klar til bilbestilling"-signal for dagen (ABE-4) |
+| writes-to | `vognmand-disponering` | Vognmand | Sendte bestillinger → vognmand modtager opgaver (ABE-1, ABE-5, ABE-7, ABE-8) |
+| writes-to | `fabrik-ordre-koe` | Fabrik | Sendte bestillinger → fabrik ser ordre-køen (ABE-2, ABE-6, ABE-8) |
+| writes-to | `chauffør-multi-produkt-loading` | Chauffør (downstream via vognmand) | `samlesPaaEnBil=true` → 9-trins fabrik-task (ABE-7 downstream) |
+| blocks | `afregning` | Formand | Afregning kan ikke køre før produkter er sendt + leveret |
+| blocks | `vognmand-disponering` (Supabase-integration) | Vognmand | Kan ikke skifte fra mock til Supabase før `transport_orders`-skemaet er låst her |
 
-Se `.claude/docs/FUNCTIONAL_FLOWS.md` for cross-app flow-detaljer.
+Se `.claude/docs/FUNCTIONAL_FLOWS.md` (ABE-1 til ABE-8) for cross-app flow-detaljer.
 
 ---
 
@@ -111,10 +121,14 @@ Se `.claude/docs/FUNCTIONAL_FLOWS.md` for cross-app flow-detaljer.
 
 | Type | Fil | Status |
 |---|---|---|
-| Kickoff | `Docs/Formand/KICKOFF_Asfaltbestilling.md` | not-started |
-| Validation contract | `Docs/Formand/CONTRACT_Asfaltbestilling.md` | not-started |
-| SPECs | `Docs/Formand/SPEC_*.md` | 0/8 |
-| Handoffs | `.claude/handoffs/asfaltbestilling-*.md` | 0/8 |
+| Section manifest | `.claude/sections/formand/asfaltbestilling.md` | exists (denne fil) |
+| Datafelter | `.claude/docs/DATA_FIELDS.md` (sektion Asfaltbestilling) | exists |
+| UX-flows | `Docs/Formand/FLOWS_Asfaltbestilling.md` | exists |
+| Cross-app flows | `.claude/docs/FUNCTIONAL_FLOWS.md` (ABE-1..8) | exists |
+| Kickoff | `Docs/Formand/KICKOFF_Asfaltbestilling.md` | exists (DRAFT) |
+| Validation contract | `Docs/Formand/CONTRACT_Asfaltbestilling.md` | exists (DRAFT — afventer sign-off) |
+| SPECs | `Docs/Formand/SPEC_*.md` | 0/10 (architect-fase) |
+| Handoffs | `.claude/handoffs/asfaltbestilling-*.md` | 0/10 (builder-fase) |
 | Validation history | `.claude/validation-history/asfaltbestilling-*.md` | 0 runs |
 
 ---
@@ -123,12 +137,12 @@ Se `.claude/docs/FUNCTIONAL_FLOWS.md` for cross-app flow-detaljer.
 
 | Type | Path |
 |---|---|
-| Components | `apps/formand/src/components/ui/{ProductBoxV2,EkstraBestillingBox,StatusPill,...}.tsx` |
+| Components | `apps/formand/src/components/ui/{ProductBoxV2,EkstraBestillingBox,StatusPill,DatePillsRow,EkstraBestillingCTA,SendTilFabrikCTA,SendBekraeftelsesModal}.tsx` |
 | Section wrapper | `apps/formand/src/components/sections/AsfaltbestillingSection.tsx` |
 | Hooks | `apps/formand/src/hooks/{useAsfaltbestilling,useEkstraBestilling}.ts` |
 | Types | `shared/types/{ordre,produkt,bestilling}.ts` |
 | Mocks | `apps/formand/src/mocks/asfaltbestilling.ts` |
-| E2E tests | `apps/formand/e2e/asfaltbestilling.spec.ts` |
+| E2E tests | `apps/formand/e2e/asfaltbestilling-{c1-send,c2-cancel,c3-restore,c4-weather,c5-samles,c6-ekstra,c7-delete-ekstra,c8-date-pills,c9-readonly,crossapp,offline,visual}.spec.ts` |
 
 ---
 
@@ -146,18 +160,22 @@ Se `.claude/docs/FUNCTIONAL_FLOWS.md` for cross-app flow-detaljer.
 
 | Rolle | Adgang | Notes |
 |---|---|---|
-| Formand | full | ejer sektionen, kan sende til fabrik |
-| Vognmand | read-only-derived | ser disponerings-opgaver fra sendte bestillinger, ikke selve sektionen |
-| Chauffør | hidden | ser kun resulterende opgave i chauffør-app |
-| Fabrik | read-only-derived | ser ordre-køen, ikke selve sektionen |
-| Kunde | hidden | |
+| Formand | full | Ejer sektionen — alle 9 UX-flows |
+| Vognmand | read-only-derived | Ser disponerings-opgaver fra `transport_orders` (ABE-1, ABE-5, ABE-7, ABE-8), ikke selve sektionen |
+| Chauffør | hidden | Modtager downstream multi-produkt-loading-flow via vognmand (ABE-7 downstream) |
+| Fabrik | read-only-derived | Ser ordre-køen via `transport_orders` (ABE-2, ABE-6, ABE-8), ikke selve sektionen |
+| Kunde | hidden | — |
 
 ---
 
 ## Notes
 
 - V3 design låst 2026-05-21, se `project_dagsoversigt_v3_design` memory
-- "Samles på en bil"-mønster er åbent kunde-spørgsmål — se `project_samles_paa_en_bil_marker`
+- "Samles på en bil"-mønster låst som `DayPlan.samlesPaaEnBil` + `EkstraBestilling.samlesPaaEnBil` (NIKKE `productSamlesFlags`-map) jf. Fase A-beslutning
+- Vejr-toggle persisterer i hook pr. produkt+dag som `DayPlan.weatherActive: boolean` jf. Fase A-beslutning
 - Multi-produkt split-periods: SMA marts + GAB maj kan optræde i samme ordre, vises som adskilte perioder. Se `project_multi_product_split_periods`
-- Offline-strategi: write-queue ved "Send til fabrik" (se `project_offline_strategi`)
-- Forventet ~8 SPECs + 2 hooks ved fuld decomposition
+- Offline-strategi: write-queue ved alle skrive-actions, optimistic UI med 5s timeout og fuld rollback ved batch-fejl (se `project_offline_strategi` + CONTRACT D4)
+- `restoreDay`-bug i prototype: bruger `activeProductId` til self-lookup → fixes i architect/builder-fasen til at tage kun `dayId` med intern self-lookup (jf. C10 + CONTRACT ASF-015)
+- "Bekræftet af fabrik"-state (`transport_orders.confirmed_at`) vises IKKE i denne sektion — hører til Kørsel-sektionen (jf. C11)
+- 4 multi-produkt-opfølgnings-spg. (MP-1..MP-4) listet i CONTRACT som `TBD-refinement` — ikke blockers
+- Forventet 10 SPECs + 2 hooks ved fuld decomposition

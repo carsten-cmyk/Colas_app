@@ -6,7 +6,6 @@
  */
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { TaskSheet } from '@/components/layout/TaskSheet';
 import { BottomTabBar, TabName } from '@/components/layout/BottomTabBar';
 import { theme } from '@/config/theme';
@@ -37,10 +36,6 @@ export function BekræftLastningScreen({ onClose, onComplete }: BekræftLastning
       }
     >
       <View style={styles.content}>
-
-        <View style={styles.iconWrap}>
-          <Ionicons name="checkmark-circle" size={72} color={theme.colors.deepTeal} />
-        </View>
 
         <Text style={styles.siloLabel}>{MOCK.siloLabel} bekræftet</Text>
 
@@ -73,9 +68,6 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     paddingTop: 56,
     paddingHorizontal: theme.spacing.sm,
-  },
-  iconWrap: {
-    marginBottom: theme.spacing.xs,
   },
   siloLabel: {
     fontFamily: theme.fonts.interMedium,
