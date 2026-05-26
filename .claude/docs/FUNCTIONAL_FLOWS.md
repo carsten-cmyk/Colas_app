@@ -13,13 +13,15 @@ Opdateres manuelt når forretningsregler beskrives der ikke fremgår af kode.
 ### Trin 1 — Formand planlægger
 **App:** formand
 **Komponent:** `OrdrePlanScreen` → asfalt-kørsel sektion
-**Handling:** Formand udfylder km, **kommentar til chauffør** OG **forventet tidspunkt for første læs på udlægning** per dag. Sidstnævnte er kritisk for fabrik-notifikation (se Trin 5b).
+**Handling:** Formand udfylder km, **kommentar til chauffør**, **forventet tidspunkt for første læs på udlægning** OG **interval mellem læs på pladsen** (minutter) per dag. Første-læs + interval er kritisk for både fabrik-notifikation (se Trin 5b) og vognmandens disponering (se Trin 3).
 
 **Første-læs-regel (LÅST 2026-05-22):** Den FØRSTE bil formanden tilføjer til asfalt-kørselsbestillingen er pr. definition "første-læs"-bilen. Rækkefølgen i bestillingen er semantisk — første bil = første læs, anden bil = andet læs osv. Formanden behøver ikke vælge eksplicit. Information forventes synlig overfor vognmanden i hans disponerings-view (se Trin 3).
 
+**Interval-regel (LÅST 2026-05-26):** Formanden angiver et **interval i minutter** mellem hvert efterfølgende læs på pladsen (typisk 12-20 min). Bilerne skal ikke alle stå klar på fabrikken kl. X — de skal **forskydes** så de ankommer pladsen i en jævn strøm. Vognmandens disponering bruger intervallet til at beregne ankomst-tid pr. bil → tilbageregnet til mødetid på fabrik pr. bil (afhænger af `driveTimeMinutes` fra fabrik til plads). Eksempel: første læs på plads 07:15, interval 15 min, fabrik→plads 36 min → bil 1 fabrik 06:39 / bil 2 fabrik 06:54 / bil 3 fabrik 07:09.
+
 **Kommentar til chauffør (LÅST 2026-05-22):** Feltet i bunden af bilbestillingen er omdøbt fra "Kommentar til formanden" → **"Kommentar til chauffør"**. Indholdet skal sendes sammen med ordren TIL CHAUFFØREN (synlig i chauffeur-appen — se Trin 8 / Flow 3). Formand bruger feltet til at give kørselsspecifikke instruktioner: "Brug bagvejen", "Lav støj-restriktion efter 22", "Aflæsningssted er flyttet 50m mod vest" osv.
 
-**Skriver til:** `orders.asfalt_koersel[].planlagt = true`, `orders.asfalt_koersel[].kommentar_til_chauffoer`, `orders.asfalt_koersel[].foerste_laes_udlaegning_tid`, `orders.asfalt_koersel[].biler[]` (ordnet array — index 0 = første læs)
+**Skriver til:** `orders.asfalt_koersel[].planlagt = true`, `orders.asfalt_koersel[].kommentar_til_chauffoer`, `orders.asfalt_koersel[].foerste_laes_udlaegning_tid`, `orders.asfalt_koersel[].interval_minutter_mellem_laes`, `orders.asfalt_koersel[].biler[]` (ordnet array — index 0 = første læs)
 
 ### Trin 2 — Formand ser afventende status
 **App:** formand
@@ -27,43 +29,61 @@ Opdateres manuelt når forretningsregler beskrives der ikke fremgår af kode.
 **Viser:** Gult "Afventer vognmand" badge når kørsel er planlagt men ikke bekræftet
 **Læser:** `orders.asfalt_koersel[].confirmed_vehicles` (tom = afventer)
 
-### Trin 3 — Vognmand ser bestilling med "1. læs"-markering
+### Trin 3 — Vognmand ser bestilling med første-læs + interval
 **App:** vognmand
-**Komponent:** `OrdreKort` (liste-view), `DisponeringsView` (gantt/kalender)
-**Viser:** Ordre med asfalt-kørsel linjer, åben/disponeret status. Den FØRSTE bil-række (index 0 i `biler[]`) har en tydelig **"1. læs"-markering + mødetid fabrik** så vognmanden ved hvilken bil der har første prioritet og hvornår den skal være på fabrik.
+**Komponent:** `OrdreKort` (liste-view + gantt), `VognmandDisponeringsScreen` (drag-and-drop)
+**Viser:** Ordre med asfalt-kørsel linjer, åben/disponeret status. Formandens **første-læs på plads** + **interval** er tydeligt synlige PÅ ordre-kortet (liste + gantt) — IKKE skjult bag klik. Eksempel: `Første læs 07:15 · +15 min`.
 **Læser:** `orders` WHERE `asfalt_koersel[].planlagt = true`
 
-**Visuel markering (LÅST 2026-05-22):**
-- Tekst: **"1. læs"** (genbruger gul anchor-prik-mønster fra samleordre — se [[project-unified-planning-model]])
-- Inkluderet: **"Mødetid fabrik [kl.]"** — fx "Mødetid fabrik 06:54" — som er det beregnede `afhentnings_tid_fabrik` (se Trin 5b)
-- Eksempel-rendering: `● 1. læs · Mødetid fabrik 06:54`
-- Bil-rækken med markøren skal stå ØVERST i listen for visuel klarhed
-- Efterfølgende biler (2. læs, 3. læs osv.) får ikke samme prominente markering — kun "1. læs" er kritisk-info
+**Visuel markering på ordre-kort (LÅST 2026-05-22, udvidet 2026-05-26):**
+- "Første læs"-tid + interval vises som lille rubrik på kortet med clock/stopwatch-ikon
+- I disponerings-view's dag-tabel: kolonnen "Mødetid" er erstattet af **"Første læs · interval"** — celle viser fx `07:15 · +15 min`
+
+**Per-bil læs-nummer (LÅST 2026-05-26):**
+Når vognmanden trækker biler ind i drop-zonen, får hver placeret bil automatisk:
+- **Læs-nummer-badge** ("1. læs", "2. læs", "3. læs"…) baseret på drop-rækkefølge
+- **Ankomst-tid på plads**: `ankomstPlads = førsteLæsPåPlads + (index) × intervalMinutter`
+- **Tilbageregnet mødetid på fabrik** (i tooltip eller sekundær linje): `mødetidFabrik = ankomstPlads − driveTimeMinutes`
+- Eksempel chip: `[1. læs] 🚛 XE32114 · Lars · 07:15`  (tooltip: `1. læs · plads 07:15 · fabrik 06:39`)
+- Læs-nummer **omberegnes automatisk** hvis vognmand fjerner en bil i midten (array-index bestemmer)
 
 ### Trin 4 — Vognmand disponerer bil
 **App:** vognmand
-**Komponent:** `DisponeringsView` — drag-and-drop bil hen over kørsel-linje
-**Skriver til:** `orders.asfalt_koersel[].confirmed_vehicles[]` med `{ reg_nr, chauffoer_navn, tlf, bil_type }`
+**Komponent:** `VognmandDisponeringsScreen` — drag-and-drop bil hen over dag-række
+**Skriver til:** `orders.asfalt_koersel[].confirmed_vehicles[]` med per-bil objekt:
+```
+{
+  reg_nr: string,
+  chauffoer_navn: string,
+  chauffoer_tlf: string,
+  bil_type: string,
+  laes_nummer: number,           // 1, 2, 3… (drop-rækkefølge)
+  ankomst_plads_tid: string,     // HH:MM — beregnet fra første-læs + interval
+  moedetid_fabrik: string,       // HH:MM — tilbageregnet fra ankomst_plads − driveTimeMinutes
+}
+```
+Disse felter sendes retur til formand (Trin 7) og til chauffør (Trin 8) — hver chauffør får KUN sin egen mødetid_fabrik.
 
 ### Trin 5 — Vognmand bekræfter
 **App:** vognmand
 **Komponent:** `GodkendFlow` — bekræftelsesside
 **Skriver til:** `orders.asfalt_koersel[].bekraeftet_af_vognmand = true`
 
-### Trin 5b — Fabrik notificeres om afhentningstidspunkt (LÅST 2026-05-22)
+### Trin 5b — Fabrik notificeres om afhentningstidspunkt (LÅST 2026-05-22, udvidet 2026-05-26)
 **App:** (fabrik-system / integration)
 **Trigger:** Formand sender bil-bestilling (eller vognmand bekræfter) — afhængigt af hvor langt fremme i flowet fabrikken skal vide besked.
-**Beregning:**
-- `afhentnings_tid_fabrik = foerste_laes_udlaegning_tid − drive_time_fabrik_til_udlaegning`
-- `drive_time` hentes fra `orders.factory.driveTimeMinutes` (allerede i datamodellen — beregnet ud fra afstand fabrik ↔ udførselssted)
-- Eksempel: forventet første læs på plads kl. 07:30, drive time 36 min → fabrik notificeres om afhentning kl. 06:54
+**Beregning per bil (efter interval-modellen LÅST 2026-05-26):**
+- `ankomst_plads_n = foerste_laes_udlaegning_tid + (n−1) × interval_minutter_mellem_laes`
+- `moedetid_fabrik_n = ankomst_plads_n − driveTimeMinutes`
+- `driveTimeMinutes` hentes fra `orders.factory.driveTimeMinutes`
+- Eksempel: første læs på plads 07:30, interval 15 min, drive time 36 min:
+  - Bil 1 (1. læs): plads 07:30 → fabrik 06:54
+  - Bil 2 (2. læs): plads 07:45 → fabrik 07:09
+  - Bil 3 (3. læs): plads 08:00 → fabrik 07:24
 
-**Skriver til:** fabrik-system får:
-  - `pickup_time_fabrik` (beregnet)
-  - `reg_nr` (fra confirmed_vehicles)
-  - `chauffoer_navn`
-  - `produkter[]` med tons (fra morgen-bestilling)
-  - `samles_paa_en_bil_flag` hvis relevant (signaler at bilen henter flere produkter — se Flow 12)
+**Skriver til:** fabrik-system får en **liste af afhentninger** (ikke én samlet tid):
+  - `pickups[]: { reg_nr, chauffoer_navn, laes_nummer, pickup_time_fabrik, produkter[], samles_paa_en_bil_flag }`
+  - Bygges fra `confirmed_vehicles[]` (Trin 4) når vognmand bekræfter (Trin 5) — eller fra placeholder-rækker hvis fabrik skal vide besked før vognmand-bekræftelse
 
 **Hvorfor:** Fabrik skal kunne planlægge produktion + tilberedning så asfalten er klar når chauffør ankommer. Uden eksplicit afhentnings-tid kan fabrik ikke optimere timing eller advare om kapacitet.
 
@@ -81,15 +101,17 @@ Opdateres manuelt når forretningsregler beskrives der ikke fremgår af kode.
 ### Trin 7 — Formand ser bildetaljer i Udførelse
 **App:** formand
 **Komponent:** `BekraeftetBilKort` (Udførelse → Forundersøgelse sektion)
-**Viser:** reg.nr, chauffør, tlf, biltype
-**Læser:** `orders.asfalt_koersel[].confirmed_vehicles[]`
+**Viser per bil:** reg.nr, chauffør-navn, chauffør-tlf, biltype, **læs-nummer** ("1. læs", "2. læs"…), **ankomst på plads** (HH:MM), **mødetid fabrik** (HH:MM)
+**Læser:** `orders.asfalt_koersel[].confirmed_vehicles[]` — alle felter inkl. læs-nummer + per-bil tider (se Trin 4)
+**Note:** Formanden kan ringe direkte til chaufføren via tlf og se hvilken læs-rolle bilen har, så han kan koordinere ved afvigelser.
 
 ### Trin 8 — Chauffør modtager ordre
 **App:** chauffeur (React Native)
 **Komponent:** `TaskCard`, `TaskDetailScreen`
-**Viser:** Ordredetaljer, lokation, kontakt OG **kommentar til chauffør** (`kommentar_til_chauffoer` fra bilbestillingen — kørselsspecifikke instruktioner fra formand som "Brug bagvejen", "Aflæsningssted flyttet" osv.)
-**Læser:** `assigned_tasks` WHERE `driver_phone = auth.user.phone` OR `truck_plate = chauffeur.plate`, inkl. `kommentar_til_chauffoer`-feltet
-**Note:** Chauffør identificeres via tlf-nummer og nummerplade — ikke login
+**Viser:** Ordredetaljer, lokation, kontakt, **chaufførens egen mødetid på fabrik** (HH:MM — afhængig af læs-nummer), **læs-nummer** ("Du er 2. læs"), OG **kommentar til chauffør** (`kommentar_til_chauffoer` fra bilbestillingen — kørselsspecifikke instruktioner fra formand).
+**Læser:** `assigned_tasks` WHERE `driver_phone = auth.user.phone` OR `truck_plate = chauffeur.plate`, henter KUN denne chaufførs `confirmed_vehicles[]`-row (filtreret på reg_nr/tlf) — sin **moedetid_fabrik** + **laes_nummer** vises prominent.
+**Vigtigt:** Mødetiden på fabrik er **forskellig pr. læs-nummer** — 1. læs møder først, 2. læs møder `intervalMinutter` senere osv. Chaufføren ser KUN sin egen — ikke de andre biler.
+**Note:** Chauffør identificeres via tlf-nummer og nummerplade — ikke login.
 **TBD:** Distributions-mekanisme — push-notifikation, polling, eller event på reg.nr? Skal afklares før prod.
 
 ### Variant: "Egen bil"-flow (LÅST 2026-05-22) — Formand → Chauffør (uden vognmand)
@@ -830,6 +852,294 @@ Hver vejning genererer én vejeseddel pr. produkt (via fabrik-system). Chauffør
   - Akkord-bil: bilen arver tons fra vejesedlerne, × sats = beløb
   - 1,5-times-reglen gælder fortsat (akkord → time hvis triggered)
 **Skriver til:** `vejesedler[].fordeling[]` med `{ ordre_id, tons }` — auto-udfyldt for puljelæs (single ordre).
+
+---
+
+## Asfaltbestilling — Formand → Vognmand + Fabrik + Dagsoverblik
+
+> **Section:** `asfaltbestilling` (Formand · Planlægning-tab)
+> **Source-of-truth:** `Docs/Formand/FLOWS_Asfaltbestilling.md` (UX-flows C1-C9)
+> **Komponent-scope:** `.claude/sections/formand/asfaltbestilling.md`
+> **Datafelter:** `.claude/docs/DATA_FIELDS.md` → sektion "Asfaltbestilling"
+>
+> Disse flows beskriver de cross-app skrivninger der udløses fra Asfaltbestilling-sektionens hook-actions. Sektionen er **producent**; modtager-apps (fabrik, vognmand, udforsel-dagsoverblik) bygges i separate sektion-pakker — kontrakten låses her.
+>
+> **Prefix-konvention:** ABE-N (Asfalt-Bestilling-Event)
+
+---
+
+### ABE-1: SendBatch → Vognmand.Disponering
+
+**From:** Formand `useAsfaltbestilling.sendAlleForSelectedDate(kommentar)` (UX-flow C1 step 9)
+**To:** Vognmand → Disponerings-sektion (eksisterende DisponeringsView, se Flow 1 Trin 3)
+**Trigger:** Formand klikker "Send til fabrik" i `SendBekraeftelsesModal` for en `(orderId, selectedPlanDate)`.
+
+**Payload (per `transport_orders` row, kind=`'morgen'` ELLER `'ekstra'`):**
+
+| Felt | Format | Notes |
+|---|---|---|
+| `order_id` | uuid | FK til orders |
+| `date` | ISO `yyyy-mm-dd` | = `selectedPlanDate` |
+| `kind` | `'morgen' \| 'ekstra'` | Skelner morgen-bestilling fra drip-bestilling |
+| `tons` | int | `morgenTons` for morgen, `tons` for ekstra |
+| `product_id` | uuid | FK til products |
+| `samles_paa_en_bil` | boolean | Read fra DayPlan eller EkstraBestilling |
+| `weather_active` | boolean | Read fra DayPlan; altid false for ekstra (felt ikke på EkstraBestilling) |
+| `kommentar` | string \| null | Delt streng for hele batch'en — samme for alle rows fra samme send |
+| `sent_at` | ISO 8601 + TZ | server-genereret |
+| `status` | `TransportOrderStatus` | Default `'afventer'` |
+
+**Aggregeret per dato til vognmand-UI:**
+- Liste-card "Afventer disponering" pr. `(date, order_id)` — også når der er multiple produkter
+- Hver bestilling-row vises som linje under card'en med recipe-name + tons + samles-flag + weather-flag
+
+**Receiver-handling (vognmand):**
+1. Ny "Afventer disponering"-opgave dukker op i listen for `date`
+2. Vognmand disponerer bil(er) (jf. Flow 1 Trin 4) — sætter `confirmed_vehicles[]`
+3. Når bekræftet → `transport_orders.status = 'bekraeftet'`, `confirmed_at = now()`
+4. **Hvis `samles_paa_en_bil = true`** på flere rows samme dato + samme order → vognmand opfordres (UI-hint) til at allokere én bil til alle (jf. Flow 12)
+5. **Hvis `weather_active = true`** → informativt flag i UI; ingen automatisk re-disponering
+
+**Race / konflikt:**
+- Server-side unique constraint på `(day_plan_id) WHERE kind='morgen'` forhindrer dobbelt-send for samme dag.
+- Hvis vognmand allerede har disponeret bil og formand sender opdatering (`weather_active` toggle efter send) → vognmand får notification men bil bevares.
+
+---
+
+### ABE-2: SendBatch → Fabrik.OrdreKoe
+
+**From:** Formand `useAsfaltbestilling.sendAlleForSelectedDate(kommentar)` (UX-flow C1 step 9)
+**To:** Fabrik → Ordre-kø-sektion (kommende fabrik-app)
+**Trigger:** Samme som ABE-1.
+
+**Payload:** Samme `transport_orders`-row som ABE-1. Fabrik læser også:
+
+| Ekstra-felt fra join | Format | Notes |
+|---|---|---|
+| `recipeCode` | string | Fra `products.recipe_code` |
+| `recipeName` | string | Fra `products.recipe_name` |
+| `factory_code` | string | Fra `orders.factory_code` |
+| `kommentar` | string \| null | Fra `transport_orders.kommentar` |
+
+**Receiver-handling (fabrik):**
+1. Ny linje i ordre-køen sorteret efter `sent_at` ASC
+2. Fabrik ser `kommentar` som tooltip eller udfoldelig sektion under linjen
+3. Fabrik kvitterer modtagelse (ikke nødvendigvis i v1 — TBD om fabrik også opdaterer `confirmed_at`)
+4. **Hvis `samles_paa_en_bil = true`** → multi-produkt-loading-flow forberedes (jf. Flow 12)
+5. **Hvis `weather_active = true`** → flag vises i køen, informativt
+
+**Race / konflikt:**
+- Fabrik-app er kommende — i v1 sendes data men der er ingen fabrik-UI der konsumerer. Kontrakten skal holde stand når fabrik-app bygges.
+
+---
+
+### ABE-3: SendBatch → Formand.UdfoerselDagsoverblik
+
+**From:** Formand `useAsfaltbestilling.sendAlleForSelectedDate(kommentar)` (UX-flow C1 step 9)
+**To:** Formand → Udførsel-mode → DagsoverblikSection (samme app, anden sektion)
+**Trigger:** Samme som ABE-1, men kun for `kind='morgen'`-rows.
+
+**Payload (intern formand-sync):**
+
+| Felt | Format | Notes |
+|---|---|---|
+| `order_id` | uuid | — |
+| `date` | ISO | — |
+| `product_id` | uuid | — |
+| `morgen_tons` | int | Default-værdi for "faktisk udlagt"-input |
+
+**Receiver-handling (Formand Udførsel-mode):**
+1. Når formand åbner Dagsoverblik for `(order_id, date)` → "faktisk udlagt"-input for `product_id` er pre-fyldt med `morgen_tons`
+2. Formand kan stadig overskrive
+3. Hvis morgen-bestilling ændres efter send (kun via cancelDay → ny send) → default opdateres (men brugerens manuelle override bevares hvis allerede sat)
+
+**Race / konflikt:**
+- Hvis formand allerede har skrevet "faktisk udlagt" → pre-fill overskriver IKKE den manuelle værdi
+- Ren read-relation: dagsoverblik læser `transport_orders` via query, ingen tovejs-write
+
+---
+
+### ABE-4: SendBatch → Formand.AsfaltKoersel
+
+**From:** Formand `useAsfaltbestilling.sendAlleForSelectedDate(kommentar)` (UX-flow C1 step 9)
+**To:** Formand → Planlægning-tab → AsfaltKoersel-sektion (samme skærm, anden sektion under Asfaltbestilling)
+**Trigger:** Samme som ABE-1, kun for `kind='morgen'`.
+
+**Payload (intern UI-sync):**
+
+| Felt | Notes |
+|---|---|
+| `date` | Markér dagen som "klar til bilbestilling" i Asfalt kørsel-sektionen |
+| `total_tons_for_date` | Aggregeret morgen-tons (alle produkter) → starter forudfyldning af biltype-beregneren |
+
+**Receiver-handling (AsfaltKoersel-sektion):**
+1. Dagen markeres "klar til bilbestilling" — UI-cue om at formand nu skal disponere biler (jf. Flow 1 Trin 1)
+2. Hvis formand allerede har planlagt biler → ingen ændring
+3. Hvis tons-aggregatet ændres efter send (cancelDay + ny send) → bil-beregner får signal om at re-validere kapacitet (TBD: notification eller silent re-calc)
+
+**Race / konflikt:**
+- Begge sektioner er på samme skærm → re-render synkront via fælles parent-state (`OrdrePlanScreen`).
+- Ved offline: AsfaltKoersel kan stadig planlægge biler baseret på cached tons.
+
+---
+
+### ABE-5: CancelDay → Vognmand.Disponering
+
+**From:** Formand `useAsfaltbestilling.cancelDay(productId, dayId, reason)` (UX-flow C2)
+**To:** Vognmand → Disponerings-sektion
+**Trigger:** Formand vælger en aflysnings-årsag i `ProductBoxV2` reason-picker.
+
+**Payload:**
+
+| Felt | Format | Notes |
+|---|---|---|
+| `day_plan_id` | uuid | Identificerer hvilken bestilling |
+| `cancelled` | boolean | true |
+| `cancel_reason` | `AflysningsAarsag` | `'regn' \| 'frost' \| 'underlag' \| 'andet'` |
+| `cancel_reason_note` | string \| null | Kun ved `'andet'` (afhænger af C-spg C5) |
+| `cancelled_at` | ISO 8601 + TZ | server-genereret |
+
+**Receiver-handling (vognmand):**
+1. **Hvis `transport_order` allerede eksisterer for dayId** (allerede sendt):
+   - Modtagne `transport_order.status` skal cascade-aflyses (afventer beslutning i C-spg C2 — soft-delete eller separat `cancelled`-flag på row)
+   - Notification til vognmand: "Dagens bestilling for [adresse] er aflyst (årsag: [reason])"
+   - Hvis vognmand allerede har disponeret bil → bil markeres som "Frigjort" i vognmand-UI; vognmand kan re-allokere bilen til andre opgaver
+2. **Hvis `transport_order` IKKE eksisterer endnu** (cancelDay før send):
+   - Ingen cross-app effekt — kun lokal opdatering i formand-app
+
+**Race / konflikt:**
+- Hvis vognmand er midt i at bekræfte bilen samtidig med formand aflyser → server håndterer optimistic locking. Den der vinder, vinder. Formand får refetch + advarsel.
+
+---
+
+### ABE-6: CancelDay → Fabrik.OrdreKoe
+
+**From:** Formand `useAsfaltbestilling.cancelDay(productId, dayId, reason)` (UX-flow C2)
+**To:** Fabrik → Ordre-kø-sektion
+**Trigger:** Samme som ABE-5.
+
+**Payload:** Samme `day_plans.cancelled=true`-event.
+
+**Receiver-handling (fabrik):**
+1. **Hvis `transport_order` allerede eksisterer**:
+   - Row markeres som aflyst i kø-view (visuel: bad-styling, "Aflyst — [reason]" label)
+   - Hvis fabrik ikke har påbegyndt loading → fjern fra aktiv kø
+   - Hvis fabrik er i gang med loading → kritisk advarsel (særskilt UX-design TBD i fabrik-sektion)
+2. **Hvis `transport_order` IKKE eksisterer** → ingen effekt
+
+**Race / konflikt:**
+- Hvis fabrik er midt i loading + formand aflyser → fabrik vinder (loading kan ikke rulles tilbage). Vejeseddel oprettes alligevel. Formand notificeres via toast.
+
+---
+
+### ABE-7: ToggleSamlesPaaEnBil → Vognmand.Disponering (+ downstream Chauffør)
+
+**From:** Formand `useAsfaltbestilling.toggleSamlesPaaEnBil(productId, dayId, samles)` eller `useEkstraBestilling.updateEkstra(id, { samlesPaaEnBil })` (UX-flow C5)
+**To:** Vognmand → Disponerings-sektion (→ derefter Chauffør-app via vognmand-disposition)
+**Trigger:** Formand toggler "Samles på en bil"-checkbox.
+
+**Payload:**
+
+| Felt | Format | Notes |
+|---|---|---|
+| `day_plan_id` eller `ekstra_bestilling_id` | uuid | Identifier |
+| `samles_paa_en_bil` | boolean | Ny værdi |
+
+**Receiver-handling (vognmand):**
+1. **Flag-opdatering før send** (mens dagen er `'afventer'`): Flag persisteres til DB; vognmand ser det først når `transport_order` ankommer ved Send-batch
+2. **Flag-opdatering efter send** (`isSent === true`) — sker **kun** hvis Carsten beslutter at tillade dette (jf. C-spg C8). **Default: ikke tilladt — checkbox locked på sendt row.**
+3. Vognmand-UI: produkt-row får "Samles på en bil"-indikator (visuel pattern fra Flow 12)
+4. **Hvis vognmand allokerer én bil til flere `samles_paa_en_bil=true`-rows på samme dato + samme order**:
+   - Multi-produkt-loading-flow trigges i chauffør-app når bilen ankommer fabrik (9-trins flow jf. `project_samles_paa_en_bil_marker`)
+
+**Receiver-handling (chauffør — downstream via vognmand-disposition):**
+- Chauffør-app modtager udvidet fabrik-task: "Læs produkt 1: [recipe] [tons], silo [X]; læs produkt 2: [recipe] [tons], silo [Y]"
+- Vejning sker pr. produkt på fabrik (jf. Flow 12 Trin 5)
+
+**Race / konflikt:**
+- Hvis vognmand allerede har disponeret bil baseret på `samles=false` og formand toggler til `true` → vognmand får notification + UI-hint om at konsolidere
+- Reverse: hvis `samles=true → false` efter disposition → vognmand bør re-vurdere
+
+---
+
+### ABE-8: ToggleWeather → Vognmand.Disponering + Fabrik.OrdreKoe
+
+**From:** Formand `useAsfaltbestilling.toggleWeather(productId, dayId, active)` (UX-flow C4)
+**To:** Vognmand → Disponerings-sektion OG Fabrik → Ordre-kø
+**Trigger:** Formand toggler vejr-ikon på `ProductBoxV2`.
+
+**Payload:**
+
+| Felt | Format | Notes |
+|---|---|---|
+| `day_plan_id` | uuid | — |
+| `weather_active` | boolean | Ny værdi |
+
+**Receiver-handling (vognmand):**
+1. Vognmand-UI viser informativt "Vejr-påvirket"-flag på row'en
+2. **Ingen automatisk re-disponering** — vejr er pure information jf. B12
+3. Vognmand kan manuelt beslutte at flytte bil, ringe til formand, eller acceptere
+
+**Receiver-handling (fabrik):**
+1. Fabrik-kø viser flag
+2. **Ingen automatisk "minus regn"-fradrag** — afregnings-logikken bestemmes manuelt af formand i Udførsel-mode (jf. project_offline_strategi / afregningsregler i Flow 4)
+3. Fabrik kan stadig levere som planlagt
+
+**Race / konflikt:**
+- Tilladt at toggle efter send (jf. C-spg C7 default = tilladt)
+- Idempotent: gentaget toggle = ingen ekstra side-effekter
+
+---
+
+## Asfaltbestilling — Modeller modtaget af modtager-apps (kontrakt-resumé)
+
+Dette er minimum-felter som modtager-apps SKAL kunne læse fra Supabase når `transport_orders` + `day_plans` + `ekstra_bestillinger` er populeret:
+
+```
+transport_orders                                  // Source-of-truth for "sendt til fabrik"
+  ├── id: uuid
+  ├── order_id: uuid                              // FK
+  ├── day_plan_id: uuid | null                    // FK (morgen) eller null (ekstra)
+  ├── ekstra_bestilling_id: uuid | null           // FK (ekstra) eller null (morgen)
+  ├── kind: 'morgen' | 'ekstra'
+  ├── product_id: uuid                            // FK
+  ├── date: date                                  // dato bestillingen er for
+  ├── tons: int                                   // ≥ 0
+  ├── status: 'afventer' | 'bekraeftet'           // TransportOrderStatus
+  ├── kommentar: text | null                      // delt pr. (order_id, date)-batch
+  ├── sent_at: timestamptz                        // immutable efter set
+  └── confirmed_at: timestamptz | null            // sættes af fabrik/vognmand
+
+day_plans                                          // Source-of-truth for "planlagt"
+  ├── id: uuid
+  ├── product_id: uuid                             // FK
+  ├── date: date
+  ├── tons_planned: int                            // ≥ 0
+  ├── morgen_tons: int | null                      // formand's morgen-input
+  ├── cancelled: boolean                           // false default
+  ├── cancel_reason: 'regn'|'frost'|'underlag'|'andet' | null
+  ├── cancel_reason_note: text | null              // KUN hvis cancel_reason='andet' (C-spg C5)
+  ├── samles_paa_en_bil: boolean                   // false default
+  └── weather_active: boolean                      // false default
+
+ekstra_bestillinger                                // Drip-bestillinger
+  ├── id: uuid
+  ├── order_id: uuid                                // FK
+  ├── product_id: uuid | null                       // null indtil bruger vælger
+  ├── date: date                                    // = formand's selectedPlanDate ved oprettelse
+  ├── tons: int                                     // ≥ 0
+  ├── samles_paa_en_bil: boolean                    // false default
+  ├── puljelaes: boolean                            // false default — DATA-ONLY (ikke UI på bestilling)
+  ├── multilaes: boolean                            // false default — DATA-ONLY
+  ├── sent: boolean                                 // false default
+  └── sent_at: timestamptz | null
+```
+
+**Cross-app reads:**
+- **Vognmand** queryer `transport_orders JOIN day_plans JOIN ekstra_bestillinger JOIN products JOIN orders` for sin disposition-view
+- **Fabrik** queryer samme set for sin ordre-kø
+- **Formand Udførsel-mode (Dagsoverblik)** queryer `transport_orders WHERE kind='morgen' AND date=?` for pre-fill af "faktisk udlagt"
+- **Chauffør** modtager opgaver via `assigned_tasks[]` der peger på `transport_orders` (downstream af vognmand-disposition)
 
 ---
 

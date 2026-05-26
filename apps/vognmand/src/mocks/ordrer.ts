@@ -22,11 +22,11 @@ export const MOCK_ORDRER: Ordre[] = [
     endDate: '2026-03-18',
     dage: [
       // Mandag 16/3 — ingen disponeret → rød
-      { dato: '2026-03-16', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 45 },
+      { dato: '2026-03-16', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 45, førsteLæsPåPlads: '07:15', intervalMinutter: 15 },
       // Tirsdag 17/3 — delvist disponeret → orange
-      { dato: '2026-03-17', bestilteBiler: 3, disponeredeBiler: 1, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 45, kommentar: 'Smal adgangsvej' },
+      { dato: '2026-03-17', bestilteBiler: 3, disponeredeBiler: 1, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 45, kommentar: 'Smal adgangsvej', førsteLæsPåPlads: '07:15', intervalMinutter: 15 },
       // Onsdag 18/3 — fuldt disponeret → grøn
-      { dato: '2026-03-18', bestilteBiler: 2, disponeredeBiler: 2, ændretAfFormand: false, mødetidFabrik: '07:00', tidFabrikTilPlads: 60 },
+      { dato: '2026-03-18', bestilteBiler: 2, disponeredeBiler: 2, ændretAfFormand: false, mødetidFabrik: '07:00', tidFabrikTilPlads: 60, førsteLæsPåPlads: '07:15', intervalMinutter: 15 },
     ],
     materiel: MOCK_MATERIEL_O1,
     tidligereKørte: [
@@ -57,7 +57,7 @@ export const MOCK_ORDRER: Ordre[] = [
     tidsvindue: 'weekend',
     dage: [
       // Fredag 20/3 — ændret af formand → gul
-      { dato: '2026-03-20', bestilteBiler: 2, disponeredeBiler: 2, ændretAfFormand: true, mødetidFabrik: '06:00', tidFabrikTilPlads: 30 },
+      { dato: '2026-03-20', bestilteBiler: 2, disponeredeBiler: 2, ændretAfFormand: true, mødetidFabrik: '06:00', tidFabrikTilPlads: 30, førsteLæsPåPlads: '06:30', intervalMinutter: 20 },
     ],
   },
   {
@@ -75,10 +75,10 @@ export const MOCK_ORDRER: Ordre[] = [
     tidsvindue: 'aften',
     dage: [
       // Tirsdag–fredag 24–27/3 — alle ikke disponeret → rød
-      { dato: '2026-03-24', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 40 },
-      { dato: '2026-03-25', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 40 },
-      { dato: '2026-03-26', bestilteBiler: 2, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '07:00', tidFabrikTilPlads: 60 },
-      { dato: '2026-03-27', bestilteBiler: 2, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '07:00', tidFabrikTilPlads: 60, kommentar: 'Afvent signal fra formand' },
+      { dato: '2026-03-24', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 40, førsteLæsPåPlads: '17:00', intervalMinutter: 12 },
+      { dato: '2026-03-25', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 40, førsteLæsPåPlads: '17:00', intervalMinutter: 12 },
+      { dato: '2026-03-26', bestilteBiler: 2, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '07:00', tidFabrikTilPlads: 60, førsteLæsPåPlads: '17:00', intervalMinutter: 12 },
+      { dato: '2026-03-27', bestilteBiler: 2, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '07:00', tidFabrikTilPlads: 60, kommentar: 'Afvent signal fra formand', førsteLæsPåPlads: '17:00', intervalMinutter: 12 },
     ],
   },
   {

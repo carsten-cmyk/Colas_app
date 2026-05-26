@@ -6,7 +6,7 @@
  */
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Search, Truck } from 'lucide-react'
+import { ChevronLeft, Search, Truck, Clock, Repeat, Factory, Scale } from 'lucide-react'
 import { MOCK_ORDRER } from '@/mocks/ordrer'
 import { MOCK_BILER, MOCK_CHAUFFOERER } from '@/mocks/biler'
 import { markGodkendt } from '@/mocks/disponeringState'
@@ -35,6 +35,38 @@ const STATUS_BADGE: Record<DagStatus, { cls: string; label: string }> = {
 function fmtDato(iso: string): string {
   const d = new Date(iso + 'T00:00:00')
   return d.toLocaleDateString('da-DK', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+/** Pure helper — beregner HH:MM + minutter. Returnér '—' ved ugyldigt input. */
+function addMinutesToHHMM(hhmm: string | undefined, minutes: number): string {
+  if (!hhmm) return '—'
+  const parts = hhmm.split(':')
+  if (parts.length !== 2) return '—'
+  const h = parseInt(parts[0], 10)
+  const m = parseInt(parts[1], 10)
+  if (isNaN(h) || isNaN(m)) return '—'
+  const total = h * 60 + m + minutes
+  const hh = Math.floor(((total % 1440) + 1440) % 1440 / 60)
+  const mm = ((total % 1440) + 1440) % 1440 % 60
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
+}
+
+function førsteLæsAggregeret(dage: DagDisponering[]): string {
+  const synlige = dage.filter(d => d.bestilteBiler > 0)
+  if (synlige.length === 0) return '—'
+  const første = synlige[0].førsteLæsPåPlads
+  if (!første) return '—'
+  const ensartet = synlige.every(d => d.førsteLæsPåPlads === første)
+  return ensartet ? første : 'Varierer'
+}
+
+function intervalAggregeret(dage: DagDisponering[]): string {
+  const synlige = dage.filter(d => d.bestilteBiler > 0)
+  if (synlige.length === 0) return '—'
+  const første = synlige[0].intervalMinutter
+  if (første == null) return '—'
+  const ensartet = synlige.every(d => d.intervalMinutter === første)
+  return ensartet ? `+${første} min` : 'Varierer'
 }
 
 // ── Lastbil-kort i flåde-panel ────────────────────────────────────────────────
@@ -348,9 +380,11 @@ export function VognmandDisponeringsScreen() {
             {/* Ordrekort */}
             <div className="bg-white rounded-2xl border border-hairline shadow-sm overflow-hidden">
 
-              {/* Header — identisk med OrdreKort */}
+              {/* Header — 2-kolonne grid, matcher VognmandListeScreen OrdreKort header */}
               <div className="px-5 pt-5 pb-4 border-b border-box-outline">
-                <div className="flex items-start justify-between gap-3">
+                <div className="grid grid-cols-[1fr_14rem] gap-md">
+
+                  {/* Venstre kolonne: udførselssted + 4 metadata-celler */}
                   <div className="min-w-0">
                     <p className="font-inter text-xxs font-medium uppercase tracking-widest text-text-muted mb-xxxs">
                       Udførselssted
@@ -358,22 +392,56 @@ export function VognmandDisponeringsScreen() {
                     <p className="font-poppins font-semibold text-sm text-deep-teal leading-snug">
                       {ordre.adresse}
                     </p>
-                    <p className="font-inter text-xs text-text-muted mt-0.5">
-                      Ordrenummer: {ordre.ordrenr} · {ordre.produktKode}
-                    </p>
+                    {/* 4-celle metadata-grid */}
+                    <div className="grid grid-cols-4 gap-xs mt-sm">
+                      <div>
+                        <p className="flex items-center gap-xxxs font-inter text-xxs text-text-muted uppercase tracking-wide">
+                          <Clock size={12} className="text-text-muted flex-shrink-0" />
+                          Første læs
+                        </p>
+                        <p className="font-inter text-sm font-semibold text-deep-teal">
+                          {førsteLæsAggregeret(ordre.dage)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="flex items-center gap-xxxs font-inter text-xxs text-text-muted uppercase tracking-wide">
+                          <Repeat size={12} className="text-text-muted flex-shrink-0" />
+                          Interval
+                        </p>
+                        <p className="font-inter text-sm font-semibold text-deep-teal">
+                          {intervalAggregeret(ordre.dage)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="flex items-center gap-xxxs font-inter text-xxs text-text-muted uppercase tracking-wide">
+                          <Factory size={12} className="text-text-muted flex-shrink-0" />
+                          Fabrik
+                        </p>
+                        <p className="font-inter text-sm font-semibold text-deep-teal">
+                          {ordre.fabrik}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="flex items-center gap-xxxs font-inter text-xxs text-text-muted uppercase tracking-wide">
+                          <Scale size={12} className="text-text-muted flex-shrink-0" />
+                          Mængde
+                        </p>
+                        <p className="font-inter text-sm font-semibold text-deep-teal">
+                          {ordre.mængdeTotal} t · {ordre.produktKode}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-4 mt-3 flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-inter text-[11px] text-text-muted">Fabrik:</span>
-                    <span className="font-inter text-[11px] font-medium text-text-secondary">{ordre.fabrik}</span>
+
+                  {/* Højre kolonne: holdnummer + ordrenummer + formand */}
+                  <div className="flex flex-col gap-xxxs">
+                    <p className="font-inter text-xs text-text-primary">Holdnummer 10541</p>
+                    <p className="font-inter text-xs text-text-primary">Jens Thorsager</p>
+                    <p className="font-inter text-xxs text-text-muted mt-xxxs">Ordrenummer {ordre.ordrenr}</p>
+                    <p className="font-inter text-xs text-text-secondary mt-xxxs">Formand: Lars Hansen</p>
+                    <p className="font-inter text-xs text-text-secondary">22 33 44 55</p>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-inter text-[11px] text-text-muted">Mængde:</span>
-                    <span className="font-inter text-[11px] font-medium text-text-secondary">
-                      {ordre.mængdeTotal} tons · Produkt {ordre.produktKode}
-                    </span>
-                  </div>
+
                 </div>
               </div>
 
@@ -383,7 +451,7 @@ export function VognmandDisponeringsScreen() {
                   className="px-5 py-2 grid bg-surface-2 border-b border-hairline"
                   style={{ gridTemplateColumns: '8rem 5.5rem 6rem 1fr 9rem 1fr' }}
                 >
-                  {['Dato for udlægning', 'Bestilte biler', 'Mødetid', 'Disponerede biler', 'Status', 'Kommentar'].map(h => (
+                  {['Dato for udlægning', 'Bestilte biler', 'Første læs · interval', 'Disponerede biler', 'Status', 'Kommentar'].map(h => (
                     <span key={h} className="font-inter text-[10px] font-semibold uppercase tracking-wide text-text-muted">
                       {h}
                     </span>
@@ -411,7 +479,10 @@ export function VognmandDisponeringsScreen() {
                           {dag.bestilteBiler}
                         </span>
                         <span className="font-inter text-xs text-text-secondary pt-1.5">
-                          {dag.mødetidFabrik ?? '—'}
+                          {dag.førsteLæsPåPlads
+                            ? <>{dag.førsteLæsPåPlads}{' '}<span className="text-text-muted font-normal">+{dag.intervalMinutter} min</span></>
+                            : '—'
+                          }
                         </span>
 
                         {/* Drop zone */}
@@ -433,13 +504,23 @@ export function VognmandDisponeringsScreen() {
                                 : 'border-dashed border-hairline hover:border-deep-teal/40 hover:bg-soft-aqua/20',
                             ].join(' ')}
                           >
-                            {disponerede.map(reg => {
+                            {disponerede.map((reg, idx) => {
                               const bil = biler.find(b => b.reg === reg)
+                              const læsNr = idx + 1
+                              const ankomstPlads = addMinutesToHHMM(dag.førsteLæsPåPlads, idx * (dag.intervalMinutter ?? 0))
+                              const fabrikMøde = dag.tidFabrikTilPlads != null && ankomstPlads !== '—'
+                                ? addMinutesToHHMM(ankomstPlads, -dag.tidFabrikTilPlads)
+                                : dag.mødetidFabrik ?? '—'
                               return (
                                 <span
                                   key={reg}
+                                  title={`${læsNr}. læs · plads ${ankomstPlads} · fabrik ${fabrikMøde}`}
                                   className="inline-flex items-center gap-1 bg-surface-2 border border-hairline rounded-md px-2 py-0.5 font-inter text-[11px] font-semibold text-text-secondary"
                                 >
+                                  {/* Læs-nummer badge — text-xxs = 10px i tokens */}
+                                  <span className="font-inter text-xxs font-semibold bg-deep-teal/10 text-deep-teal px-1.5 py-px rounded-full flex-shrink-0">
+                                    {læsNr}. læs
+                                  </span>
                                   <Truck size={9} className="text-text-muted flex-shrink-0" />
                                   <button
                                     onClick={() => setProfileReg(reg)}
@@ -448,6 +529,9 @@ export function VognmandDisponeringsScreen() {
                                     {reg}
                                   </button>
                                   {bil && <span className="font-normal text-text-muted">· {bil.chaufførNavn.split(' ')[0]}</span>}
+                                  {ankomstPlads !== '—' && (
+                                    <span className="font-normal text-text-muted">· {ankomstPlads}</span>
+                                  )}
                                   <button
                                     onClick={() => removeBil(dag.dato, reg)}
                                     className="ml-0.5 w-3.5 h-3.5 flex items-center justify-center rounded-full text-text-muted hover:bg-bad/10 hover:text-bad transition-colors flex-shrink-0"

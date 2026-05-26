@@ -6,6 +6,10 @@ export interface DagDisponering {
   mødetidFabrik?: string    // HH:MM
   tidFabrikTilPlads?: number // minutter
   kommentar?: string
+  /** Tidspunkt hvor formand vil have første bil ankomme til pladsen (HH:MM) */
+  førsteLæsPåPlads?: string
+  /** Minutter mellem hvert læs på pladsen (formandens specifikation) */
+  intervalMinutter?: number
 }
 
 export interface TidligereKørtBil {

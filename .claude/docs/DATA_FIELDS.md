@@ -41,6 +41,536 @@
 
 ---
 
+### Sektion: Asfaltbestilling (Planlægning-tab)
+
+> **Status:** Interview-fase B — feltkortlægning pr. komponent
+> **Prototype-source:** `apps/formand/src/prototypes/ordre-plan/OrdrePlanScreen.tsx#L1440-L1634`
+> **Interview-rev:** 2026-05-26
+> **Cross-cutting:** Status-enums = `TransportOrderStatus` + `ProduktTilstand` + `AflysningsAarsag` (se STATUS_VOKABULAR.md). Dato-storage = ISO. Dato-display via `formatLongDate`/`formatLongDateWithDay`.
+> **Refactor-noter fra prototype:**
+> - `productSamlesFlags: Record<\`${productId}__${dayId}\`, boolean>` → flyttes ind på `DayPlan.samlesPaaEnBil: boolean`
+> - `weatherActive` (local useState i ProductBoxV2) → flyttes ind på `DayPlan.weatherActive: boolean` (persisteret)
+> - CancelReason `'regn' | 'frost' | 'underlag' | 'andet'` matcher allerede `AflysningsAarsag` 1:1 — ingen mapping nødvendig
+> - StatusPill `'sendt' | 'aflyst' | 'afventer'` er UI-derived — ikke en persisteret enum. Beregnes fra `day.cancelled` + `sentDayIds.has(day.id)` + `day.morgenTons != null`
+
+---
+
+#### Type: `DayPlan` (per produkt, per dag)
+
+> Persisteret per produkt+dato. Storage-enhed for hele dagens planlægnings-tilstand.
+
+| Felt | Type | Required | Default | Validation | Kilde | Cross-app |
+|---|---|---|---|---|---|---|
+| `id` | `string` | ✅ | server-genereret | UUID | System | — |
+| `productId` | `string` | ✅ | parent | FK → product | System | — |
+| `day` | `number` | ✅ | beregnet | ≥ 1 (ordinal nr. i produktets dag-spænd) | Derived | — |
+| `date` | `string` (ISO `yyyy-mm-dd`) | ✅ | parent.startDate | Lovligt ISO, inden for `product.startDate..endDate` | Formand | → vognmand, → fabrik, → udfoersel-dagsoverblik |
+| `tonsPlanned` | `number` | ✅ | 0 | ≥ 0, heltal, ≤ resterende tons på produkt | Formand | → vognmand (kapacitet) |
+| `morgenTons` | `number \| undefined` | ❌ | `undefined` | ≥ 0, heltal, typisk ≤ `tonsPlanned` (advarsel ikke blocker) | Formand | → fabrik (faktisk bestilling), → udfoersel-dagsoverblik (default for "faktisk udlagt") |
+| `cancelled` | `boolean` | ✅ | `false` | — | Formand | → vognmand, → fabrik |
+| `cancelReason` | `AflysningsAarsag \| undefined` | ❌ | `undefined` | Kun hvis `cancelled === true`. Enum: `'regn' \| 'frost' \| 'underlag' \| 'andet'` | Formand | → fabrik (info) |
+| `samlesPaaEnBil` | `boolean` | ✅ | `false` | — | Formand | → fabrik, → vognmand, → chauffør (multi-produkt-loading-flow) |
+| `weatherActive` | `boolean` | ✅ | `false` | — | Formand | → fabrik, → vognmand (info — kan påvirke "minus regn"-fradrag) |
+
+**Beregnet/derived state (ikke gemt på DayPlan, kun i UI):**
+
+| Felt | Type | Beregnes som |
+|---|---|---|
+| `isSent` | `boolean` | `sentDayIds.has(day.id)` — flyttes til Supabase `transport_orders` med `status === 'bekraeftet' \| 'afventer'` |
+| `pillKind` | `'sendt' \| 'aflyst' \| 'afventer'` | `cancelled` → `'aflyst'`; `isSent` → `'sendt'`; ellers `'afventer'` |
+| `afventerLabel` | `string` | `morgenTons == null` → `'Indtast morgen'`; ellers `'Klar til afsendelse'` |
+
+**Supabase mapping (TODO):**
+```sql
+-- TODO: Erstat med Supabase når klar
+day_plans (
+  id uuid pk,
+  product_id uuid fk,
+  date date not null,
+  tons_planned int not null default 0,
+  morgen_tons int null,
+  cancelled boolean not null default false,
+  cancel_reason text check (cancel_reason in ('regn','frost','underlag','andet')) null,
+  samles_paa_en_bil boolean not null default false,
+  weather_active boolean not null default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+)
+```
+
+---
+
+#### Type: `EkstraBestilling`
+
+> Drip-bestilling oprettet løbende på dagen ud over morgen-bestillingen. Persisteret pr. ekstra-ordre.
+
+| Felt | Type | Required | Default | Validation | Kilde | Cross-app |
+|---|---|---|---|---|---|---|
+| `id` | `string` | ✅ | server-genereret | UUID | System | — |
+| `orderId` | `string` | ✅ | parent | FK → order | System | — |
+| `date` | `string` (ISO) | ✅ | `selectedPlanDate` | Lovligt ISO, samme dag som morgen-bestilling | Formand | → fabrik, → vognmand |
+| `productId` | `string` | ✅ (ved send) | `''` (placeholder) | Skal være sat før `sent`-kald | Formand | → fabrik |
+| `tons` | `number` | ✅ | 0 | > 0 ved `sent` (validation gate) | Formand | → fabrik |
+| `samlesPaaEnBil` | `boolean` | ✅ | `false` | — | Formand | → fabrik, → vognmand, → chauffør |
+| `puljelaes` | `boolean` | ✅ | `false` | Data-flag bevaret for vejeseddel-kompatibilitet — IKKE vist i UI. **Spørgsmål B6: Beholdes på Supabase eller dropper vi det helt?** | System | → vejesedler (afregning) |
+| `multilaes` | `boolean` | ✅ | `false` | Data-flag bevaret for vejeseddel-kompatibilitet — IKKE vist i UI. **Spørgsmål B6: Beholdes på Supabase eller dropper vi det helt?** | System | → vejesedler (afregning) |
+| `andreOrdrer` | `string[]` | ✅ | `[]` | Cross-ordre fordeling — pt. tomt array. **Spørgsmål B7: Hører dette på `EkstraBestilling` eller på `Samleordre`?** | Derived/Formand | → afregning |
+| `sent` | `boolean` | ✅ | `false` | — | System (sættes ved Send til fabrik) | → fabrik |
+
+**Supabase mapping (TODO):**
+```sql
+-- TODO: Erstat med Supabase når klar
+ekstra_bestillinger (
+  id uuid pk,
+  order_id uuid fk,
+  product_id uuid fk null,            -- nullable indtil productId er valgt
+  date date not null,
+  tons int not null default 0,
+  samles_paa_en_bil boolean not null default false,
+  puljelaes boolean not null default false,  -- afventer B6
+  multilaes boolean not null default false,  -- afventer B6
+  sent boolean not null default false,
+  sent_at timestamptz null,
+  created_at timestamptz default now()
+)
+```
+
+---
+
+#### Type: `TransportOrder` (UI-derived per produkt+dag — sendt til fabrik)
+
+> Repræsenterer afsendt bestilling. UI læser status via `sentDayIds: Set<string>` i prototypen, men i produktion er det en row i Supabase.
+
+| Felt | Type | Required | Default | Validation | Kilde | Cross-app |
+|---|---|---|---|---|---|---|
+| `id` | `string` | ✅ | server-genereret | UUID | System | — |
+| `dayPlanId` | `string \| null` | conditional | — | Required for morgen-bestilling; null for ekstra-bestilling | System | — |
+| `ekstraBestillingId` | `string \| null` | conditional | — | Required for ekstra-bestilling; null for morgen | System | — |
+| `orderId` | `string` | ✅ | parent | FK → order | System | — |
+| `date` | `string` (ISO) | ✅ | — | Lovligt ISO | Derived | → fabrik, → vognmand, → udfoersel-dagsoverblik |
+| `kind` | `'morgen' \| 'ekstra'` | ✅ | — | — | Derived | — |
+| `tons` | `number` | ✅ | — | `morgenTons` for kind='morgen', `tons` for kind='ekstra'. > 0 | Derived | → fabrik |
+| `productId` | `string` | ✅ | — | FK → product | Derived | → fabrik |
+| `status` | `TransportOrderStatus` | ✅ | `'afventer'` | Enum: `'afventer' \| 'bekraeftet'` (se STATUS_VOKABULAR.md §5) | System | → vognmand, → fabrik, → udfoersel-dagsoverblik |
+| `kommentar` | `string \| null` | ❌ | `null` | Per-DAG kommentar (delt for alle bestillinger sendt samme batch). Max 500 tegn | Formand | → fabrik |
+| `sentAt` | `string` (ISO 8601 m. TZ) | ✅ | server-genereret | Tidspunkt for afsendelse | System | → fabrik, → vognmand |
+| `confirmedAt` | `string \| null` | ❌ | `null` | Sættes når fabrik/vognmand bekræfter | System | ← fabrik |
+
+> **Bemærk:** Prototypen bruger `sentDayIds: Set<string>` og `sentKommentarer: Record<date, string>` som UI-state. I produktion bliver det rækker i `transport_orders` med eksplicit `status` + `kommentar`. **Vigtig refactor-note for architect:** Hooken må eksponere `isSent(dayId)`/`statusFor(dayId)` queries — ikke selve Set'en.
+
+---
+
+#### Type: `AsfaltKoerselDag` (per ordre, per dag) — første-læs + interval-model (LÅST 2026-05-26)
+
+> Asfalt-kørselsbestilling der sendes til vognmand. En row per dag per ordre. Vognmand returnerer placerede biler i `confirmed_vehicles[]` med per-bil læs-nummer + mødetid fabrik (tilbageregnet fra første-læs + interval + GPS-drive-time).
+> **Cross-app:** Formand → Vognmand → Chauffør (se FUNCTIONAL_FLOWS Flow 1).
+
+| Felt | Type | Required | Default | Validation | Kilde | Cross-app |
+|---|---|---|---|---|---|---|
+| `orderId` | `string` | ✅ | parent | FK → order | System | — |
+| `date` | `string` (ISO) | ✅ | — | Lovligt ISO | Formand | → vognmand, → fabrik, → chauffør |
+| `bestilte_biler` | `number` | ✅ | 0 | ≥ 0, heltal | Formand | → vognmand |
+| `foerste_laes_udlaegning_tid` | `string` (HH:MM) | ✅ | — | Lovligt HH:MM | Formand | → vognmand, → fabrik (Trin 5b), → chauffør |
+| `interval_minutter_mellem_laes` | `number` | ✅ | — | > 0, heltal, typisk 12-20 | Formand | → vognmand (per-bil ankomst-tid), → fabrik (per-bil pickup), → chauffør (per-læs mødetid) |
+| `kommentar_til_chauffoer` | `string \| null` | ❌ | `null` | Max 500 tegn | Formand | → chauffør (Flow 1 Trin 8) |
+| `egen_bil` | `boolean` | ✅ | `false` | Hvis `true`: vognmand-flow springes over (se Flow 1 Variant) | Formand | → chauffør (direkte) |
+| `bekraeftet_af_vognmand` | `boolean` | ✅ | `false` | Sættes når vognmand bekræfter (Trin 5) | Vognmand | → formand (badge), → fabrik |
+| `aendret_af_formand` | `boolean` | ✅ | `false` | Markerer ændring efter vognmand-bekræftelse | Formand | → vognmand (gul status) |
+| `confirmed_vehicles` | `ConfirmedVehicle[]` | ✅ | `[]` | Per-bil retur-data fra vognmand (se type nedenfor) | Vognmand | → formand, → chauffør, → fabrik |
+
+#### Type: `ConfirmedVehicle` (per placeret bil i en asfalt-kørsel)
+
+> Returdata fra vognmand til formand når bil placeres i drop-zone. Hver chauffør får KUN sin egen row sendt til chauffør-appen.
+
+| Felt | Type | Required | Default | Validation | Kilde | Cross-app |
+|---|---|---|---|---|---|---|
+| `reg_nr` | `string` | ✅ | — | Gyldig nummerplade (DK-format) | Vognmand | → formand, → chauffør, → fabrik |
+| `chauffoer_navn` | `string` | ✅ | — | Fulde navn | Vognmand | → formand, → fabrik |
+| `chauffoer_tlf` | `string` | ✅ | — | DK mobil (8 cifre, +45 valgfri) | Vognmand | → formand (ring direkte) |
+| `bil_type` | `string` | ✅ | — | Fx "6-aks", "Egen bil" | Vognmand | → formand |
+| `laes_nummer` | `number` | ✅ | — | ≥ 1, heltal. Bestemt af drop-rækkefølge i vognmand's disponering. Omberegnes hvis en bil fjernes | Vognmand (derived: array-index + 1) | → formand, → chauffør ("Du er 2. læs"), → fabrik |
+| `ankomst_plads_tid` | `string` (HH:MM) | ✅ | — | Beregnet: `foerste_laes_udlaegning_tid + (laes_nummer−1) × interval_minutter_mellem_laes` | Derived | → formand, → fabrik |
+| `moedetid_fabrik` | `string` (HH:MM) | ✅ | — | Beregnet: `ankomst_plads_tid − orders.factory.driveTimeMinutes` | Derived | → formand, → chauffør (HOVED-INFO), → fabrik |
+
+**Supabase mapping (TODO):**
+```sql
+-- TODO: Erstat med Supabase når klar
+asfalt_koersel (
+  id uuid pk,
+  order_id uuid fk,
+  date date not null,
+  bestilte_biler int not null default 0,
+  foerste_laes_udlaegning_tid time not null,
+  interval_minutter_mellem_laes int not null,
+  kommentar_til_chauffoer text null,
+  egen_bil boolean not null default false,
+  bekraeftet_af_vognmand boolean not null default false,
+  aendret_af_formand boolean not null default false,
+  created_at timestamptz default now(),
+  unique (order_id, date)
+);
+
+confirmed_vehicles (
+  id uuid pk,
+  asfalt_koersel_id uuid fk,
+  reg_nr text not null,
+  chauffoer_navn text not null,
+  chauffoer_tlf text not null,
+  bil_type text not null,
+  laes_nummer int not null check (laes_nummer >= 1),
+  ankomst_plads_tid time not null,
+  moedetid_fabrik time not null,
+  created_at timestamptz default now(),
+  unique (asfalt_koersel_id, laes_nummer)
+);
+```
+
+**Supabase mapping (TODO):**
+```sql
+-- TODO: Erstat med Supabase når klar
+transport_orders (
+  id uuid pk,
+  order_id uuid fk,
+  day_plan_id uuid fk null,
+  ekstra_bestilling_id uuid fk null,
+  date date not null,
+  kind text check (kind in ('morgen','ekstra')) not null,
+  tons int not null,
+  product_id uuid fk not null,
+  status text check (status in ('afventer','bekraeftet')) not null default 'afventer',
+  kommentar text null,
+  sent_at timestamptz not null,
+  confirmed_at timestamptz null,
+  check (
+    (kind = 'morgen' and day_plan_id is not null and ekstra_bestilling_id is null)
+    or
+    (kind = 'ekstra' and ekstra_bestilling_id is not null and day_plan_id is null)
+  )
+)
+```
+
+---
+
+#### Komponent: `AsfaltbestillingSection` (Container)
+
+**Ejer state via hooks** — importerer `useAsfaltbestilling` + `useEkstraBestilling`. Modtager kun ordre-context som props udefra.
+
+**Props ind (fra parent — OrdrePlanScreen):**
+
+| Felt | Type | Required | Beskrivelse |
+|---|---|---|---|
+| `orderId` | `string` | ✅ | Identificerer ordren (driver hook-queries) |
+| `isSamleordreMode` | `boolean` | ✅ | Aktivér samleordre-visning |
+| `samleordreCtx` | `SamleordreContext \| null` | conditional | Required hvis `isSamleordreMode`. Definerer ordre-tags på produktbokse |
+| `activeProductId` | `string` | ✅ | Driver fokus-styling — controlled fra parent (deles med Spec-grid) |
+| `onActiveProductIdChange` | `(id: string) => void` | ✅ | Callback når bruger klikker produkt-header |
+| `selectedPlanDate` | `string` (ISO) | ✅ | Den valgte dato i dato-pille-rækken — controlled fra parent |
+| `onSelectedPlanDateChange` | `(date: string) => void` | ✅ | Callback ved dato-skift |
+
+> **Designvalg:** `activeProductId` og `selectedPlanDate` er **controlled fra parent** fordi andre sektioner (Ordredetaljer-spec-grid, Kørsel) også reagerer på dem. Container ejer ikke disse — den propagerer kun.
+
+**Lokal container-state (kun visuelt — ikke persisteret):**
+- `cancellingDayId: string | null` — hvilken dag er i "vælg aflysnings-årsag"-mode
+- `showConfirmSend: boolean` — modal-visibility
+
+**Children rendret:**
+1. `<DatePillsRow>` med dato-piller
+2. Empty-state-besked `"Ingen produkter denne dag"` (når `productsForSelectedDate.length === 0`)
+3. `<ProductBoxV2>` × n
+4. `<StatusPill>` under hver ProductBoxV2
+5. `<EkstraBestillingBox>` × m
+6. `<StatusPill>` under hver EkstraBestillingBox
+7. `<EkstraBestillingCTA>` (dashed-border "+ Ekstra"-knap)
+8. `<SendTilFabrikCTA>` (gul "Send til fabrik"-knap m. kommentar-tooltip)
+9. `<SendBekraeftelsesModal>` (conditional på `showConfirmSend`)
+
+---
+
+#### Komponent: `DatePillsRow` (Presenter)
+
+**Props ind:**
+
+| Felt | Type | Required | Default | Validation | Beskrivelse |
+|---|---|---|---|---|---|
+| `dates` | `string[]` (ISO) | ✅ | — | Array af lovlige ISO-datoer, sorteret ASC | Datoer der har mindst ét ikke-aflyst produkt |
+| `selectedDate` | `string` (ISO) | ✅ | — | Skal være i `dates` | Den aktuelt valgte dato |
+| `sentStateByDate` | `Record<string, 'all-sent' \| 'partial' \| 'none'>` | ✅ | `{}` | — | Per-dato status — om alle/nogen/ingen produkter er sendt |
+
+**Callbacks ud:**
+
+| Callback | Signatur | Beskrivelse |
+|---|---|---|
+| `onSelect` | `(date: string) => void` | Bruger klikker en pille |
+
+**Display:**
+- Hver pille viser `formatLongDate(date)` — fx `16. marts 2026`
+- `aria-label` = `formatLongDate(date)` + (hvis sendt) `" (afsendt)"`
+- 3 visuelle tilstande: `selected` (deep-teal bg), `all-sent` (good/grøn bg + check-ikon), `default` (hvid m. border)
+
+> **Empty state** flyttes ud af denne komponent (Fase A-beslutning). Container håndterer `productsForSelectedDate.length === 0`-tilfældet selv.
+
+---
+
+#### Komponent: `ProductBoxV2` (Presenter — 7 visual modes)
+
+**Props ind:**
+
+| Felt | Type | Required | Default | Validation | Beskrivelse |
+|---|---|---|---|---|---|
+| `product` | `MockProduct` | ✅ | — | — | Hele produkt-objektet (læser `recipeName`, `recipeCode`, `thicknessMm`) |
+| `day` | `DayPlan` | ✅ | — | — | Hele dag-objektet (læser `tonsPlanned`, `morgenTons`, `cancelled`, `cancelReason`, `samlesPaaEnBil`, `weatherActive`) |
+| `isFocused` | `boolean` | ✅ | — | — | Visuel fokus-ring (dark-teal border) |
+| `isSelectingReason` | `boolean` | ✅ | — | — | Visning af aflysnings-årsags-picker |
+| `isSent` | `boolean` | ✅ | — | — | Låser Forventet + Morgen tons + checkbox (read-only) |
+| `ordreTagLabels` | `string[] \| undefined` | ❌ | `undefined` | Hver label max 30 tegn | Samleordre: ordre-tags vist under produkt-navn |
+
+**Callbacks ud:**
+
+| Callback | Signatur | Beskrivelse |
+|---|---|---|
+| `onFocus` | `() => void` | Bruger klikker produkt-header (driver Spec-grid) |
+| `onUpdateTons` | `(v: number) => void` | Forventet tons ændret. v ≥ 0, heltal |
+| `onUpdateMorgenTons` | `(v: number \| undefined) => void` | Morgen tons ændret. `undefined` = ryddet |
+| `onToggleWeather` | `(active: boolean) => void` | Vejr-toggle skiftet (A4-beslutning: bobler ud, ikke local) |
+| `onToggleSamlesPaaEnBil` | `(samles: boolean) => void` | "Samles på en bil"-checkbox skiftet (A5: `day.samlesPaaEnBil`) |
+| `onCancel` | `() => void` | "X" øverst højre klikket — åbn årsags-picker |
+| `onAbortCancel` | `() => void` | Luk årsags-picker uden at aflyse |
+| `onConfirmCancel` | `(reason: AflysningsAarsag) => void` | Årsag valgt — bekræft aflysning |
+| `onRestore` | `() => void` | "Fortryd" på aflyst-tilstand klikket |
+
+**7 visual modes:**
+1. **Aflyst** (`day.cancelled`) — opacity-60, bad-border, recipe-name + "Aflyst" + årsag + "Fortryd"-link
+2. **Reason-picker** (`isSelectingReason`) — 4 årsags-knapper + X-fortryd
+3. **Default** (alle andre) — hvid kort med 7 sub-elementer:
+   - X-aflys-knap (top right)
+   - Vejr-toggle (bottom right, z-10) — 2 modes: inactive (`#F5F5F5`) / active (`bg-dark-teal`)
+   - Produkt-header (klikbar) m. evt. ordre-tags
+   - Forventet tons input (locked når `isSent`)
+   - Morgen tons input m. 2 modes: empty (rød-bg) / udfyldt (grøn-bg). Locked når `isSent`
+   - "Samles på en bil"-checkbox (locked når `isSent`)
+4. **Sent + aktiv** (`isSent === true`) — alle inputs locked, dropper sub-tilstand af mode 3
+
+> **Validation rules:**
+> - `tonsPlanned` ≥ 0 (clamped via `Math.max(0, ...)`)
+> - `morgenTons` ≥ 0 eller `undefined`
+> - Ingen submit-validering på selve boksen — den lever på `SendTilFabrikCTA`/`SendBekraeftelsesModal`
+
+---
+
+#### Komponent: `EkstraBestillingBox` (Presenter)
+
+**Props ind:**
+
+| Felt | Type | Required | Default | Validation | Beskrivelse |
+|---|---|---|---|---|---|
+| `ekstra` | `EkstraBestilling` | ✅ | — | — | Hele ekstra-objektet |
+| `products` | `MockProduct[]` | ✅ | — | Min. 1 element | Til produkt-dropdown |
+
+**Callbacks ud:**
+
+| Callback | Signatur | Beskrivelse |
+|---|---|---|
+| `onUpdate` | `(patch: Partial<EkstraBestilling>) => void` | Partial-update af felt (tons, productId, samlesPaaEnBil) |
+| `onRemove` | `() => void` | Slet ekstra-bestilling |
+
+**2 visual modes:**
+1. **Sendt** (`ekstra.sent`) — read-only m. E-badge, produkt-navn, tons + evt. "Samles på en bil"-indikator
+2. **Default** — X-slet, E-badge, tons-input, produkt-dropdown, "Samles på en bil"-checkbox
+
+> **Validation rules:**
+> - `tons` ≥ 0 (clamped via `Math.max`)
+> - `productId` må være `''` (placeholder "Vælg") indtil send-trigger; så er det validation-blocker
+> - I "sent"-mode er alt locked
+
+---
+
+#### Komponent: `StatusPill` (Presenter)
+
+**Props ind:**
+
+| Felt | Type | Required | Default | Validation | Beskrivelse |
+|---|---|---|---|---|---|
+| `kind` | `'sendt' \| 'aflyst' \| 'afventer'` | ✅ | — | Enum | UI-derived state |
+| `afventerLabel` | `string \| undefined` | ❌ | `'Afventer'` | — | Vises kun ved kind='afventer'. Typiske værdier: `'Indtast morgen'`, `'Klar til afsendelse'`, `'Indtast tons'` |
+
+**Callbacks ud:** Ingen — pure visual.
+
+**3 visual modes:**
+1. `sendt` — `bg-good-bg`, dot + "Sendt til fabrik"
+2. `aflyst` — `bg-bad/10`, "Aflyst"
+3. `afventer` — dashed border, dynamisk label
+
+> **Vigtigt:** `kind` er **ikke** en persisteret enum. Den beregnes per render i container fra `day.cancelled` + `sentDayIds` + `morgenTons`. Bruges ikke i Supabase.
+
+---
+
+#### Komponent: `EkstraBestillingCTA` (Presenter — NY ift. prototype)
+
+> Ekstrakteret fra inline-JSX L1565-L1580 — den dashed-border "+ Ekstra"-boks.
+
+**Props ind:**
+
+| Felt | Type | Required | Default | Validation | Beskrivelse |
+|---|---|---|---|---|---|
+| (ingen) | — | — | — | — | Komponenten har ingen reelle props. Kunne tage en `disabled?: boolean` hvis vi vil deaktivere når dagen er fuldt aflyst — **B8** |
+
+**Callbacks ud:**
+
+| Callback | Signatur | Beskrivelse |
+|---|---|---|
+| `onClick` | `() => void` | Opretter ny tom ekstra-bestilling |
+
+> **Højde-alignment:** Skal matche ProductBoxV2's højde (160px × min-h-172px) + tom 24px placeholder under (matcher StatusPill-højden).
+
+---
+
+#### Komponent: `SendTilFabrikCTA` (Presenter)
+
+**Props ind:**
+
+| Felt | Type | Required | Default | Validation | Beskrivelse |
+|---|---|---|---|---|---|
+| `disabled` | `boolean` | ✅ | — | — | True når intet er klar til at sende |
+| `totalIkkeSendt` | `number` | ✅ | — | ≥ 0 | Tæller til knap-tekst ("3 bestillinger klar") |
+| `sentKommentar` | `string \| null` | ❌ | `null` | Max 500 tegn | Kommentar gemt fra forrige send (vist som tooltip under knap) |
+
+**Callbacks ud:**
+
+| Callback | Signatur | Beskrivelse |
+|---|---|---|
+| `onClick` | `() => void` | Åbn `SendBekraeftelsesModal` (sætter `showConfirmSend=true` i container) |
+
+> **Bemærk:** Selve "Send"-logikken sker ikke her — den udløses af modal'ens "Send til fabrik"-knap. CTA'ens job er at åbne modalen + vise tooltip med tidligere kommentar.
+
+---
+
+#### Komponent: `SendBekraeftelsesModal` (Presenter — NY som egen komponent)
+
+> Ekstrakt af L2480-L2545. Egen komponent med lokal kommentar-state (ikke bobler hver tasten op til container).
+
+**Props ind:**
+
+| Felt | Type | Required | Default | Validation | Beskrivelse |
+|---|---|---|---|---|---|
+| `open` | `boolean` | ✅ | — | — | Modal-visibility |
+
+**Callbacks ud:**
+
+| Callback | Signatur | Beskrivelse |
+|---|---|---|
+| `onCancel` | `() => void` | Bruger trykker "Annullér" eller backdrop |
+| `onConfirm` | `(kommentar: string) => void` | Bruger trykker "Send til fabrik". `kommentar` er trimmed, kan være `''` |
+
+**Lokal state (ikke prop):**
+- `kommentar: string` — local useState; reset til `''` ved open/close
+
+**Validation rules:**
+- `kommentar.length ≤ 500` (UI-soft-limit; backend håndhæver)
+- Trim før `onConfirm` kaldes
+- Tom string er gyldigt (= ingen kommentar gemt)
+
+---
+
+#### Hook: `useAsfaltbestilling(orderId)`
+
+**Returnerer:**
+
+| Felt | Type | Beskrivelse |
+|---|---|---|
+| `products` | `MockProduct[]` | Alle produkter på ordren (inkl. deres `days[]`) |
+| `activeProductId` | `string` | Aktuelt fokuseret produkt (drives også af Spec-grid) |
+| `setActiveProductId` | `(id: string) => void` | Manuelt skift af fokus |
+| `selectedPlanDate` | `string` (ISO) | Den aktuelt valgte dato |
+| `setSelectedPlanDate` | `(date: string) => void` | Manuelt skift af dato |
+| `planDays` | `string[]` (ISO) | Alle datoer i ordrens dag-spænd (inkl. dage uden produkter) — beregnet |
+| `productsForSelectedDate` | `Array<{ product: MockProduct, day: DayPlan }>` | Filtreret til valgt dato |
+| `orderStartDate` | `string` (ISO) | Min af alle produkters startDate — derived |
+| `orderEndDate` | `string` (ISO) | Max af alle produkters endDate — derived |
+| `sentStateByDate` | `Record<string, 'all-sent' \| 'partial' \| 'none'>` | Per-dato afsendelses-status — derived |
+| `isDaySent` | `(dayId: string) => boolean` | Query: er denne dag sendt? |
+| `updateTons` | `(productId, dayId, tons: number) => void` | Action: opdater tonsPlanned |
+| `updateMorgenTons` | `(productId, dayId, tons: number \| undefined) => void` | Action: opdater morgenTons |
+| `cancelDay` | `(productId, dayId, reason: AflysningsAarsag) => void` | Action: aflys dag |
+| `restoreDay` | `(productId, dayId) => void` | Action: fortryd aflysning |
+| `toggleWeather` | `(productId, dayId, active: boolean) => void` | Action: A4 — sæt `day.weatherActive` |
+| `toggleSamlesPaaEnBil` | `(productId, dayId, samles: boolean) => void` | Action: A5 — sæt `day.samlesPaaEnBil` |
+| `sendAlleForSelectedDate` | `(kommentar: string) => Promise<void>` | Action: send alle ikke-sendte morgen-bestillinger + ikke-sendte ekstra-bestillinger for `selectedPlanDate`. Persisterer `kommentar` på dagens transport_orders |
+| `kommentarForDate` | `(date: string) => string \| null` | Query: returnér gemt kommentar for sendt dato |
+| `loading` | `boolean` | Standard data-hook contract |
+| `error` | `Error \| null` | Standard data-hook contract |
+
+**Side-effects (intern):**
+- Auto-skift af `activeProductId` når current ikke matcher nogen produkt på `selectedPlanDate` (jf. Fase A-beslutning: lever HER, ikke i container)
+- Write-queue ved offline (per `project_offline_strategi`)
+
+**Cross-app writes** udløst af `sendAlleForSelectedDate`:
+- → fabrik (transport_orders rækker)
+- → vognmand (afventer disponering)
+- → udfoersel-dagsoverblik (default for "faktisk udlagt"-feltet)
+
+---
+
+#### Hook: `useEkstraBestilling(orderId, selectedDate)`
+
+**Returnerer:**
+
+| Felt | Type | Beskrivelse |
+|---|---|---|
+| `ekstraForSelectedDate` | `EkstraBestilling[]` | Filtreret til `selectedDate` |
+| `addEkstra` | `() => void` | Action: opret tom ekstra med default-values |
+| `updateEkstra` | `(id: string, patch: Partial<EkstraBestilling>) => void` | Action: partial update |
+| `removeEkstra` | `(id: string) => void` | Action: slet |
+| `isEkstraSent` | `(id: string) => boolean` | Query: er denne sendt? |
+| `loading` | `boolean` | Standard data-hook contract |
+| `error` | `Error \| null` | Standard data-hook contract |
+
+> **Bemærk:** `useEkstraBestilling.sendAll` findes IKKE som separat action. `useAsfaltbestilling.sendAlleForSelectedDate` håndterer både morgen- og ekstra-bestillinger atomisk (samme batch, samme kommentar).
+
+> **Spørgsmål B9:** Skal de to hooks slås sammen til én `useAsfaltbestilling`-hook? Argumenter for: send-action er på tværs af morgen + ekstra. Argumenter mod: scope-separation, ekstra-bestilling kan testes isoleret.
+
+---
+
+### Status-enum mappings (Asfaltbestilling)
+
+| Prototype-string | Persisteret enum | Notes |
+|---|---|---|
+| `CancelReason = 'regn' \| 'frost' \| 'underlag' \| 'andet'` | `AflysningsAarsag` (STATUS_VOKABULAR §8) | 1:1 match, ingen refactor nødvendig |
+| StatusPill `kind = 'sendt' \| 'aflyst' \| 'afventer'` | UI-derived — IKKE persisteret | Beregnes per render |
+| `transport_order.status = 'afventer' \| 'bekraeftet'` | `TransportOrderStatus` (STATUS_VOKABULAR §5) | Bruges af vognmand/fabrik til at vise om bestillingen er bekræftet |
+| `product.state` (implicit i prototype) | `ProduktTilstand` (STATUS_VOKABULAR §7) | Refactor: i shared/types skal `Product.state` være `'afventer' \| 'aktiv' \| 'afsluttet'` (eksisterer ikke på MockProduct i prototype — afventer Supabase-mapping) |
+
+---
+
+### Datofelter (Asfaltbestilling) — storage vs. display
+
+| Felt | Storage | Display-helper |
+|---|---|---|
+| `DayPlan.date` | ISO `yyyy-mm-dd` | `formatLongDate` i dato-piller |
+| `EkstraBestilling.date` | ISO `yyyy-mm-dd` | (vises ikke direkte — implicit fra container's `selectedPlanDate`) |
+| `TransportOrder.date` | ISO `yyyy-mm-dd` | `formatLongDate` (vises i fabrik-kø + vognmand-disponering) |
+| `TransportOrder.sentAt` | ISO 8601 + TZ (`2026-03-16T07:42:00+01:00`) | `formatDateTime` for audit-trail |
+| `TransportOrder.confirmedAt` | ISO 8601 + TZ | `formatDateTime` |
+| `product.startDate`, `product.endDate` | ISO `yyyy-mm-dd` | `formatDateRange` i Spec-grid |
+
+> **Ingen af felterne bruger ugedag-on i denne sektion** — dato-piller er allerede dag-orienterede pga. pille-format. **Spørgsmål B10:** Skal pillerne vise ugedag-prefix (fx `mandag 16. marts`)? DATOFORMAT siger "Planlægnings-view = ugedag PÅ", men prototypen viser uden. Beslut: Følg DATOFORMAT-reglen (ugedag PÅ) eller behold prototype-form?
+
+---
+
+### Cross-app effekter — sammenfatning
+
+| Trigger | Modtager | Hvad sendes |
+|---|---|---|
+| `sendAlleForSelectedDate(kommentar)` | fabrik | Per produkt+dag: `productId`, `recipeCode`, `recipeName`, `tons`, `date`, `factory.code`, `kommentar`, `samlesPaaEnBil`, `weatherActive` |
+| `sendAlleForSelectedDate(kommentar)` | vognmand | Aggregeret per dato: `date`, `factory`, biltype-behov (afventer kørsels-beregner — særskilt sektion) |
+| `cancelDay(productId, dayId, reason)` | fabrik + vognmand | Notification + `cancelReason` |
+| `toggleSamlesPaaEnBil` | chauffør (via vognmand → chauffør-app) | Multi-produkt-loading-flow-indikator |
+| `toggleWeather` | fabrik + vognmand | "Minus regn"-status — kan påvirke afregning/leverings-prioritet |
+| `morgenTons`-update (efter send) | — | **Locked** — kun via telefon til fabrik. Ingen automatisk re-send. |
+
+> Cross-app flows skal opdateres i `FUNCTIONAL_FLOWS.md` af architect i dev-fasen. Interview-output (denne fil) er kilde.
+
+---
+
 ### Sektion: Planlægning — Produktoversigt
 
 | Felt | Format | Kilde |

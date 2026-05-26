@@ -38,6 +38,24 @@ function isWeekend(d: Date): boolean {
   return dow === 0 || dow === 6
 }
 
+function førsteLæsAggregeret(dage: DagDisponering[]): string {
+  const synlige = dage.filter(d => d.bestilteBiler > 0)
+  if (synlige.length === 0) return '—'
+  const første = synlige[0].førsteLæsPåPlads
+  if (!første) return '—'
+  const ensartet = synlige.every(d => d.førsteLæsPåPlads === første)
+  return ensartet ? første : 'Varierer'
+}
+
+function intervalAggregeret(dage: DagDisponering[]): string {
+  const synlige = dage.filter(d => d.bestilteBiler > 0)
+  if (synlige.length === 0) return '—'
+  const første = synlige[0].intervalMinutter
+  if (første == null) return '—'
+  const ensartet = synlige.every(d => d.intervalMinutter === første)
+  return ensartet ? `+${første} min` : 'Varierer'
+}
+
 // TODO (produktion): Brug dansk kalender med danske mærkedage (helligdage).
 // Skal markere mindst: nytårsdag, skærtorsdag, langfredag, 2. påskedag, store bededag,
 // Kr. himmelfartsdag, 2. pinsedag, juleaften, juledag, 2. juledag, nytårsaftensdag.
@@ -93,13 +111,6 @@ const CELL_BAR_CLASS: Record<CellStatus, string> = {
   neutral: 'bg-light-aqua/50',
 }
 
-const BADGE_CLASS: Record<CellStatus, string> = {
-  groen:   'bg-good text-white border-transparent',
-  orange:  'bg-warn-bg text-deep-teal border-yellow/40',
-  roed:    'bg-bad text-white border-transparent',
-  gul:     'bg-yellow text-deep-teal border-yellow/40',
-  neutral: 'bg-light-aqua/50 text-text-muted border-transparent',
-}
 
 export function VognmandGanttScreen() {
   const navigate = useNavigate()
@@ -310,11 +321,22 @@ export function VognmandGanttScreen() {
                         Holdnummer 10541 – Jens Thorsager
                       </p>
                       <p className="font-inter text-[11px] text-text-muted">
-                        Ordrenummer: {ordre.ordrenr}
-                      </p>
-                      <p className="font-inter text-[11px] text-text-muted">
                         Formand: Lars Hansen – 22 33 44 55
                       </p>
+                      <div className="mt-xs flex flex-col gap-0.5">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="font-inter text-[9px] font-medium uppercase tracking-widest text-text-muted">Mængde</span>
+                          <span className="font-inter text-[11px] font-semibold text-text-secondary">{ordre.mængdeTotal} t · {ordre.produktKode}</span>
+                        </div>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="font-inter text-[9px] font-medium uppercase tracking-widest text-text-muted">Første læs</span>
+                          <span className="font-inter text-[11px] font-semibold text-text-secondary">{førsteLæsAggregeret(ordre.dage)}</span>
+                        </div>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="font-inter text-[9px] font-medium uppercase tracking-widest text-text-muted">Interval</span>
+                          <span className="font-inter text-[11px] font-semibold text-text-secondary">{intervalAggregeret(ordre.dage)}</span>
+                        </div>
+                      </div>
                     </button>
 
                     {/* Dag-celler */}
@@ -383,21 +405,6 @@ export function VognmandGanttScreen() {
                                   />
                                 )}
                               </div>
-
-                              {/* Badge med antal biler — kun hvis der er en bestilling */}
-                              {bestilling && (
-                                <button
-                                  className={[
-                                    'mt-2 flex items-center gap-1 font-inter text-[10px] font-semibold px-1.5 py-[3px] rounded-full border transition-all hover:-translate-y-px hover:opacity-90',
-                                    BADGE_CLASS[status],
-                                  ].join(' ')}
-                                  onClick={() => navigate(`/prototyper/disponering/${ordre.id}`)}
-                                  aria-label={`${bestilling.bestilteBiler} biler bestilt ${day.toLocaleDateString('da-DK')}`}
-                                >
-                                  <span className="w-[5px] h-[5px] rounded-full bg-current opacity-70 flex-shrink-0" />
-                                  {bestilling.bestilteBiler}
-                                </button>
-                              )}
                             </>
                           )}
                         </div>

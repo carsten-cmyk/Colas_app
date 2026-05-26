@@ -5,7 +5,7 @@
  */
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronRight, List, LayoutGrid } from 'lucide-react'
+import { ChevronRight, List, LayoutGrid, Clock, Repeat, Factory, Scale } from 'lucide-react'
 import { MOCK_ORDRER } from '@/mocks/ordrer'
 import { erGodkendt } from '@/mocks/disponeringState'
 import type { Ordre, DagDisponering } from '@/types/vognmand'
@@ -69,6 +69,24 @@ function fmtDatoKort(iso: string): string {
   return d.toLocaleDateString('da-DK', { day: 'numeric', month: 'numeric' })
 }
 
+function førsteLæsAggregeret(dage: DagDisponering[]): string {
+  const synlige = dage.filter(d => d.bestilteBiler > 0)
+  if (synlige.length === 0) return '—'
+  const første = synlige[0].førsteLæsPåPlads
+  if (!første) return '—'
+  const ensartet = synlige.every(d => d.førsteLæsPåPlads === første)
+  return ensartet ? første : 'Varierer'
+}
+
+function intervalAggregeret(dage: DagDisponering[]): string {
+  const synlige = dage.filter(d => d.bestilteBiler > 0)
+  if (synlige.length === 0) return '—'
+  const første = synlige[0].intervalMinutter
+  if (første == null) return '—'
+  const ensartet = synlige.every(d => d.intervalMinutter === første)
+  return ensartet ? `+${første} min` : 'Varierer'
+}
+
 // Solid-tint pills uden border — matcher formand's status-pille-pattern (PATTERNS.md 1a)
 const STATUS_BADGE: Record<OrdreStatus, { cls: string; label: string }> = {
   roed:   { cls: 'bg-bad/15 text-bad',                  label: 'Ikke disponeret' },
@@ -95,41 +113,66 @@ function OrdreKort({ ordre, onDisponer }: OrdreKortProps) {
 
       {/* Header */}
       <div className="px-5 pt-5 pb-4 border-b border-box-outline">
-        <div className="flex items-start justify-between gap-3">
+        <div className="grid grid-cols-[1fr_14rem] gap-md">
+
+          {/* Venstre kolonne: udførselssted + 4 metadata-celler */}
           <div className="min-w-0">
             <p className="font-inter text-xxs font-medium uppercase tracking-widest text-text-muted mb-xxxs">
               Udførselssted
             </p>
-            <p className="font-poppins font-semibold text-sm text-deep-teal leading-snug truncate">
+            <p className="font-poppins font-semibold text-sm text-deep-teal leading-snug">
               {ordre.adresse}
             </p>
-            <p className="font-inter text-xs text-text-primary mt-0.5">
-              Holdnummer 10541 – Jens Thorsager
-            </p>
-            <p className="font-inter text-xs text-text-muted">
-              Ordrenummer: {ordre.ordrenr} · {ordre.produktKode}
-            </p>
-            <p className="font-inter text-xs text-text-muted">
-              Formand: Lars Hansen – 22 33 44 55
-            </p>
+            {/* 4-celle metadata-grid */}
+            <div className="grid grid-cols-4 gap-xs mt-sm">
+              <div>
+                <p className="flex items-center gap-xxxs font-inter text-xxs text-text-muted uppercase tracking-wide">
+                  <Clock size={12} className="text-text-muted flex-shrink-0" />
+                  Første læs
+                </p>
+                <p className="font-inter text-sm font-semibold text-deep-teal">
+                  {førsteLæsAggregeret(ordre.dage)}
+                </p>
+              </div>
+              <div>
+                <p className="flex items-center gap-xxxs font-inter text-xxs text-text-muted uppercase tracking-wide">
+                  <Repeat size={12} className="text-text-muted flex-shrink-0" />
+                  Interval
+                </p>
+                <p className="font-inter text-sm font-semibold text-deep-teal">
+                  {intervalAggregeret(ordre.dage)}
+                </p>
+              </div>
+              <div>
+                <p className="flex items-center gap-xxxs font-inter text-xxs text-text-muted uppercase tracking-wide">
+                  <Factory size={12} className="text-text-muted flex-shrink-0" />
+                  Fabrik
+                </p>
+                <p className="font-inter text-sm font-semibold text-deep-teal">
+                  {ordre.fabrik}
+                </p>
+              </div>
+              <div>
+                <p className="flex items-center gap-xxxs font-inter text-xxs text-text-muted uppercase tracking-wide">
+                  <Scale size={12} className="text-text-muted flex-shrink-0" />
+                  Mængde
+                </p>
+                <p className="font-inter text-sm font-semibold text-deep-teal">
+                  {ordre.mængdeTotal} t · {ordre.produktKode}
+                </p>
+              </div>
+            </div>
           </div>
-          <button
-            className="flex-shrink-0 font-poppins text-xs font-semibold px-md py-xs rounded-full bg-good text-white inline-flex items-center gap-xxxs hover:opacity-90 transition-opacity"
-            onClick={() => onDisponer(ordre.id)}
-          >
-            {erFuldt ? 'Se disponering' : 'Disponer'}
-          </button>
-        </div>
 
-        <div className="flex items-center gap-4 mt-3 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <span className="font-inter text-[11px] text-text-muted">Fabrik:</span>
-            <span className="font-inter text-[11px] font-medium text-text-secondary">{ordre.fabrik}</span>
+          {/* Højre kolonne: holdnummer + ordrenummer + formand */}
+          <div className="flex flex-col gap-xxxs">
+            <p className="font-inter text-xs text-text-primary">Holdnummer 10541</p>
+            <p className="font-inter text-xs text-text-primary">Jens Thorsager</p>
+            <p className="font-inter text-xxs text-text-muted mt-xxxs">Ordrenummer {ordre.ordrenr}</p>
+            <p className="font-inter text-xs text-text-secondary mt-xxxs">Formand: Lars Hansen</p>
+            <p className="font-inter text-xs text-text-secondary">22 33 44 55</p>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="font-inter text-[11px] text-text-muted">Mængde:</span>
-            <span className="font-inter text-[11px] font-medium text-text-secondary">{ordre.mængdeTotal} tons · Produkt {ordre.produktKode}</span>
-          </div>
+
         </div>
       </div>
 
@@ -196,6 +239,16 @@ function OrdreKort({ ordre, onDisponer }: OrdreKortProps) {
             )
           })}
         </div>
+      </div>
+
+      {/* Disponer-knap */}
+      <div className="px-5 py-3 border-t border-box-outline flex justify-end">
+        <button
+          className="font-poppins text-xs font-semibold px-md py-xs rounded-full bg-deep-teal text-white inline-flex items-center gap-xxxs hover:bg-dark-teal transition-colors"
+          onClick={() => onDisponer(ordre.id)}
+        >
+          {erFuldt ? 'Se disponering' : 'Disponer'}
+        </button>
       </div>
 
       {/* Tidligere kørte */}
