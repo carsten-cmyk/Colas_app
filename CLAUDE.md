@@ -33,12 +33,13 @@ Colas/
 3. `.claude/docs/FUNCTIONAL_FLOWS.md` — cross-app komponent-flows
 4. `.claude/docs/core/DESIGN_SYSTEM.md` — tokens og patterns
 5. `.claude/docs/WORKFLOW_PROTOTYPE_TIL_PRODUKTION.md` — fra prototype til produktion, vertical slices, quality gates
+6. `.claude/sections/` — aktive sektioner og deres lifecycle-status
 
 Tilføj ved specifik app:
 - Formand/Vognmand: `Docs/Formand/PRD.md` + `Docs/Formand/REVIEW_SPEC.md`
 - Chauffeur app: `Docs/Chauffør/PRD.md` + `Docs/Chauffør/REVIEW_SPEC_1.md`
 
-**Ved start af ny produktions-sektion** (efter prototype-godkendelse): Architect kopierer `.claude/docs/SECTION_KICKOFF_TEMPLATE.md` til `Docs/[App]/KICKOFF_[Sektion].md` og udfylder før SPEC-decomposition.
+**Ved start af ny produktions-sektion** (efter prototype-godkendelse): Interviewer starter ALTID først — producerer section-manifest, opdaterer DATA_FIELDS, drafter kickoff + validation contract. Architect tager først over når contract er signed.
 
 ---
 
@@ -46,7 +47,8 @@ Tilføj ved specifik app:
 
 | Kommando | Agent | Hvad sker der |
 |---|---|---|
-| `/develop-screen [skærm] [app]` | architect | Analysér → plan → SPEC-filer → parallel build → issues |
+| `/interview [sektion] [app]` | interviewer | Komponent-scoping → datafelter → kickoff → validation contract draft |
+| `/develop-screen [skærm] [app]` | architect | Analysér → plan → SPEC-filer → parallel build → issues *(kræver signed contract)* |
 | `/review [fil]` | reviewer | Review mod REVIEW_SPEC — read-only, issue-liste |
 | `/cleanup [fil]` | cleanup-agent | Dead code + token-violations + flyt logik/mock/typer |
 | `/token-check [mappe]` | cleanup-agent | Scan for token-violations — rapporter, ret ikke |
@@ -64,20 +66,32 @@ Se `.claude/agents/` for fulde agent-definitioner.
 
 | Agent | Model | Rolle |
 |---|---|---|
-| `architect` | Opus | Planlægger, nedbryder skærme, skriver SPEC-filer, opdaterer FUNCTIONAL_FLOWS |
-| `builder` | Sonnet | Bygger én komponent fra SPEC — aldrig uden SPEC |
-| `reviewer` | Sonnet | Read-only review — returnerer issue-liste |
+| `interviewer` | Opus | Scoper sektion, mapper datafelter, drafter kickoff + validation contract |
+| `architect` | Opus | Planlægger build-rounds, skriver SPEC-filer mod signed contract, opdaterer FUNCTIONAL_FLOWS |
+| `builder` | Sonnet | Bygger én komponent fra SPEC — kopierer fra prototype, skriver handoff-fil |
+| `reviewer` | Sonnet | Read-only kode-review mod REVIEW_SPEC + handoff |
 | `test-writer` | Haiku | Tests efter review er godkendt |
 | `cleanup-agent` | Sonnet | Token-violations + dead code + flyt logik |
 | `git-agent` | Haiku | Commit på eksplicit bruger-request via /git |
 
-**Delegation-flow:**
+**Delegation-flow (vertical slice):**
 ```
-/develop-screen → architect (plan + SPECs)
-                → builder × N (parallelt)
-                → reviewer × N (parallelt)
+/interview → interviewer  (manifest + DATA_FIELDS + kickoff + contract DRAFT)
+           ↓ Carsten signer contract → FROZEN
+/develop-screen → architect (build-rounds + SPECs mod contract)
+                → Round 1: types + hooks + mocks (parallelt, gate: grøn)
+                → Round 2: atomic presentere (parallelt, gate: grøn)
+                → Round 3: komplekse presentere (parallelt, gate: grøn)
+                → Round 4: container
+                → reviewer × N (læser handoff + kode)
                 → præsenter issues
 ```
+
+**Vigtige regler:**
+- Builder må IKKE committe uden handoff-fil i `.claude/handoffs/`
+- Architect må IKKE skrive SPECs uden signed contract
+- Builder kopierer fra prototype hvor muligt — rewrite kun ved bevidst afvigelse (dokumenteres i handoff)
+- Container/Presenter-pattern: kun container importerer hooks. Presentere får props ind, sender callbacks ud.
 
 ---
 
