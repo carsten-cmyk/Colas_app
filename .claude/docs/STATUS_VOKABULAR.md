@@ -34,35 +34,40 @@ type TaskTilstand = 'ikke_startet' | 'aktiv' | 'pauset' | 'afsluttet'
 
 ---
 
-### 2. `VejeseddelStatus` — Vejeseddel + ScheduleRow (konsolideret)
+### 2. `VejeseddelStatus` — Vejeseddel + ScheduleRow (konsolideret, opdateret 2026-05-27)
 
 ```ts
 type VejeseddelStatus =
-  | 'planlagt'
-  | 'laesser'
-  | 'undervejs'
-  | 'ankommet'
-  | 'paa_vej_til_fabrik'
-  | 'afsluttet'
+  | 'paa_vej_til_fabrik'  // bil på vej til fabrik (første gang ELLER returlæs)
+  | 'paa_fabrik'          // ankommet fabrik, indvejning/læsning/udvejning i gang
+  | 'undervejs'           // afsluttet vejning på fabrik, kører mod plads (ETA aktiv)
+  | 'aflaesning'          // ankommet plads, læsser af
+  | 'dag_afsluttet'       // NY 2026-05-27 — bilens planlagte næste-tur er overflødiggjort (sidste-læs taget af anden bil)
+  | 'udlagt'              // udlagt + temp-målt (slut-tilstand)
 ```
 
 **Lifecycle:**
 ```
-planlagt → laesser (på fabrik) → undervejs → ankommet (på plads)
-                                         ↓
-                                  paa_vej_til_fabrik (returlæs) → afsluttet
+paa_vej_til_fabrik → paa_fabrik → undervejs (ETA-status) → aflaesning → udlagt
+        │                 ↑                                                  ↓
+        │                 └─────── returlæs (bil tilbage til fabrik) ────────┘
+        │
+        └──→ dag_afsluttet  (sidegren — sidste-læs taget af anden bil, ingen returlæs)
 ```
 
-| Værdi | Betyder |
-|---|---|
-| `planlagt` | Vejeseddel oprettet, bil endnu ikke startet |
-| `laesser` | Bil på fabrik, læsser |
-| `undervejs` | Bil på vej til aflæsningssted |
-| `ankommet` | Bil ankommet på plads |
-| `paa_vej_til_fabrik` | Bil på vej tilbage (returlæs eller tom) |
-| `afsluttet` | Vejeseddel lukket |
+| Værdi | Betyder | Trigger |
+|---|---|---|
+| `paa_vej_til_fabrik` | Bil på vej til fabrik (første læs eller returlæs) | Chauffør klikker "Kør til fabrik" |
+| `paa_fabrik` | Bil på fabrik — indvejning, læsning eller udvejning | Geofence ankomst fabrik |
+| `undervejs` | ETA-fase — bil kører mod udførselssted, ETA-tid synlig | Chauffør klikker "Afslut vejning" på fabrik |
+| `aflaesning` | Bil ankommet plads, læsser af | Geofence ankomst udførselssted |
+| `dag_afsluttet` | Bilens planlagte næste-tur er overflødiggjort (sidste-læs taget af anden bil) | Formand disponerer sidste-læs-bil → andre biler markeres `dag_afsluttet` |
+| `udlagt` | Udlagt + temp-målt — slut-tilstand i visning | Formand/chauffør registrerer temperatur + afsluttet |
 
-> **Bemærk:** Tidligere separat `ScheduleRowStatus` er konsolideret ind i denne enum 2026-05-26.
+> **Bemærk:**
+> - Tidligere separat `ScheduleRowStatus` er konsolideret ind i denne enum 2026-05-26.
+> - Enum forenklet 2026-05-27: gamle værdier `planlagt`/`laesser`/`ankommet`/`afsluttet` udfases. `laesser` → `paa_fabrik`, `ankommet` → `udlagt` (med temp-målt-implikation), `planlagt`/`afsluttet` droppet (UI-fokus på aktive biler — vejeseddel eksisterer kun når chauffør er aktiv, og slutstand er `udlagt`).
+> - ETA-tid (i minutter eller HH:MM) er kun relevant ved status `undervejs`. Beregnes via Google Distance Matrix API (se [[flow-3-trin-6-eta-beregning]]).
 
 ---
 
@@ -222,3 +227,4 @@ Refactor af eksisterende kode sker **inkrementelt per sektion** i dev-fasen — 
 | Dato | Ændring | Ansvarlig |
 |---|---|---|
 | 2026-05-26 | Initial låsning af alle 11 enums | Carsten |
+| 2026-05-27 | `VejeseddelStatus` udvidet med `dag_afsluttet` (sidegren fra `paa_vej_til_fabrik`) | builder |

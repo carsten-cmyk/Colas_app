@@ -37,10 +37,10 @@ export const Default: Story = {
   },
 }
 
-/** Kun ankomne — 3 læs med forskellig temperaturstatus */
-export const KunAnkomne: Story = {
+/** Kun udlagte — 3 læs med forskellig temperaturstatus */
+export const KunUdlagte: Story = {
   args: {
-    vejesedler: INITIAL_VEJESEDLER.filter((v) => v.status === 'ankommet'),
+    vejesedler: INITIAL_VEJESEDLER.filter((v) => v.status === 'udlagt'),
   },
 }
 
@@ -56,11 +56,11 @@ export const LangTabel: Story = {
   args: {
     vejesedler: [
       ...INITIAL_VEJESEDLER,
-      // Ekstra ankomne
+      // Ekstra udlagte
       {
-        id: 'v-009',
+        id: 'v-013',
         ordrenummer: '260423891',
-        status: 'ankommet',
+        status: 'udlagt',
         vejeseddelNr: '25-1006-D',
         regnr: 'DP 88 114',
         chauffoerNavn: 'Henrik Sørensen',
@@ -75,9 +75,9 @@ export const LangTabel: Story = {
         forventetEtaMinutter: null,
       } satisfies Vejeseddel,
       {
-        id: 'v-010',
+        id: 'v-014',
         ordrenummer: '260423891',
-        status: 'ankommet',
+        status: 'udlagt',
         vejeseddelNr: '25-1007-E',
         regnr: 'GS 22 776',
         chauffoerNavn: 'Jens Christensen',
@@ -113,7 +113,7 @@ export const LangTabel: Story = {
       {
         id: 'v-012',
         ordrenummer: '260423891',
-        status: 'paa-vej-til-fabrik',
+        status: 'paa_vej_til_fabrik',
         vejeseddelNr: null,
         regnr: 'NR 77 452',
         chauffoerNavn: 'Ole Jensen',
@@ -131,11 +131,11 @@ export const LangTabel: Story = {
   },
 }
 
-/** Ankommet uden temperatur — TemperaturBadge-input synligt og klar til registrering */
-export const AnkommetUdenTemperatur: Story = {
+/** Udlagt uden temperatur — TemperaturBadge-input synligt og klar til registrering */
+export const UdlagtUdenTemperatur: Story = {
   args: {
     vejesedler: INITIAL_VEJESEDLER.filter(
-      (v) => v.status === 'ankommet' && v.temperatur === null,
+      (v) => v.status === 'udlagt' && v.temperatur === null,
     ),
   },
 }

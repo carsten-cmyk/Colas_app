@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { ChevronRight } from 'lucide-react'
 import type { Vejeseddel, Recept } from '../../types/order'
 import type { UdlaeggerEnhed } from '../../types/udlaegger'
 import { VejeseddelRow } from './VejeseddelRow'
@@ -46,30 +48,39 @@ export interface VejesedlerTableProps {
 }
 
 /**
- * Sorterer vejesedler efter forretningsregel:
- * 1. Ankomne — nyeste modtagetTidspunkt øverst (DESC). Undefined timestamp i bunden.
- * 2. Undervejs — kortest etaMinutter øverst (ASC). null/undefined i bunden.
- * 3. På vej til fabrik — original rækkefølge bevaret.
+ * Sorterer vejesedler efter forretningsregel (tættest-på-færdig øverst, afsluttede sidst):
+ * 1. aflaesning — ankommet plads, læsser af (tættest på færdig)
+ * 2. undervejs — kortest etaMinutter øverst (ASC). null/undefined i bunden af gruppen.
+ * 3. paa_fabrik — ved fabrik, indvejning/læsning aktiv
+ * 4. paa_vej_til_fabrik — disponeret, afventer afhentning (længst fra færdig)
+ * 5. dag_afsluttet — bilens næste-tur overflødiggjort (gråtonet i listen, IKKE bag collapsible)
+ * 6. udlagt — afsluttede læs (nyeste modtagetTidspunkt øverst, DESC) — bag collapsible
  *
  * Ren funktion — kan testes isoleret.
  */
 export function sorterVejesedler(vejesedler: Vejeseddel[]): Vejeseddel[] {
-  const ankomne = vejesedler
-    .filter((v) => v.status === 'ankommet')
+  const paaFabrik = vejesedler.filter((v) => v.status === 'paa_fabrik')
+
+  const aflaesning = vejesedler.filter((v) => v.status === 'aflaesning')
+
+  const undervejs = vejesedler
+    .filter((v) => v.status === 'undervejs')
+    .sort((a, b) => (a.etaMinutter ?? Infinity) - (b.etaMinutter ?? Infinity))
+
+  const paaVej = vejesedler.filter((v) => v.status === 'paa_vej_til_fabrik')
+
+  const dagAfsluttet = vejesedler.filter((v) => v.status === 'dag_afsluttet')
+
+  const udlagte = vejesedler
+    .filter((v) => v.status === 'udlagt')
     .sort((a, b) => {
       const ta = a.modtagetTidspunkt ? new Date(a.modtagetTidspunkt).getTime() : 0
       const tb = b.modtagetTidspunkt ? new Date(b.modtagetTidspunkt).getTime() : 0
       return tb - ta
     })
 
-  const undervejs = vejesedler
-    .filter((v) => v.status === 'undervejs')
-    .sort((a, b) => (a.etaMinutter ?? Infinity) - (b.etaMinutter ?? Infinity))
-
-  const paaVej = vejesedler.filter((v) => v.status === 'paa-vej-til-fabrik')
-
   // TODO: v2 — overvej separator-rækker mellem statusgrupper for visuel klarhed
-  return [...ankomne, ...undervejs, ...paaVej]
+  return [...aflaesning, ...undervejs, ...paaFabrik, ...paaVej, ...dagAfsluttet, ...udlagte]
 }
 
 const HEADER_KOLONNER = [
@@ -82,6 +93,16 @@ const HEADER_KOLONNER = [
   'Udlægger',
   'Status / Temp.',
 ] as const
+
+/**
+ * Beregner total tons modtaget (alle statusser undtagen paa_vej_til_fabrik).
+ * Filtrerer værdier der HAR været på fabrik — undtaget de biler der endnu ikke er ankommet.
+ */
+export function beregnModtagetTotal(vejesedler: Vejeseddel[]): number {
+  return vejesedler
+    .filter((v) => v.status !== 'paa_vej_til_fabrik')
+    .reduce((sum, v) => sum + (v.tons ?? 0), 0)
+}
 
 export function VejesedlerTable({
   vejesedler,
@@ -98,8 +119,13 @@ export function VejesedlerTable({
   vejeseddelUdlaeggerPerOrdre,
 }: VejesedlerTableProps) {
   void fabriksNavne
-  const sorterteVejesedler = sorterVejesedler(vejesedler)
+  // Collapsible state for udlagte rækker — sammenfoldet som default
+  const [udlagteExpanded, setUdlagteExpanded] = useState(false)
 
+  const sorterteVejesedler = sorterVejesedler(vejesedler)
+  // Split i aktive (vises altid) + udlagte (bag collapsible)
+  const aktive = sorterteVejesedler.filter((v) => v.status !== 'udlagt')
+  const udlagte = sorterteVejesedler.filter((v) => v.status === 'udlagt')
   return (
     <div className="overflow-hidden rounded-lg border border-hairline bg-surface">
       {vejesedler.length === 0 ? (
@@ -116,45 +142,93 @@ export function VejesedlerTable({
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-hairline bg-surface-2">
-              {HEADER_KOLONNER.map((label) => (
-                <th
-                  key={label}
-                  scope="col"
-                  className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs"
-                >
-                  {label}
-                </th>
+        <>
+          <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-hairline bg-surface-2">
+                {HEADER_KOLONNER.map((label) => (
+                  <th
+                    key={label}
+                    scope="col"
+                    className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs"
+                  >
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {aktive.map((vejeseddel) => (
+                <VejeseddelRow
+                  key={vejeseddel.id}
+                  vejeseddel={vejeseddel}
+                  recept={
+                    vejeseddel.receptkode
+                      ? recepter[vejeseddel.receptkode]
+                      : undefined
+                  }
+                  minTemperatur={minTemperatur}
+                  udlaeggerliste={udlaeggerliste}
+                  onTemperatur={onTemperatur}
+                  onUdlaegger={onUdlaegger}
+                  samleordreChildren={samleordreChildren}
+                  selectedOrdre={vejeseddelSelectedOrdre?.[vejeseddel.id]}
+                  onSelectOrdre={onSelectOrdreForVs}
+                  tempPerOrdre={vejeseddelTempPerOrdre?.[vejeseddel.id]}
+                  udlaeggerPerOrdre={vejeseddelUdlaeggerPerOrdre?.[vejeseddel.id]}
+                />
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sorterteVejesedler.map((vejeseddel) => (
-              <VejeseddelRow
-                key={vejeseddel.id}
-                vejeseddel={vejeseddel}
-                recept={
-                  vejeseddel.receptkode
-                    ? recepter[vejeseddel.receptkode]
-                    : undefined
-                }
-                minTemperatur={minTemperatur}
-                udlaeggerliste={udlaeggerliste}
-                onTemperatur={onTemperatur}
-                onUdlaegger={onUdlaegger}
-                samleordreChildren={samleordreChildren}
-                selectedOrdre={vejeseddelSelectedOrdre?.[vejeseddel.id]}
-                onSelectOrdre={onSelectOrdreForVs}
-                tempPerOrdre={vejeseddelTempPerOrdre?.[vejeseddel.id]}
-                udlaeggerPerOrdre={vejeseddelUdlaeggerPerOrdre?.[vejeseddel.id]}
-              />
-            ))}
-          </tbody>
-        </table>
-        </div>
+            </tbody>
+          </table>
+          </div>
+          {udlagte.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setUdlagteExpanded((prev) => !prev)}
+                className="w-full flex items-center justify-start gap-xs py-xs px-sm border-t border-hairline bg-surface-2 hover:bg-hairline transition-colors"
+              >
+                <ChevronRight
+                  size={14}
+                  aria-hidden="true"
+                  className={`text-text-muted transition-transform ${udlagteExpanded ? 'rotate-90' : ''}`}
+                />
+                <span className="font-inter text-xs font-semibold text-text-secondary">
+                  Udlagt + temp-målt ({udlagte.length})
+                </span>
+              </button>
+              {udlagteExpanded && (
+                <div className="overflow-x-auto">
+                <table className="w-full">
+                  <tbody>
+                    {udlagte.map((vejeseddel) => (
+                      <VejeseddelRow
+                        key={vejeseddel.id}
+                        vejeseddel={vejeseddel}
+                        recept={
+                          vejeseddel.receptkode
+                            ? recepter[vejeseddel.receptkode]
+                            : undefined
+                        }
+                        minTemperatur={minTemperatur}
+                        udlaeggerliste={udlaeggerliste}
+                        onTemperatur={onTemperatur}
+                        onUdlaegger={onUdlaegger}
+                        samleordreChildren={samleordreChildren}
+                        selectedOrdre={vejeseddelSelectedOrdre?.[vejeseddel.id]}
+                        onSelectOrdre={onSelectOrdreForVs}
+                        tempPerOrdre={vejeseddelTempPerOrdre?.[vejeseddel.id]}
+                        udlaeggerPerOrdre={vejeseddelUdlaeggerPerOrdre?.[vejeseddel.id]}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+                </div>
+              )}
+            </>
+          )}
+        </>
       )}
     </div>
   )

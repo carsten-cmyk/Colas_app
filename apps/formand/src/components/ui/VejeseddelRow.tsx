@@ -1,4 +1,4 @@
-import { Layers } from 'lucide-react'
+import { Layers, Factory } from 'lucide-react'
 import type { Vejeseddel, Recept } from '../../types/order'
 import type { UdlaeggerEnhed } from '../../types/udlaegger'
 import { TemperaturBadge } from './TemperaturBadge'
@@ -67,7 +67,8 @@ function StatusKolonne({
   temperaturOverride?: number | null
 }) {
   switch (vejeseddel.status) {
-    case 'ankommet':
+    case 'udlagt':
+    case 'aflaesning':
       return (
         <TemperaturBadge
           temperatur={temperaturOverride !== undefined ? temperaturOverride : vejeseddel.temperatur}
@@ -83,8 +84,21 @@ function StatusKolonne({
           forventetEtaMinutter={vejeseddel.forventetEtaMinutter ?? undefined}
         />
       )
-    case 'paa-vej-til-fabrik':
+    case 'paa_fabrik':
+      return (
+        <span className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-md font-inter text-xs font-medium bg-soft-aqua/60 text-deep-teal">
+          <Factory className="w-3 h-3" aria-hidden="true" />
+          På fabrik
+        </span>
+      )
+    case 'paa_vej_til_fabrik':
       return <EtaBadge variant="paa-vej-til-fabrik" />
+    case 'dag_afsluttet':
+      return (
+        <span className="font-inter text-xxs font-semibold px-xs py-xxxs rounded-full bg-surface-2 text-text-muted">
+          Dag afsluttet
+        </span>
+      )
   }
 }
 
@@ -135,7 +149,7 @@ export function VejeseddelRow({
   tempPerOrdre,
   udlaeggerPerOrdre,
 }: VejeseddelRowProps) {
-  const erAnkommet = vejeseddel.status === 'ankommet'
+  const erAnkommet = vejeseddel.status === 'udlagt' || vejeseddel.status === 'aflaesning'
 
   // Samleordre-mode: brug per-ordre værdier hvis tilgængeligt, ellers fallback til vejeseddel-felter
   const erSamleordreMode = !!(samleordreChildren && samleordreChildren.length > 1)
@@ -147,15 +161,29 @@ export function VejeseddelRow({
     : vejeseddel.valgtUdlaeggerMaterielNr
 
   return (
-    <tr className="border-b border-hairline hover:bg-surface-2 transition-colors">
+    <tr className={[
+      'border-b border-hairline hover:bg-surface-2 transition-colors',
+      vejeseddel.status === 'dag_afsluttet' ? 'opacity-60' : '',
+      vejeseddel.er_sidste_laes ? 'bg-yellow/15' : '',
+    ].filter(Boolean).join(' ')}>
       {/* Vejeseddel */}
       <td className="font-inter text-xs font-semibold text-text-primary px-xs py-xs tabular-nums">
         {vejeseddel.vejeseddelNr ?? <Dash />}
       </td>
 
-      {/* Nummerplade */}
+      {/* Nummerplade + evt. "Sidste læs"-pille */}
       <td className="font-inter text-xs text-text-primary px-xs py-xs tabular-nums">
-        {vejeseddel.regnr}
+        <span className="inline-flex items-center gap-xs">
+          {vejeseddel.regnr}
+          {vejeseddel.er_sidste_laes && (
+            <span
+              className="font-inter text-xxs font-semibold px-xs py-xxxs rounded-full bg-yellow text-deep-teal whitespace-nowrap"
+              title="Sidste læs — indeholder rest af bestilt total"
+            >
+              Sidste læs
+            </span>
+          )}
+        </span>
       </td>
 
       {/* Chauffør */}

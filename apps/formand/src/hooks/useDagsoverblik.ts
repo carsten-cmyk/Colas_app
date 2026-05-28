@@ -7,7 +7,7 @@ import type { Recept, DagsoverblikRegistrering } from '@/types/order'
 import { useVejesedler } from './useVejesedler'
 
 export interface UseDagsoverblikReturn {
-  /** Sum af tons fra vejesedler med status='ankommet' */
+  /** Sum af tons fra vejesedler med status='udlagt' */
   tonsAnkommet: number
   /**
    * Beregnet m² = tonsAnkommet × 1000 / recept.kg_per_m2.
@@ -52,12 +52,12 @@ export function useDagsoverblik(
   // ── Beregninger ─────────────────────────────────────────────────────────────
 
   /**
-   * Sum af tons fra ankomne vejesedler.
-   * Kun status='ankommet' tæller — undervejs og på-vej-til-fabrik er ikke afleveret endnu.
+   * Sum af tons fra udlagte vejesedler.
+   * Kun status='udlagt' tæller — øvrige statusser er ikke endeligt afleveret endnu.
    * Enhed: tons [t]
    */
   const tonsAnkommet = vejesedler.reduce<number>((sum, v) => {
-    if (v.status === 'ankommet' && v.tons !== null) {
+    if (v.status === 'udlagt' && v.tons !== null) {
       return sum + v.tons
     }
     return sum

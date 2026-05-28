@@ -46,7 +46,7 @@ const MOCK_UDLAEGGERE: UdlaeggerEnhed[] = [
 const BASE_VEJESEDDEL: Vejeseddel = {
   id: 'v-1',
   ordrenummer: 'ORD-2026-001',
-  status: 'ankommet',
+  status: 'udlagt',
   vejeseddelNr: '25-1003-A',
   regnr: 'AB 12 345',
   chauffoerNavn: 'Morten Lund',
@@ -87,11 +87,11 @@ type Story = StoryObj<typeof meta>
 // ─── Stories ──────────────────────────────────────────────────────────────────
 
 /**
- * Ankommet med temperatur registreret — grøn OK-status.
+ * Udlagt med temperatur registreret — grøn OK-status.
  * Udlægger-dropdown er aktiv og viser valgt enhed.
  */
-export const AnkommetMedTemperatur: Story = {
-  name: 'Ankommet — fuldt registreret',
+export const UdlagtMedTemperatur: Story = {
+  name: 'Udlagt — fuldt registreret',
   args: {
     vejeseddel: {
       ...BASE_VEJESEDDEL,
@@ -102,12 +102,12 @@ export const AnkommetMedTemperatur: Story = {
 }
 
 /**
- * Ankommet men temperatur er ikke registreret endnu.
+ * Udlagt men temperatur er ikke registreret endnu.
  * Viser inputfelt i Status/Temp-kolonnen.
  * Udlægger-dropdown er aktiv.
  */
-export const AnkommetUdenTemperatur: Story = {
-  name: 'Ankommet — temperatur mangler',
+export const UdlagtUdenTemperatur: Story = {
+  name: 'Udlagt — temperatur mangler',
   args: {
     vejeseddel: {
       ...BASE_VEJESEDDEL,
@@ -118,15 +118,33 @@ export const AnkommetUdenTemperatur: Story = {
 }
 
 /**
- * Ankommet med temperatur under minimumgrænse — viser "Lav"-badge.
+ * Udlagt med temperatur under minimumgrænse — viser "Lav"-badge.
  */
-export const AnkommetTemperaturForLav: Story = {
-  name: 'Ankommet — temperatur for lav',
+export const UdlagtTemperaturForLav: Story = {
+  name: 'Udlagt — temperatur for lav',
   args: {
     vejeseddel: {
       ...BASE_VEJESEDDEL,
       temperatur: 140,
       valgtUdlaeggerMaterielNr: '9-0009',
+    },
+  },
+}
+
+/**
+ * Aflæsning — ankommet plads, læsser af. Temperatur klar til registrering.
+ */
+export const Aflaesning: Story = {
+  name: 'Aflæsning — læsser af',
+  args: {
+    vejeseddel: {
+      ...BASE_VEJESEDDEL,
+      id: 'v-4',
+      status: 'aflaesning',
+      vejeseddelNr: '25-1009-F',
+      tons: 25.0,
+      temperatur: null,
+      valgtUdlaeggerMaterielNr: null,
     },
   },
 }
@@ -154,6 +172,27 @@ export const UndervejesMedEta: Story = {
 }
 
 /**
+ * På fabrik — indvejning/læsning/udvejning i gang.
+ * Status/Temp viser badge. Udlægger-dropdown disabled.
+ */
+export const PaaFabrik: Story = {
+  name: 'På fabrik',
+  args: {
+    vejeseddel: {
+      ...BASE_VEJESEDDEL,
+      id: 'v-3b',
+      status: 'paa_fabrik',
+      vejeseddelNr: null,
+      receptkode: null,
+      tons: null,
+      temperatur: null,
+      valgtUdlaeggerMaterielNr: null,
+      etaMinutter: null,
+    },
+  },
+}
+
+/**
  * Bil disponeret men endnu ikke afhentet last.
  * Status/Temp viser "På vej til fabrik"-badge. Udlægger-dropdown disabled.
  */
@@ -163,7 +202,7 @@ export const PaaVejTilFabrik: Story = {
     vejeseddel: {
       ...BASE_VEJESEDDEL,
       id: 'v-3',
-      status: 'paa-vej-til-fabrik',
+      status: 'paa_vej_til_fabrik',
       vejeseddelNr: null,
       receptkode: null,
       tons: null,

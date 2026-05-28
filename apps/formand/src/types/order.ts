@@ -203,14 +203,20 @@ export interface Recept {
 // ─── Vejesedler ───────────────────────────────────────────────────────────────
 
 /** Eksplicit status på et læs — sat af hook baseret på GPS + afhentet-flag. KANONISK: UI læser kun dette felt */
-export type VejeseddelStatus = 'ankommet' | 'undervejs' | 'paa-vej-til-fabrik'
+export type VejeseddelStatus =
+  | 'paa_vej_til_fabrik'  // chauffør på vej til fabrik (disponeret, ingen GPS-afgang endnu)
+  | 'paa_fabrik'          // ankommet fabrik, indvejning/læsning/udvejning i gang
+  | 'undervejs'           // afsluttet vejning på fabrik, kører mod plads (ETA aktiv)
+  | 'aflaesning'          // ankommet plads, læsser af
+  | 'dag_afsluttet'       // NY — bilens planlagte næste-tur er overflødiggjort (sidste-læs taget af anden bil)
+  | 'udlagt'              // afsluttet — udlagt + temp-målt (tidligere 'ankommet')
 
 /**
  * Afledt view der kombinerer plan_vejebilag (PLAN) + status fra chauffør-app GPS.
  * Status-afledning:
- *   ankommet           ⇔ vejeseddelNr !== null OG tons !== null
+ *   udlagt             ⇔ vejeseddelNr !== null OG tons !== null
  *   undervejs          ⇔ afgang_fabrik sat men vejeseddelNr === null
- *   paa-vej-til-fabrik ⇔ bil disponeret, ingen GPS-afgang endnu
+ *   paa_vej_til_fabrik ⇔ bil disponeret, ingen GPS-afgang endnu
  */
 export interface Vejeseddel {
   /** Unik id — = plan_vejebilag.id når vejebilag findes, ellers temp-id */
@@ -249,6 +255,11 @@ export interface Vejeseddel {
   /** Puljelæs-flag: bil har flere produkter til samme ordre. Ingen fordeling — tons går direkte.
    * Visuelt label er "Samles på en bil". */
   puljelaesFlag?: boolean
+  /** Markeret som sidste læs for dagen (indeholder rest-tons, ikke fuld kapacitet).
+   *  Beregnes automatisk fra: tons < bil_kapacitet OG sum(allokeret_tons) >= bestilt_total - bil_kapacitet.
+   *  I prototypen sat manuelt i mock — i produktion beregnet i hook eller server-side.
+   *  TODO: Erstat med beregning når Supabase klar */
+  er_sidste_laes?: boolean
 }
 
 // ─── Dagsoverblik ─────────────────────────────────────────────────────────────
