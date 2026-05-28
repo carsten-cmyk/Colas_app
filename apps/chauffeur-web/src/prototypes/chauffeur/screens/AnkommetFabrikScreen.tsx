@@ -11,7 +11,7 @@ import type { TabName } from '../components/BottomTabBar'
 const MOCK = {
   orderNumber: '1212343',
   silo: 'Silo 3',
-  ton: 75,
+  ton: 34,
   produkt: 'SMA 11S',
   pickup: { name: 'Køge Asfaltfabrik' },
 }
@@ -217,7 +217,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
               }}
             >
               <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
-                Kør til {MOCK.silo}
+                Kør til Silo
               </p>
               <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0, textAlign: 'center', lineHeight: 1.4 }}>
                 Inden lastning skal du bekræfte produkt ved at scanne QR-kode på Silo
@@ -403,7 +403,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
             >
               {[
                 { label: 'Silo', value: MOCK.silo },
-                { label: 'Antal tons', value: `${MOCK.ton}` },
+                { label: 'Bilens kapacitet', value: `${MOCK.ton} t` },
                 { label: 'Produkt', value: MOCK.produkt },
               ].map((row, i, arr) => (
                 <div

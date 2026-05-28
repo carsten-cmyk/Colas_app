@@ -14,13 +14,14 @@ import { TaskDetailScreen } from './screens/TaskDetailScreen'
 import { MessagesListScreen } from './screens/MessagesListScreen'
 import { ConversationScreen } from './screens/ConversationScreen'
 import { AnkommetFabrikScreen } from './screens/AnkommetFabrikScreen'
+import { AnkommetUdfoerselsstedScreen } from './screens/AnkommetUdfoerselsstedScreen'
 import { TimeRegistrationScreen } from './screens/TimeRegistrationScreen'
 import { TaskListScreen } from './screens/TaskListScreen'
 import { BottomTabBar } from './components/BottomTabBar'
 import type { TabName } from './components/BottomTabBar'
 
 type AppScreen = 'splash' | 'app'
-type PrototypeSubScreen = 'ankomst' | 'timereg' | 'opgaveliste' | null
+type PrototypeSubScreen = 'ankomst' | 'ankomst-plads' | 'timereg' | 'opgaveliste' | null
 
 const MESSAGE_COUNT = mockConversations.filter(
   c => !c.lastMessage.isRead && c.lastMessage.senderId !== 'me'
@@ -168,6 +169,7 @@ export function ChauffoerPrototype() {
             </p>
             {[
               { title: 'Ankomst til fabrik', desc: 'QR-scanning ved siloanlæg', screen: 'ankomst' as PrototypeSubScreen },
+              { title: 'Ankomst til udførselssted', desc: 'Geofencing ved plads + aflæsning', screen: 'ankomst-plads' as PrototypeSubScreen },
               { title: 'Timeregistrering', desc: 'Oversigt over dagsforbrug', screen: 'timereg' as PrototypeSubScreen },
               { title: 'Opgaveliste', desc: 'Dagsoversigt over opgaver', screen: 'opgaveliste' as PrototypeSubScreen },
             ].map((item) => (
@@ -222,6 +224,9 @@ export function ChauffoerPrototype() {
       {/* Prototype sub-screens */}
       {isPrototyperTab && prototypeSubScreen === 'ankomst' && (
         <AnkommetFabrikScreen onClose={() => setPrototypeSubScreen(null)} messageCount={MESSAGE_COUNT} />
+      )}
+      {isPrototyperTab && prototypeSubScreen === 'ankomst-plads' && (
+        <AnkommetUdfoerselsstedScreen onClose={() => setPrototypeSubScreen(null)} messageCount={MESSAGE_COUNT} />
       )}
       {prototypeSubScreen === 'timereg' && (
         <TimeRegistrationScreen

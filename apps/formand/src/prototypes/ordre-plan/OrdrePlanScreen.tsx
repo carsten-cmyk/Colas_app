@@ -29,7 +29,7 @@ import type { TabName } from '@/types/navigation'
 import { OrdreInfoCard } from '@/components/ui/OrdreInfoCard'
 import { FremdriftCard } from '@/components/ui/FremdriftCard'
 import { FremdriftInputRow } from '@/components/ui/FremdriftInputRow'
-import { VejesedlerTable } from '@/components/ui/VejesedlerTable'
+import { VejesedlerTable, beregnModtagetTotal } from '@/components/ui/VejesedlerTable'
 import { useRecept } from '@/hooks/useRecept'
 import { useVejesedler } from '@/hooks/useVejesedler'
 import { useDagsoverblik } from '@/hooks/useDagsoverblik'
@@ -548,6 +548,10 @@ interface ChauffoerAfregning {
   pause?: number
   tons_koert?: number            // fra PLAN vejebilag (mock for nu)
   chauffoer_kommentar?: string
+  // Returlæs — manuel formand-registrering
+  // null = ikke aktiveret, 0+ = aktiv med timer-værdi
+  returlaes_timer?: number | null
+  returlaes_kommentar?: string
   // State
   godkendt_af_formand: boolean
   godkendt_tidspunkt?: string
@@ -2436,7 +2440,7 @@ export function OrdrePlanScreen() {
               samleordreCtx={samleordreCtx}
               samleordreTabOrderNr={samleordreTabOrderNr}
               makeOrdredetaljerCard={makeOrdredetaljerCard}
-              onNavigateToAfregning={() => setActiveMode('afregning')}
+              onNavigateToAsfaltbestilling={() => setActiveMode('planlaegning')}
             />
           )}
 
@@ -3123,7 +3127,7 @@ const MATERIEL_ENHEDER: MaterielEnhed[] = [
   { anlaegsNr: '7-0078', beskrivelse: 'HAMM DV70VV' },
 ]
 
-function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeftelse, vognmandMaterielBekraeftelse, products, isSamleordreMode, samleordreCtx, samleordreTabOrderNr, makeOrdredetaljerCard, onNavigateToAfregning }: {
+function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeftelse, vognmandMaterielBekraeftelse, products, isSamleordreMode, samleordreCtx, samleordreTabOrderNr, makeOrdredetaljerCard, onNavigateToAsfaltbestilling }: {
   forundersoegelseFotos: MockPhoto[]
   onAddPhotos: (p: MockPhoto[]) => void
   vognmandBekraeftelse?: VognmandBekraeftelse
@@ -3138,8 +3142,8 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
   samleordreTabOrderNr?: string
   /** Factory-funktion til Ordredetaljer-visning — kald med hideTabs=true for at skjule tab-rækken */
   makeOrdredetaljerCard: (hideTabs?: boolean) => ReactNode
-  /** Callback til at navigere til Afregning-mode fra Vejesedler-sektionen */
-  onNavigateToAfregning?: () => void
+  /** Callback til at navigere til Planlægning-mode (Asfaltbestilling) fra Vejesedler-sektionen */
+  onNavigateToAsfaltbestilling?: () => void
 }) {
   // ── Produkt + dato selector state ───────────────────────────────────────────
   // TODO (produktion): Selector-state (selectedProductId + selectedDate) skal huskes
@@ -3836,15 +3840,44 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
       <section>
         <div className="flex items-center justify-between mb-sm">
           <h2 className="font-poppins font-semibold text-xl text-text-primary">Vejesedler</h2>
-          {onNavigateToAfregning && (
-            <button
-              type="button"
-              onClick={onNavigateToAfregning}
-              className="font-inter text-xs text-dark-teal hover:text-deep-teal transition-colors"
-            >
-              Se afregning →
-            </button>
-          )}
+          <div className="flex items-center gap-sm">
+            {/* Kompakt tons-progress — same row as Ekstra bestilling-knap */}
+            {(() => {
+              const modtaget = beregnModtagetTotal(vejesedler)
+              // TODO: Erstat med dynamisk beregning fra DayPlan.tonsPlanned + EkstraBestilling.tons for selectedDate
+              const bestiltTotal = products.reduce((sum, p) => {
+                const day = p.days.find(d => d.date === selectedDate)
+                return sum + (day?.tonsPlanned ?? 0)
+              }, 0) || 480
+              const pct = bestiltTotal > 0 ? Math.min(100, Math.round((modtaget / bestiltTotal) * 100)) : 0
+              return (
+                <div className="inline-flex items-center gap-xs bg-surface-2 rounded-full px-md py-xs">
+                  <span className="font-inter text-xxs font-semibold uppercase tracking-widest text-text-muted">
+                    Status
+                  </span>
+                  <div className="h-2 w-28 bg-white rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-good rounded-full transition-all duration-500 ease-out"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="font-poppins text-xs font-semibold text-text-secondary whitespace-nowrap">
+                    {modtaget % 1 === 0 ? modtaget : modtaget.toFixed(1)} t af {bestiltTotal} t · {pct}%
+                  </span>
+                </div>
+              )
+            })()}
+            {onNavigateToAsfaltbestilling && (
+              <button
+                type="button"
+                onClick={onNavigateToAsfaltbestilling}
+                className="font-poppins font-semibold text-xs px-md py-xs rounded-full bg-yellow text-deep-teal inline-flex items-center gap-xxxs hover:opacity-90 transition-opacity"
+              >
+                <Plus size={14} />
+                Ekstra bestilling
+              </button>
+            )}
+          </div>
         </div>
         <VejesedlerTable
           vejesedler={vejesedler}
@@ -3994,7 +4027,7 @@ function AfregningContent({ vognmandBekraeftelse, todayDay, isSamleordreMode, sa
     })
   }
 
-  function updateAfregningField(key: string, field: keyof ChauffoerAfregning, value: number | string | boolean | undefined) {
+  function updateAfregningField(key: string, field: keyof ChauffoerAfregning, value: number | string | boolean | undefined | null) {
     setAfregningData(prev => ({
       ...prev,
       [key]: { ...prev[key], [field]: value },
@@ -4416,6 +4449,56 @@ function AfregningContent({ vognmandBekraeftelse, todayDay, isSamleordreMode, sa
                                         </div>
                                       )}
                                     </div>
+
+                                    {/* ── Returlæs — manuel formand-registrering ──────── */}
+                                    {afrData?.returlaes_timer == null ? (
+                                      <button
+                                        type="button"
+                                        disabled={isGodkendt}
+                                        onClick={() => updateAfregningField(afregKey, 'returlaes_timer', 0)}
+                                        className="font-inter text-xs text-dark-teal hover:text-deep-teal cursor-pointer inline-flex items-center gap-xxxs mt-xs disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                      >
+                                        <Plus size={12} />
+                                        Returlæs (rest asfalt/materiel retur til fabrik)
+                                      </button>
+                                    ) : (
+                                      <div className="mt-xs flex flex-wrap items-end gap-xs">
+                                        <div className="flex flex-col gap-xxxs">
+                                          <label className="font-inter text-xxs text-text-muted uppercase tracking-widest">Returlæs</label>
+                                          <input
+                                            type="number"
+                                            step="0.5"
+                                            value={afrData.returlaes_timer ?? ''}
+                                            disabled={isGodkendt}
+                                            onChange={e => updateAfregningField(afregKey, 'returlaes_timer', parseFloat(e.target.value) || 0)}
+                                            className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-sm tabular-nums w-[120px] focus:outline-none focus:border-dark-teal disabled:opacity-60"
+                                          />
+                                        </div>
+                                        <div className="flex flex-col gap-xxxs flex-1">
+                                          <label className="font-inter text-xxs text-text-muted uppercase tracking-widest">&nbsp;</label>
+                                          <input
+                                            type="text"
+                                            placeholder="Kommentar (valgfri)"
+                                            value={afrData.returlaes_kommentar ?? ''}
+                                            disabled={isGodkendt}
+                                            onChange={e => updateAfregningField(afregKey, 'returlaes_kommentar', e.target.value)}
+                                            className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-sm max-w-[280px] w-full focus:outline-none focus:border-dark-teal disabled:opacity-60"
+                                          />
+                                        </div>
+                                        <button
+                                          type="button"
+                                          disabled={isGodkendt}
+                                          aria-label="Fjern returlæs"
+                                          onClick={() => updateAfregningField(afregKey, 'returlaes_timer', null)}
+                                          className="self-end p-xxxs text-text-muted hover:text-error transition-colors disabled:opacity-40 disabled:cursor-not-allowed min-h-[44px] min-w-[44px] flex items-center justify-center"
+                                        >
+                                          <X size={14} />
+                                        </button>
+                                        <p className="w-full font-inter text-xxs text-text-muted mt-xxxs">
+                                          Manuel indtastning af formand — chaufførens kompensation for retur-kørsel
+                                        </p>
+                                      </div>
+                                    )}
 
                                     {/* A. "Beregnet beløb pr. ordre"-sektionen er fjernet — økonomi er ikke formands domæne */}
 
