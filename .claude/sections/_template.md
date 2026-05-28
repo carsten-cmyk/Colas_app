@@ -94,12 +94,19 @@ Round 4 (container — sidste):
 
 ## Artefakter
 
+> **Konvention (LÅST 2026-05-28):** Alle sektion-docs ligger i `Docs/[App]/[sektion-slug]/`. Se [[workflow-upgrades-planned]] C4.
+
 | Type | Fil | Status |
 |---|---|---|
-| Kickoff | `Docs/[App]/KICKOFF_[Sektion].md` | not-started |
-| Validation contract | `Docs/[App]/CONTRACT_[Sektion].md` | not-started |
-| SPECs | `Docs/[App]/SPEC_*.md` | 0/N |
-| Handoffs | `.claude/handoffs/[section]-*.md` | 0/N |
+| Kickoff | `Docs/[App]/[sektion-slug]/KICKOFF.md` | not-started |
+| Validation contract | `Docs/[App]/[sektion-slug]/CONTRACT.md` | not-started |
+| Customer-facing spec | `Docs/[App]/[sektion-slug]/CUSTOMER_SPEC.md` | not-started |
+| Kunde-Q&A | `Docs/[App]/[sektion-slug]/QA.md` | not-started |
+| UX-flows | `Docs/[App]/[sektion-slug]/FLOWS.md` | not-started |
+| SPECs | `Docs/[App]/[sektion-slug]/SPEC_*.md` | 0/N |
+| Handoffs | `Docs/[App]/[sektion-slug]/handoffs/*.md` | 0/N |
+| Review reports | `Docs/[App]/[sektion-slug]/handoffs/REVIEW_REPORT_*.md` | 0/N |
+| Lessons learned | `Docs/[App]/[sektion-slug]/LESSONS_LEARNED.md` | not-started |
 | Validation history | `.claude/validation-history/[section]-*.md` | 0 runs |
 
 ---
@@ -141,5 +148,74 @@ Round 4 (container — sidste):
 ## Notes
 
 > Fri tekst — beslutninger, åbne tråde, links til memory/Slack/Monday.
+
+---
+
+## Executive summary (udfyldes af interviewer i Fase A)
+
+> **Skal stå øverst i CONTRACT.md når den produceres** — ½-side resumé så reviewers ikke skal læse 1000+ linjer for at forstå sektionen.
+
+**Forretningsformål** (1-2 sætninger):
+[Hvad sektionen løser for kunden]
+
+**Scope (3-5 bullets):**
+- [Hvad er IN]
+- [Hvad er IN]
+- [Hvad er IN]
+
+**10 vigtigste invariants:**
+1. [Ufravigelig regel 1]
+2. [...]
+
+**In-flight risks (kendte usikkerheder):**
+- [Risiko 1 + mitigation]
+- [Risiko 2 + mitigation]
+
+**Sign-off-status:**
+- Carsten: [✓ / pending — dato]
+- Kunde: [✓ / pending — dato]
+
+---
+
+## Lessons learned (udfyldes ved sektion-afslutning)
+
+> **Skal stå nederst i CONTRACT.md (eller separat LESSONS_LEARNED.md) når sektionen markeres `live`.**
+> Selvlærende loop — mønstre der gentager sig 2x promoveres til dette template eller PATTERNS.md.
+
+### Hvad gik godt
+- [Konkret eksempel — fx "SPECs var detaljerede nok til at builder ikke skulle gætte"]
+
+### Hvad gik galt / kunne gøres bedre
+- [Konkret eksempel — fx "Vi manglede a11y-spec; builder skulle gætte ARIA-labels"]
+
+### Gentagne huller (kandidat til template-promotion)
+- [Mønster der dukker op flere gange — fx "Performance-budgets glemmes altid"]
+
+### Forbedringer der bør indarbejdes i `_template.md`
+- [Konkret tilføjelse]
+
+### Action items
+- [ ] [Konkret opfølgning + ejer + dato]
+
+---
+
+## Sign-off audit-trail (udfyldes løbende — kolonner per komponent)
+
+> Vises som tabel når komponenter har gennemløbet review-loop. Bruges af reviewer-agent + git-agent til audit.
+
+| Komponent | Builder-signoff | Reviewer-signoff | Review-rounds | Status |
+|---|---|---|---|---|
+| `[Komponent1]` | YYYY-MM-DD (model) | YYYY-MM-DD (model) | 1 | GODKENDT |
+| `[Komponent2]` | — | — | 0 | not-started |
+
+---
+
+## Review-loop tracker (udfyldes løbende)
+
+> Stigning ved hver builder→reviewer→builder-iteration. Hard-gate ved 3 rounds → eskalering til Carsten.
+
+| Komponent | Round 1 | Round 2 | Round 3 | Eskalering |
+|---|---|---|---|---|
+| `[Komponent1]` | I-001, I-002 | I-001 RESOLVED, I-002 DISPUTED | — | — |
 
 -
