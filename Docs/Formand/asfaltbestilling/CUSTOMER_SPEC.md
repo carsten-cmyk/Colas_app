@@ -170,7 +170,7 @@ Følgende detaljer mangler endelig afklaring inden udvikling kan afslutte fuldst
 
 **Sektionens fase**: dev-ready (klar til udvikling efter sign-off)
 **Prototype**: bygget og live på `formandsapp.netlify.app`
-**Tekniske detaljer**: i `KICKOFF_Asfaltbestilling.md` + `CONTRACT_Asfaltbestilling.md` + `FLOWS_Asfaltbestilling.md`
+**Tekniske detaljer**: i `KICKOFF.md` + `CONTRACT.md` + `FLOWS.md`
 **Cross-app dataflow**: dokumenteret i `.claude/docs/FUNCTIONAL_FLOWS.md`
 
 Efter kundens sign-off på dette dokument går sektionen i **udvikling** — anslået varighed iflg. interviewer-vurdering: TBD.

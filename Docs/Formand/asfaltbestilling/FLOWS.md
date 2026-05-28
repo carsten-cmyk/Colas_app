@@ -12,7 +12,7 @@ status: draft
 
 > **Hvad denne fil ER:** Detaljerede UX-flows for Asfaltbestilling-sektionen — én reference for hvad der sker hvor i UI'en, hvilke hooks/actions der kaldes, og hvilke cross-app writes der udløses.
 >
-> **Hvad denne fil IKKE er:** Acceptkriterier (det er Fase D / CONTRACT_Asfaltbestilling.md) eller forretnings-scope (det er kickoff'en).
+> **Hvad denne fil IKKE er:** Acceptkriterier (det er Fase D / CONTRACT.md) eller forretnings-scope (det er kickoff'en).
 >
 > **Læs sammen med:**
 > - `.claude/sections/formand/asfaltbestilling.md` — komponent-scope

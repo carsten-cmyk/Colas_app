@@ -12,7 +12,7 @@ status: signed
 
 > **Hvad denne fil ER:** Forretnings-scope og strategisk overblik for Asfaltbestilling-sektionen. Den fortæller HVORFOR vi bygger sektionen nu, HVAD den dækker, HVEM den serverer, og HVAD den IKKE må dække.
 >
-> **Hvad denne fil IKKE er:** Komponent-decomposition (det er `.claude/sections/formand/asfaltbestilling.md`), datafelter (det er `.claude/docs/DATA_FIELDS.md`), UX-flows (det er `Docs/Formand/FLOWS_Asfaltbestilling.md`) eller accept-kriterier (det er `CONTRACT_Asfaltbestilling.md`).
+> **Hvad denne fil IKKE er:** Komponent-decomposition (det er `.claude/sections/formand/asfaltbestilling.md`), datafelter (det er `.claude/docs/DATA_FIELDS.md`), UX-flows (det er `Docs/Formand/asfaltbestilling/FLOWS.md`) eller accept-kriterier (det er `CONTRACT.md`).
 
 ---
 

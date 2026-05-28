@@ -11,7 +11,7 @@ last_updated: 2026-05-26
 # Section Manifest — Asfaltbestilling
 
 > **Hvad denne fil ER:** Lifecycle-tracker for Asfaltbestilling-sektionen på Formand's Planlægning-tab. Single index over alle artefakter.
-> **Hvad denne fil IKKE er:** Forretnings-scope (kickoff), datafelter (`DATA_FIELDS.md`), UX-flows (`FLOWS_Asfaltbestilling.md`) eller accept-kriterier (`CONTRACT_Asfaltbestilling.md`).
+> **Hvad denne fil IKKE er:** Forretnings-scope (kickoff), datafelter (`DATA_FIELDS.md`), UX-flows (`asfaltbestilling/FLOWS.md`) eller accept-kriterier (`asfaltbestilling/CONTRACT.md`).
 
 ---
 
@@ -21,7 +21,7 @@ last_updated: 2026-05-26
 |---|---|---|---|
 | Prototype | klar-til-dev | 2026-05-22 | V3 design låst — interview gennemført |
 | Interview | færdig (alle 4 faser) | 2026-05-26 | Alle faser accepteret af Carsten |
-| Dev | signed-klar-til-architect | 2026-05-26 | `CONTRACT_Asfaltbestilling.md` = SIGNED-2026-05-26 FROZEN — architect kan dispatches via `/develop-screen` |
+| Dev | signed-klar-til-architect | 2026-05-26 | `asfaltbestilling/CONTRACT.md` = SIGNED-2026-05-26 FROZEN — architect kan dispatches via `/develop-screen` |
 | Test | ikke-startet | — | |
 | Live | ikke-startet | — | |
 
@@ -62,7 +62,7 @@ last_updated: 2026-05-26
 | 10 | `useEkstraBestilling` | Hook | (logik spredt i OrdrePlanScreen + `markSent`-callback til atomic batch fra useAsfaltbestilling) | not-started | `Docs/Formand/SPEC_useEkstraBestilling.md` | — |
 
 **Sub-sektioner / sub-flows (interne modes — IKKE separate komponenter):**
-- Aflys-årsag picker — intern mode i `ProductBoxV2` (Reason-picker), styret af container-state `cancellingDayId` (se C2-flow i `FLOWS_Asfaltbestilling.md`)
+- Aflys-årsag picker — intern mode i `ProductBoxV2` (Reason-picker), styret af container-state `cancellingDayId` (se C2-flow i `asfaltbestilling/FLOWS.md`)
 - Vejr-toggle — sub-element inde i `ProductBoxV2` Default-mode (styret af `day.weatherActive`, callback `onToggleWeather`)
 - "Samles på en bil"-checkbox — sub-element i både `ProductBoxV2` og `EkstraBestillingBox` (styret af `day.samlesPaaEnBil` / `ekstra.samlesPaaEnBil`)
 - Empty-state `"Ingen produkter denne dag"` — rendres direkte i container (ikke egen komponent jf. Fase A-beslutning)
@@ -123,10 +123,10 @@ Se `.claude/docs/FUNCTIONAL_FLOWS.md` (ABE-1 til ABE-8) for cross-app flow-detal
 |---|---|---|
 | Section manifest | `.claude/sections/formand/asfaltbestilling.md` | exists (denne fil) |
 | Datafelter | `.claude/docs/DATA_FIELDS.md` (sektion Asfaltbestilling) | exists |
-| UX-flows | `Docs/Formand/FLOWS_Asfaltbestilling.md` | exists |
+| UX-flows | `Docs/Formand/asfaltbestilling/FLOWS.md` | exists |
 | Cross-app flows | `.claude/docs/FUNCTIONAL_FLOWS.md` (ABE-1..8) | exists |
-| Kickoff | `Docs/Formand/KICKOFF_Asfaltbestilling.md` | exists (DRAFT) |
-| Validation contract | `Docs/Formand/CONTRACT_Asfaltbestilling.md` | exists (DRAFT — afventer sign-off) |
+| Kickoff | `Docs/Formand/asfaltbestilling/KICKOFF.md` | exists (DRAFT) |
+| Validation contract | `Docs/Formand/asfaltbestilling/CONTRACT.md` | exists (DRAFT — afventer sign-off) |
 | SPECs | `Docs/Formand/SPEC_*.md` | 0/10 (architect-fase) |
 | Handoffs | `.claude/handoffs/asfaltbestilling-*.md` | 0/10 (builder-fase) |
 | Validation history | `.claude/validation-history/asfaltbestilling-*.md` | 0 runs |

@@ -18,11 +18,11 @@ signed_by: Carsten
 > **Læs sammen med:**
 > - `.claude/sections/formand/asfaltbestilling.md` — komponent-scope
 > - `.claude/docs/DATA_FIELDS.md` (sektion: Asfaltbestilling) — felter, validation, Supabase-mapping
-> - `Docs/Formand/FLOWS_Asfaltbestilling.md` — alle 9 UX-flows
+> - `Docs/Formand/asfaltbestilling/FLOWS.md` — alle 9 UX-flows
 > - `.claude/docs/FUNCTIONAL_FLOWS.md` (ABE-1..8) — cross-app kontrakt
 > - `.claude/docs/STATUS_VOKABULAR.md` — låst 2026-05-26
 > - `.claude/docs/DATOFORMAT.md` — låst 2026-05-26
-> - `Docs/Formand/KICKOFF_Asfaltbestilling.md` — forretnings-scope
+> - `Docs/Formand/asfaltbestilling/KICKOFF.md` — forretnings-scope
 
 ---
 
@@ -31,7 +31,7 @@ signed_by: Carsten
 - **Sektion:** Asfaltbestilling
 - **App:** Formand
 - **Manifest:** `.claude/sections/formand/asfaltbestilling.md`
-- **Kickoff:** `Docs/Formand/KICKOFF_Asfaltbestilling.md`
+- **Kickoff:** `Docs/Formand/asfaltbestilling/KICKOFF.md`
 - **Status:** `DRAFT`
 - **Contract-version:** 1.0
 - **Godkendt af Carsten:** `[ ] Dato: ___`

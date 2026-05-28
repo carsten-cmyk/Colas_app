@@ -997,7 +997,7 @@ Hver vejning genererer én vejeseddel pr. produkt (via fabrik-system). Chauffør
 ## Asfaltbestilling — Formand → Vognmand + Fabrik + Dagsoverblik
 
 > **Section:** `asfaltbestilling` (Formand · Planlægning-tab)
-> **Source-of-truth:** `Docs/Formand/FLOWS_Asfaltbestilling.md` (UX-flows C1-C9)
+> **Source-of-truth:** `Docs/Formand/asfaltbestilling/FLOWS.md` (UX-flows C1-C9)
 > **Komponent-scope:** `.claude/sections/formand/asfaltbestilling.md`
 > **Datafelter:** `.claude/docs/DATA_FIELDS.md` → sektion "Asfaltbestilling"
 >
