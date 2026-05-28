@@ -1,10 +1,14 @@
 ---
 section: [section-slug]                # fx asfaltbestilling
 component: [ComponentName]             # fx ProductBoxV2
-spec: Docs/[App]/SPEC_[Name].md
+spec: Docs/[App]/[sektion-slug]/SPEC_[Name].md
 builder_session: [yyyy-mm-dd-hhmm]
-status: [draft | ready-for-review | ready-for-validation]
+builder_model: [fx claude-sonnet-4-6]
+status: [draft | ready-for-review | needs-fix | reviewer-approved]
+review_rounds: 0
 ---
+
+> **Filplacering (LÅST 2026-05-28):** Denne handoff skal ligge i `Docs/[App]/[sektion-slug]/handoffs/[ComponentName].md` (ikke i `.claude/handoffs/` som tidligere). Se workflow-upgrades C4.
 
 # Handoff — [ComponentName]
 
@@ -169,3 +173,31 @@ Coverage (hvis målt):
 - [ ] **Klar til reviewer** → ⏳
 
 > Builder afslutter her. Reviewer overtager.
+
+---
+
+## 🖋️ Builder sign-off (LÅST 2026-05-28)
+
+> **Krav:** Builder MÅ IKKE markere status `ready-for-review` uden at udfylde denne blok.
+> **Audit-trail:** Denne signatur kobles til reviewer-signoff → git-agent (commit-message) → section-manifest.
+
+```yaml
+builder_signoff:
+  builder_agent: [fx claude-sonnet-4-6]
+  signed_at: [yyyy-mm-dd HH:MM]
+  acceptkriterier_implementeret: [fx 15 af 18 fra CONTRACT.md ASF-001..018]
+  acceptkriterier_skipped: [fx 3 — se 'Not implemented'-sektion]
+  prototype_kopieret_1_til_1: true|false
+  bevidste_afvigelser_count: [N — alle dokumenteret i 'Prototype-fidelity']
+  manuel_testning_udfoert:
+    - "[Scenarie 1: bruger udfylder tons + sender batch — OK]"
+    - "[Scenarie 2: optimistic UI ruller tilbage ved 5s timeout — OK]"
+    - "[Scenarie 3: ...]"
+  selv_lint_typecheck: passed|failed
+  saerlig_opmaerksomhed_bedes_paa:
+    - "[Fx: dispatchOptimisticBatch — usikker på om timeout-håndtering er korrekt ved netværks-flakiness]"
+    - "[Fx: ARIA-labels på reason-picker — gættet, bekræft mod a11y-spec]"
+  signatur: "Jeg står inde for at koden implementerer SPEC + handoff præcis som dokumenteret ovenfor"
+```
+
+**Næste skridt:** Status sættes til `ready-for-review`. Reviewer-agent auto-dispatches (i dev/test/live-fase) eller manuelt via `/review [komponent]` (prototype/test-fase).
