@@ -163,6 +163,70 @@ orders.asfalt_koersel[].egen_bil: boolean (default false)
 
 ---
 
+### Variant: "Sidste læs"-frigivelse af overflødige chauffører (LÅST 2026-05-27)
+
+**Trigger:** Når formand allokerer sidste-læs (`er_sidste_laes: true` på en vejeseddel) ELLER systemet automatisk identificerer at `sum(allokerede_tons) >= bestilt_total - bil_kapacitet` for resten af dagen.
+
+**Forretningsregel:**
+- Når sidste-læs er allokeret, er N-1 biler overflødige (hvor N er antal allokerede biler for dagen)
+- 1 bil holdes **i reserve-buffer** indtil sidste-læs er aflæsset (`status = udlagt`)
+- De øvrige `N - 2` biler kan frigives med det samme
+
+**Trin SL-1 — System foreslår frigivelse**
+**App:** formand (computation) → vognmand (notifikation)
+**Trigger:** `er_sidste_laes: true` er sat på en vejeseddel (`paa_vej_til_fabrik`-status)
+**Beregning:**
+- `overfloedige_biler = N_allokerede - 1 (sidste-læs) - 1 (reserve)`
+- Reserve-bil = den bil hvis næste-tur normalt ville være LIGE EFTER sidste-læs (sidste i køen)
+**Skriver til:** `frigivelses_forslag` (Supabase-tabel):
+  - `ordre_id`, `dato`, `foreslaaede_reg_nr: string[]` (de overflødige), `reserve_reg_nr: string`, `status: 'afventer_vognmand'`
+
+**Trin SL-2 — Vognmand modtager notifikation + bekræfter**
+**App:** vognmand
+**Komponent:** `FrigivelsesModal` (NY) — modal eller toast i `VognmandShell`
+**Viser:** Liste over biler der kan frigives + reserve-bil markeret. CTA: "Frigiv X biler" + "Behold for nu" (afvis).
+**Handling:** Vognmand klikker "Frigiv X biler"
+**Skriver til:**
+- `frigivelses_forslag.status = 'bekraeftet'`
+- For hver frigivet bil: `confirmed_vehicles[].dag_afsluttet_kl = now()`
+- Vejeseddel for hver frigivet bil opdateres: `status = 'dag_afsluttet'`
+
+**Trin SL-3 — Chauffør modtager besked**
+**App:** chauffeur (React Native)
+**Komponent:** Push-notifikation + `DagAfsluttetScreen` (NY) eller banner på TaskDetailScreen
+**Distribution:** Push til chauffør-tlf (samme mekanisme som task-distribution)
+**Indhold:** "Dagens kørsel afsluttet — du kan køre hjem. Tak for indsatsen."
+**Læser:** `assigned_tasks` WHERE `truck_plate = chauffeur.plate` AND `status = 'dag_afsluttet'`
+
+**Trin SL-4 — Reserve-bil frigives når sidste-læs er aflæsset**
+**App:** formand (computation) → vognmand → chauffør (automatisk via Trin SL-2 + SL-3)
+**Trigger:** Sidste-læs-vejeseddel skifter status til `udlagt`
+**Handling:** System sender automatisk frigivelses-besked til reserve-bilen (uden vognmand-bekræftelse — reserve-perioden er afsluttet, ingen risiko tilbage)
+**Skriver til:** Reserve-bilens `confirmed_vehicles[].dag_afsluttet_kl = now()` + vejeseddel `status = 'dag_afsluttet'`
+
+**Visuelle effekter (cross-app):**
+- **Formand**: Frigivne biler skifter til `dag_afsluttet`-status i Vejesedler-tabellen (gråtonet styling)
+- **Vognmand**: Bil-disponering viser "Dag afsluttet"-badge på frigivne biler
+- **Chauffør**: Push + status-skift fra `paa_vej_til_fabrik` → `dag_afsluttet`. Bilen kan parkeres, ingen flere ture.
+
+**Tidsregistrering / afregning:**
+- Chauffør får løn for tid frem til **afmelding modtaget** (ikke frem til vognmands bekræftelse — vognmand kan være sløv)
+- For akkord-biler: ingen ekstra betaling for resten af dagen — bilen er ikke længere i loop
+- For time-biler: timeregistreringen lukkes ved afmelding (chauffør får besked om at registrere "Afsluttet")
+
+**Afvisnings-flow (vognmand siger nej):**
+- Hvis vognmand klikker "Behold for nu" i Trin SL-2, sker INGEN afmelding
+- Biler fortsætter i loop indtil sidste-læs er aflæsset
+- Når `udlagt` triggers, viser systemet ny notifikation: "Dagens mål nået — vil du afmelde resterende biler?"
+
+**🟡 ÅBNE SPØRGSMÅL (ved implementering):**
+- **Allerede-på-vej-til-fabrik chauffører:** Hvad hvis chauffør modtager afmelding mens han ER på vej til fabrik? Skal han vende om, parkere, eller fortsætte til fabrik og blive afmeldt der? Default: chauffør beslutter selv om han har lyst at vende om (giver mening for kort afstand) eller fortsætte (lang afstand). UX-detalje besluttes ved implementering.
+- **Push fejler:** Hvad sker hvis push-notifikation ikke når frem (telefonen er offline)? Fallback: chauffør får besked ved næste app-åbning + SMS hvis kritisk.
+- **Reserve-bil-valg:** Skal reserve-bilen vælges baseret på position (tættest på fabrik), læs-nummer (sidste i køen), eller chauffør-præference? Default: sidste i køen (mindst forstyrrelse).
+- **Afvisnings-konsekvens:** Hvis vognmand AFVISER frigivelse første gang og sidste-læs senere fejler, har vi tabt tid på automatik vs. manuel. Skal afvisning logges + advare hvis sidste-læs fejler bagefter?
+
+---
+
 ## Flow 2: Materiel-transport — Formand → Vognmand
 
 **Status:** Planlagt, ikke bygget endnu
@@ -284,21 +348,45 @@ orders.asfalt_koersel[].egen_bil: boolean (default false)
 **Viser:** Success-banner "Du kan nu starte lastningen" + silo + produkt
 **Handling:** Chauffør trykker "Lastning færdig" når silo er tømt og bil er læsset
 
+**LÅST 2026-05-27 — Bilens kapacitet vises:**
+- På "Du kan nu starte lastningen"-skærmen vises bilens kapacitet (tons-rummelighed) tydeligt så chaufføren ved hvor meget han kan/skal læsse
+- Kapaciteten kommer fra bil-disponeringen (vognmand-data: `bil.tons` eller tilsvarende kapacitets-felt)
+- Værdien matches mod faktisk udvejet last på "Udvejning bekræftet"-skærmen — eventuel afvigelse signalerer at last er mindre end kapacitet (rest til evt. returlæs eller bare sidste-læs)
+- Eksempel: 34 t kapacitet vises på lastnings-skærm → efter læsning udvejes 34 t (eller mindre hvis sidste-læs/rest)
+
 ### Trin 5 — Udvejning + afgang fra fabrik
 **App:** chauffeur
 **Komponent:** `AnkommetFabrikScreen` (sub-screen: `udvejet`)
 **Handling:** Chauffør udvejes med last på vægt; trykker "Udvejet og på vej til udførselssted"
 **Skriver til:** `task_timestamps.afgang_fabrik = now()`, `task_logs.last_tons = tons` (fra vægt-system)
 
-### Trin 6 — ETA beregnes til formand + udførselssted
+### Trin 6 — ETA beregnes til formand + udførselssted (LÅST 2026-05-27)
 **App:** beregnes server-side, vises i formand + fabrik (kommende)
 **Komponent:**
-  - `formand`: ETA-badge på ordre — "Asfalt forventet kl. 14:32"
+  - `formand`: ETA-badge på vejeseddel i Udførsel/Vejesedler-tabel (status `undervejs`) — fx "ETA 09:42" eller "12 min"
   - `fabrik` (kommende): Liste over kommende lastbiler med ETA
-**Beregning:**
-  - `eta_udfoerselssted = afgang_fabrik + køretid(fabrik → udførselssted)`
-  - `eta_fabrik = afgang_udfoerselssted + køretid(udførselssted → fabrik)` (omvendt retning, til fabrik-view)
-**Note:** Køretid hentes fra GPS-historik eller maps-API (TBD)
+
+**Status-overgang:** Vejeseddel skifter fra `paa_fabrik` → `undervejs` når chauffør klikker **"Afslut vejning"** på fabrik (sidste udvejning). ETA-tid bliver synlig fra dette tidspunkt.
+
+**Beregning (LÅST 2026-05-27):**
+- Primær: **Google Distance Matrix API** — kald med `origins=fabrik_coords`, `destinations=udfoersel_coords`, `mode=driving`, `departure_time=now`, `traffic_model=best_guess`. Returnerer `duration_in_traffic` (sekunder, inkl. live trafik).
+- Lastbil-buffer: **+10%** oven i Google's bil-tid for at kompensere for lastbil-hastighed (lavere top-fart, accelerations-/decelerations-profil).
+- Formel: `eta_minutter = ceil(duration_in_traffic_seconds × 1.10 / 60)`
+- ETA-klokkeslæt: `eta_klokkeslaet = afgang_fabrik + eta_minutter`
+
+**Returvej (returlæs-flow):**
+- `eta_fabrik = afgang_udfoerselssted + køretid(udførselssted → fabrik)` — samme Google-kald, omvendt retning + +10% buffer
+
+**API-aftale:**
+- Google Maps Platform — Distance Matrix API. Free tier: $200/måned credit (≈ 40.000 calls). Vores volumen er meget under det.
+- API-key skal være `MAPS_DISTANCE_MATRIX_KEY` i env, kald sker server-side (ikke browser — beskyt key).
+- Fallback hvis API-kald fejler: brug `km × 1 min`-approximation (eksisterende prototype-formel) som degraderet beregning.
+
+**Note:** I prototypen bruges fortsat den simple `km × 1 min`-formel via en util-funktion `estimateEta(origin, dest)` — denne udskiftes med Google-kaldet når API-key er konfigureret i produktion. Util'en isolerer beregningen så ombytningen er triviel.
+
+**Cross-app effekt:**
+- Vejeseddel-status: `undervejs` med `eta_minutter` + `eta_klokkeslaet` synlig i formand `VejesedlerTable` (se Flow 8 / Udførsel/Vejesedler-sektionen)
+- Næste status-overgang: `undervejs` → `aflaesning` når geofence triggers ankomst udførselssted
 
 ---
 
@@ -372,6 +460,34 @@ orders.asfalt_koersel[].egen_bil: boolean (default false)
 - **Chauffør-kommentar** (`ChauffoerKommentarBox`) — vises **nederst i expanderen, efter Godkend-knappen**
 - **Forretningsregel:** Hvis chauffør kører flere materiel-enheder på samme bil/reg.nr → ÉN samlet afregning per chauffør (gruppering på `regnr`), IKKE per materiel-enhed.
 **Handling:** Formand kan redigere felter — eller godkende direkte hvis de stemmer.
+
+### Trin 4a — Returlæs-timer (LÅST 2026-05-27)
+**App:** formand
+**Komponent:** `ReturlaesRow` (NY) — vises i bil-afregnings-expander under de eksisterende køretimer fra app
+**Forretningsregel:** Når en chauffør slutter dagen med rest-asfalt på bilen ELLER materiel der skal retur til fabrikken, registrerer formanden ekstra timer for chaufførens retur-kørsel. Det er chaufførens kompensation for at køre tomt tilbage.
+
+**UI-detaljer:**
+- Knap **"+ Returlæs"** vises som default i bunden af expanderen (under eksisterende køretimer-række)
+- Ved klik: ny række med felt for **timer** (decimal-tal, fx 1,5) + valgfri kommentar-felt + **× fjern**-knap
+- Etiket: "Returlæs (rest asfalt eller materiel retur til fabrik)"
+- Værdien LÆGGES TIL den samlede afregning (chauffør får løn for køretimer + returlæs-timer)
+- **Kun formand kan tilføje** — chauffør har ikke selv mulighed for at indberette returlæs-timer (formand er den der ved at retur-kørslen var nødvendig)
+
+**Hvorfor manuel + ikke automatisk fra GPS:**
+- GPS kan ikke skelne mellem "kører hjem efter arbejde" og "kører til fabrik med returlæs"
+- Formand har konteksten — han ved om bilen havde rest-asfalt eller materiel med
+- Manuel registrering = klar audit-trail for afregning
+
+**Skriver til:** `time_registreringer.returlaes` med `{ timer: number, kommentar?: string, registreret_af_formand: bool, registreret_tidspunkt: timestamp }`. Null hvis ingen returlæs.
+
+**UI-rækkefølge i expanderen:**
+1. Køretimer (fra chauffør-app)
+2. Ventetid (fra chauffør-app)
+3. Pause (fra chauffør-app — kun asfalt-time)
+4. **Returlæs** (NY — manuel formand-indtastning)
+5. Total-linje
+6. Chauffør-kommentar
+7. Godkend-knap
 
 ### Trin 5 — Formand godkender afregning (direkte, ingen modal)
 **App:** formand
@@ -573,13 +689,33 @@ hvor `densitet_kg_per_m3` er heltal fra `recepter[receptkode].densitet` (fx 2400
 **Læser:** `plan_vejebilag` WHERE `ordrenummer = current AND dato = today`
 **Note:** PLAN har ~10 min forsinkelse — viser ikke real-time. Hooket skal poll'e eller bruge Supabase realtime når koblet.
 
-### Trin 2 — Status afgøres af GPS + afhentet-flag
-**Datakilde:** chauffør-app (GPS) + vognmandsmodul (disponering)
-**Forretningsregel:**
-- `status='ankommet'` ⇔ vejeseddel modtaget i Colas (har `vejeseddelNr` + `tons`)
-- `status='undervejs'` ⇔ bil har forladt fabrik (`afgang_fabrik` sat) men `vejeseddelNr=null`
-- `status='paa-vej-til-fabrik'` ⇔ bil er disponeret men ikke afhentet endnu (`afgang_fabrik=null` OG `ankomst_fabrik=null`)
-**Note:** `status` er eksplicit på `Vejeseddel`-typen — hooken sætter det baseret på data, men UI-komponenter læser KUN `status`-feltet (single source of truth).
+### Trin 2 — Status afgøres af GPS + chauffør-events (OPDATERET 2026-05-27)
+**Datakilde:** chauffør-app (GPS + manuelle events) + vognmandsmodul (disponering)
+**Forretningsregel — 5-status-flow:**
+
+| Status | Trigger | Datasignal |
+|---|---|---|
+| `paa_vej_til_fabrik` | Chauffør klikker "Kør til fabrik" eller bil er disponeret men ikke ankommet | `afgang_fra_plads = now()` eller initial-state |
+| `paa_fabrik` | Geofence ankomst fabrik (indvejning/læsning/udvejning sker) | `ankomst_fabrik` sat, `afgang_fabrik = null` |
+| `undervejs` | Chauffør klikker **"Afslut vejning"** efter sidste udvejning på fabrik. ETA-tid bliver synlig. | `afgang_fabrik` sat, `eta_minutter` beregnet via Google Distance Matrix +10% (se Flow 3 Trin 6) |
+| `aflaesning` | Geofence ankomst udførselssted | `ankomst_udfoersel` sat, `aflaesset = false` |
+| `udlagt` | Formand/chauffør registrerer temperatur + afsluttet | `aflaesset = true`, `temperatur` sat |
+
+**Note:** `status` er eksplicit på `Vejeseddel`-typen — hooken sætter det baseret på datasignalerne ovenfor, men UI-komponenter læser KUN `status`-feltet (single source of truth). Se [[status_vokabular#VejeseddelStatus]] for kanonisk enum.
+
+**UI-gruppering i `VejesedlerTable` (LÅST 2026-05-27):**
+- **Aktive biler (top)**: `paa_vej_til_fabrik`, `paa_fabrik`, `undervejs`, `aflaesning` — vises altid synligt så formand kan følge fremdrift
+- **Collapsible-sektion (bund)**: `udlagt` — sammenfoldet som default for at fokusere på aktive biler. Header viser count: `▸ Udlagt + temp-målt (3)`
+
+**Udlægger-kolonne (LÅST 2026-05-27):**
+- Udlægger-data følger med i datasættet fra PLAN — `vejeseddel.valgtUdlaeggerMaterielNr` (kan være null indtil formand vælger på aflæsning/udlagt)
+- **Conditional column rendering**: Hvis INGEN vejeseddel i listen har en udlægger valgt (alle `valgtUdlaeggerMaterielNr === null`), skal udlægger-kolonnen **slet ikke vises** i tabellen
+- Når mindst én vejeseddel har en udlægger valgt, vises kolonnen for ALLE rækker — uvalgte viser deres `<UdlaeggerDropdown>` for at lade formand vælge
+- Implementation-note: tjek `vejesedler.some(v => v.valgtUdlaeggerMaterielNr !== null)` for at afgøre column-rendering. TODO: Erstat med Supabase når klar — udlægger-data kommer fra `plan_vejebilag.udlaegger_materiel_nr` (eller settes lokalt af formand)
+
+**Tons-summary (LÅST 2026-05-27):**
+- Sum-pille over tons-kolonnen: `{modtaget_total} t modtaget`
+- `modtaget_total = sum(tons WHERE status !== 'paa_vej_til_fabrik')` — dvs. alle vejesedler hvor bilen HAR været på fabrik (uanset hvor i flowet den er nu, inkl. udlagt)
 
 ### Trin 3 — Sortering i tabel
 **Komponent:** `VejesedlerTable`
@@ -588,17 +724,20 @@ hvor `densitet_kg_per_m3` er heltal fra `recepter[receptkode].densitet` (fx 2400
 2. Undervejs — ASC på `etaMinutter` (kortest ETA øverst)
 3. På vej til fabrik — original rækkefølge
 
-### Trin 4 — Per-række delegation
+### Trin 4 — Per-række delegation (OPDATERET 2026-05-27 — 5 statusser)
 **Komponent:** `VejeseddelRow` (delegerer baseret på `status`)
-- `ankommet` → `<TemperaturBadge>` + `<UdlaeggerDropdown>` (aktiv)
-- `undervejs` → `<EtaBadge variant="eta">` + `<UdlaeggerDropdown disabled>`
-- `paa-vej-til-fabrik` → `<EtaBadge variant="paa-vej-til-fabrik">` + `<UdlaeggerDropdown disabled>`
+- `paa_vej_til_fabrik` → status-pill "På vej til fabrik" + `<UdlaeggerDropdown disabled>`
+- `paa_fabrik` → status-pill "På fabrik" + `<UdlaeggerDropdown disabled>`
+- `undervejs` → `<EtaBadge variant="eta">` (viser ETA-tid) + `<UdlaeggerDropdown disabled>`
+- `aflaesning` → status-pill "Aflæsning" + `<UdlaeggerDropdown>` (aktiv — udlægger vælges nu)
+- `udlagt` → `<TemperaturBadge>` + `<UdlaeggerDropdown>` (aktiv — temperatur registreres)
 
-### Trin 5 — ETA beregnes løbende
-**App:** chauffør-app → formand (formidlet via PLAN/server)
-**Beregning (v1):** `etaMinutter = afstand_km × 1 min/km`
-**Datakilde:** GPS-position fra chauffør-app til ordrens udførselssted
-**Note:** Simpel formel i v1; kan udvides med maps-API (køretid baseret på trafik) senere.
+### Trin 5 — ETA beregnes løbende (OPDATERET 2026-05-27 — Google Distance Matrix)
+**App:** server-side beregning baseret på chauffør-events
+**Beregning (LÅST 2026-05-27):** Se Flow 3 Trin 6 — Google Distance Matrix API + 10% lastbil-buffer.
+- Prototype-fallback: `etaMinutter = afstand_km × 1 min/km` via util `estimateEta(origin, dest)` (udskiftes med Google-kald når API-key konfigureret)
+- Triggertidspunkt: ETA bliver synlig når status skifter fra `paa_fabrik` → `undervejs` (chauffør klikker "Afslut vejning")
+**Datakilde:** GPS-position fra chauffør-app + Google Distance Matrix duration_in_traffic
 
 ### Trin 5a — Forsinkelse-detektion + conditional formatting på EtaBadge
 **App:** formand
@@ -1140,6 +1279,62 @@ ekstra_bestillinger                                // Drip-bestillinger
 - **Fabrik** queryer samme set for sin ordre-kø
 - **Formand Udførsel-mode (Dagsoverblik)** queryer `transport_orders WHERE kind='morgen' AND date=?` for pre-fill af "faktisk udlagt"
 - **Chauffør** modtager opgaver via `assigned_tasks[]` der peger på `transport_orders` (downstream af vognmand-disposition)
+
+---
+
+## Flow 13: Fabrik-skift fra PLAN — info til formand + auto-genberegning (LÅST 2026-05-27)
+
+**Status:** Design låst — implementering afventer
+**Trigger:** Fabrik X får nedbrud, PLAN tildeler ordren til Fabrik Y i stedet
+**Kilde:** PLAN er single source of truth — apps reagerer på PLAN-push, initierer ikke skiftet selv
+
+### Trin 1 — PLAN pusher ny fabrik
+**App:** server / sync-lag
+**Trigger:** Fabrik-personale eller PLAN-bruger registrerer nedbrud + omfordeler ordren til ny fabrik
+**Skriver til:** `orders.factory.id = nyt_fabrik_id`, `orders.factory.driveTimeMinutes = nyt_drive_time` (genberegnet via Google Distance Matrix på ny rute), `orders.factory_change_log[] = { gammel_fabrik, ny_fabrik, tidspunkt, aarsag }`
+
+### Trin 2 — Formand notificeres
+**App:** formand
+**Komponent:** Toast eller banner på OrdrePlanScreen (NY — kommer)
+**Visning:** "Fabrik ændret til [Fabrik Y] kl [tidspunkt] · [årsag fra PLAN]"
+**Handling:** **Kun info** — ingen bekræftelse kræves. Fabrikken ringer parallelt til formand for verbal bekræftelse uden for systemet.
+**Læser:** `orders.factory_change_log[]` (seneste entry)
+
+### Trin 3 — Vognmand auto-opdateres
+**App:** vognmand
+**Komponent:** Disponerings-view + ordre-kort (LIVE-opdatering)
+**Visning:** Ny fabrik-info i ordre-header. Mødetid-fabrik pr. bil genberegnes automatisk fra ny `driveTimeMinutes` (samme formel som første-læs + interval-modellen — se Flow 1 Trin 5b)
+**Handling:** Vognmand ser ændringen, kan justere disponering manuelt hvis nødvendigt — ingen tvang
+
+### Trin 4 — Chauffør får ny navigation
+**App:** chauffeur (React Native)
+**Komponent:** Push-notifikation + TaskDetailScreen opdateres
+**Distribution:** Push direkte til chauffør-tlf med ny adresse
+**Visning ift. status:**
+- `paa_vej_til_fabrik`: navigation skifter til ny fabrik-adresse, ETA genberegnes
+- `paa_fabrik` (på OLD fabrik): chauffør færdiggør sin nuværende last på OLD fabrik (kører læs som planlagt). Kun NÆSTE læs henter på NEW fabrik
+- `undervejs`/`aflaesning`/`udlagt`: upåvirket (læs er allerede påvej til/på pladsen)
+**Læser:** `assigned_tasks` med opdateret `factory_id` + `factory_address`
+
+### Trin 5 — Vejesedler upåvirket (LÅST 2026-05-27)
+- Vejesedler fra OLD fabrik beholdes uændret — de blev jo leveret derfra
+- Nye vejesedler får ny `fabrikId` automatisk fra opdateret ordre-state
+- **Ingen visuel markering pr. vejeseddel om hvilken fabrik den kom fra** — modtaget-summen optæller tons uden hensyn til fabrik
+- Vejesedler-tabel viser bare det datasæt der kommer ind
+
+**Cross-app stakeholders:**
+| Rolle | Action | Hvornår |
+|---|---|---|
+| Fabrik (PLAN) | Initierer skiftet | Trin 1 |
+| Fabrik (verbal) | Ringer formand for at sikre besked er modtaget | Parallelt Trin 2 |
+| Formand | Informeres (banner/toast) — ingen action påkrævet | Trin 2 |
+| Vognmand | Ser opdaterede tider, kan justere | Trin 3 |
+| Chauffør | Får ny navigation + push | Trin 4 |
+
+**🟡 ÅBNE SPØRGSMÅL (implementering):**
+- **Recept-kompatibilitet**: Kan NEW fabrik altid producere samme produkt? Hvis ikke — hvem fanger det? Sandsynligvis PLAN, men UI-advarsel ville være rart
+- **Bil allerede ved OLD fabrik**: Skal chauffør se en advarsel om at NÆSTE læs er ny fabrik, eller bare modtage push når sin nuværende læs er udvejet?
+- **Log-visning**: Skal `factory_change_log` være synlig i formand-UI (historik over hvilke fabrikker der har leveret)? Sandsynligvis ja — relevant for ordre-historik
 
 ---
 
