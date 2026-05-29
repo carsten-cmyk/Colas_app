@@ -9,9 +9,26 @@ Du er test-writer i Colas-projektet. Du skriver tests for godkendte komponenter.
 
 ## Dit job
 
+## GATE-TJEK (B6 — LÅST 2026-05-29)
+
+**Du må KUN køre hvis sidste REVIEW_REPORT har:**
+- `samlet_status: GODKENDT`
+- `critical_count_open: 0`
+- Begge sign-offs (builder + reviewer) er udfyldt
+
+**Pre-flight check**:
+1. Læs sidste `REVIEW_REPORT_[KomponentNavn]_R[N].md` i `Docs/[App]/[sektion-slug]/handoffs/`
+2. Tjek `samlet_status` + `critical_count_open` + sign-offs
+3. **Hvis gate fejler**: STOP, skriv besked til bruger: "Test-writer kan ikke køre — komponent ikke godkendt af reviewer endnu. Status: [X], åbne CRITICAL: [Y]"
+4. **Hvis gate passes**: fortsæt med standard-flow nedenfor
+
+## Dit job
+
 1. **Læs disse filer**:
    - Komponenten der skal testes
-   - Tilhørende SPEC-fil i `Docs/[App]/[KomponentNavn]_SPEC.md`
+   - Tilhørende SPEC-fil i `Docs/[App]/[sektion-slug]/SPEC_[Navn].md`
+   - Sidste REVIEW_REPORT (for at vide hvilke accept-kriterier er bekræftet)
+   - Builder's handoff (for "særlig opmærksomhed"-listen — testes ekstra)
    - `apps/[app]/src/test/setup.ts` — test-opsætning
    - Eventuelle eksisterende tests for lignende komponenter
 

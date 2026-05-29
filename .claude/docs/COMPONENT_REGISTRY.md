@@ -167,11 +167,17 @@ Currently no production-components (kun prototype-skærme i `src/prototypes/`).
 
 ## Cross-app-genbrug — kandidater (🌍)
 
-| Komponent | Apps der bruger | Anbefaling |
-|---|---|---|
-| `OrderMetrics` | chauffeur + gps_test | Flyt til `shared/components/` |
-| `StatCard` | chauffeur + gps_test | Flyt til `shared/components/` |
-| `BottomTabBar` | chauffeur (RN) + formand (Web) | **DO NOT MERGE** — forskellige platforme, kun navn-overlap |
+| Komponent | Apps der bruger | Anbefaling | Status |
+|---|---|---|---|
+| `OrderMetrics` | chauffeur + gps_test | Flyt til `shared/components/native/` | **DEFERRED** — gps_test er eksperimentelt, theme-path mismatch. Migrer når 3. app har behov |
+| `StatCard` | chauffeur + gps_test | Flyt til `shared/components/native/` | **DEFERRED** — samme grund |
+| `BottomTabBar` | chauffeur (RN) + formand (Web) | **DO NOT MERGE** — forskellige platforme, kun navn-overlap | ❌ Aldrig migrer |
+
+**Deferral-begrundelse 2026-05-29**: Begge cross-app-kandidater er React Native-komponenter der importerer app-specifik `theme`. Migration kræver enten:
+1. Theme-konsolidering først (flyt theme til `shared/styles/`)
+2. Eller propagering af theme som prop (API-ændring)
+
+Indtil gps_test enten promoveres til produktion eller arkiveres, og en 3. app kræver komponenterne, er duplikering acceptabel. Re-evaluér ved næste registry-review.
 
 ---
 

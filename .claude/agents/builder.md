@@ -86,4 +86,63 @@ Vis filerne du har oprettet:
 [OPRETTET] apps/[app]/src/components/ui/[KomponentNavn].stories.tsx
 ```
 
-Kald derefter reviewer agenten med: "Review klar: [filsti]"
+---
+
+## Handoff + signoff (LÅST 2026-05-28 — OBLIGATORISK)
+
+Inden du afslutter, SKAL du:
+
+1. **Skrive handoff-fil** baseret på `.claude/handoffs/_template.md`:
+   - Filplacering: `Docs/[App]/[sektion-slug]/handoffs/[KomponentNavn].md`
+   - Udfyld ALLE sektioner: Implemented, Not implemented, Assumptions, Known issues, Files changed, Prototype-fidelity, API exports, Tokens/patterns brugt, Ready-for-next-step
+
+2. **Udfylde builder signoff-blokken** nederst i handoff-filen (YAML-format som specificeret i template):
+   - `builder_agent: claude-sonnet-4-6` (din egen model)
+   - `signed_at`: ISO-tidsstempel
+   - `acceptkriterier_implementeret`: count + ID-range fra SPEC
+   - `prototype_kopieret_1_til_1`: true/false
+   - `bevidste_afvigelser_count`: matcher 'Prototype-fidelity'-sektionen
+   - `manuel_testning_udfoert`: 2-4 konkrete scenarier
+   - `selv_lint_typecheck`: passed/failed
+   - `saerlig_opmaerksomhed_bedes_paa`: usikkerheder reviewer bør særligt tjekke
+   - Signatur
+
+3. **MARKÉR status** `ready-for-review` i handoff-frontmatter.
+
+4. **Sektion-manifest opdatering**: Skriv `Builder-signoff`-kolonnen til komponent-rækken med dato + dit agent-navn.
+
+## Auto-dispatch til reviewer (B2 — dev/test-fase only)
+
+**Tjek section-manifestets `current_phase`:**
+
+- **Prototype-fase**: STOP HER. Brugeren kalder manuelt `/review [komponent]` når klar.
+- **Dev-fase eller senere**: **Auto-dispatch reviewer-agenten** via Agent-tool:
+
+```
+Agent({
+  subagent_type: "reviewer",
+  description: "Auto-review af [KomponentNavn]",
+  prompt: "Review just-built component [KomponentNavn] in section [sektion]. \
+           SPEC: Docs/[App]/[sektion]/SPEC_[KomponentNavn].md \
+           Handoff: Docs/[App]/[sektion]/handoffs/[KomponentNavn].md \
+           Round: 1 (first review). \
+           Følg din standard review-proces og skriv REVIEW_REPORT_[KomponentNavn]_R1.md"
+})
+```
+
+**Hvis du blev kaldt med fix-list** (round 2+), kald reviewer med `Round: [n+1]` og reference til hvilke issue-IDs du har fixet.
+
+## Fix-loop (når du modtager fix-list fra reviewer)
+
+Hvis du bliver kaldt igen med en issue-liste fra reviewer's REVIEW_REPORT:
+
+1. **Læs** `REVIEW_REPORT_[KomponentNavn]_R[n].md` — fokuser på CRITICAL-issues først
+2. **Fix HVER issue** med stabil ID — opdatér KUN det relevante kode-område
+3. **Opdatér handoff** med:
+   - `issues_fixed: [I-001, I-002, ...]` med beskrivelse af fix
+   - `issues_disputed: [I-003]` med begrundelse hvis du IKKE er enig
+   - Ny signatur (round-nummer i metadata)
+4. **Inkrementér** `review_rounds` i frontmatter
+5. **Re-dispatch reviewer** med round = `prev + 1`
+
+**HÅRD GATE**: Hvis du modtager fix-list og `review_rounds >= 3` allerede, STOP og notér til brugeren at workflow er eskaleret. Dispatch IKKE reviewer igen.
