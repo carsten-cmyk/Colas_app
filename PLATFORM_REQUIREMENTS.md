@@ -164,6 +164,30 @@
 
 **DoD**: Når Apple/Google udgiver ny iOS/Android-version, har vi en proces til at teste + reagere inden for 1 uge.
 
+### C5. Vejesystem-integration via QR (LÅST 2026-05-29)
+
+**Why**: Chauffør-app skal erstatte fysiske vejekort. Beslutning truffet 2026-05-29 (Thomas) — NFC HCE er droppet (Danvægt's RFID-læser er frekvens-inkompatibel med telefoner). QR-scan på vejeterminalen er valgt.
+
+**Tasks**:
+- [ ] C5.1 — Afklar QR-format med Thomas (URL vs. signeret JSON-token)
+- [ ] C5.2 — Afklar security-model (time-bound token? bruger-auth ved scan?)
+- [ ] C5.3 — Definér API-kontrakt mellem chauffør-app og vejesystem (REST/webhook)
+- [ ] C5.4 — Implementér QR-scan-skærm (eksisterer i prototype — `apps/chauffeur/src/prototypes/qr-scan/`)
+- [ ] C5.5 — Backend-handler: terminal-id → vejesystem-trigger
+- [ ] C5.6 — Offline-fallback: hvad sker når vejesystem er nede?
+- [ ] C5.7 — Print + distribuér QR-koder til fabrikkerne (operations-task)
+- [ ] C5.8 — Test-flow: chauffør ankommer → scanner QR → vejesystem starter sekvens → indvejning OK
+
+**Hvad der droppes fra tidligere setup** (var i scope, nu UDE):
+- NFC HCE-arkitektur (Android-only)
+- iOS Apple Wallet-pass-alternativ
+- 13,56 MHz NFC-kortlægning
+- iOS vs Android-flåde-andel (begge platforme virker nu)
+
+**DoD**: Chauffør kan scanne QR på en vejeterminal, vejesekvens starter automatisk, indvejning + udvejning forløber uden manuel terminal-input. Test-scenarie kører på preview-environment.
+
+**Cross-reference**: `FUNCTIONAL_FLOWS.md` Flow 3 Trin 3 + memory `project_vejekort_nfc_hce.md`.
+
 ---
 
 ## D. Accessibility & internationalization

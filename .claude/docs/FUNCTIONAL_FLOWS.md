@@ -334,13 +334,27 @@ orders.asfalt_koersel[].egen_bil: boolean (default false)
 **Handling:** Chauffør kører på vægt; tom-vægt registreres i fabriksystem (ikke chauffør-app)
 **TBD:** Hvordan synkroniseres vægt-data tilbage til chauffør/ordre?
 
-### Trin 3 — QR-scan ved silo
+### Trin 3 — QR-scan på vejeterminal (LÅST 2026-05-29)
 **App:** chauffeur
 **Komponent:** `AnkommetFabrikScreen` (sub-screen: `qr-scan`)
-**Handling:** Chauffør scanner QR-kode placeret ved silo — sikrer at chauffør er ved RETTE silo for produktet på ordren
-**Læser:** `orders.produkt` + QR-payload (silo-id)
-**Validerer:** silo-id matcher produkt på ordren — ellers fejl
-**Skriver til:** `task_timestamps.qr_scannet = now()`, `task_logs.silo_bekraeftet = silo_id`
+**Handling:** Chauffør scanner unik QR-kode på vejeterminalen. Appen sender signal til vejesystem som starter vejesekvensen (indvejning).
+
+**Beslutning 2026-05-29 (Thomas, ansvarlig for fabrikker + vejesystem):**
+- **NFC HCE er DROPPET** — Danvægt's kortlæser er RFID på frekvenser der ikke er telefon-kompatible
+- **QR-scan på vejeterminal er valgt** — ingen hardware-udskiftning hos fabrikkerne
+- **App-bruger-adgangs-baseret** — ikke telefon-specifik binding
+- **Cross-platform** — virker på både iOS og Android
+
+**Læser:** `orders.produkt` + QR-payload (terminal-id)
+**Validerer:** terminal-id matcher fabrik på ordren — ellers fejl
+**Skriver til:** `task_timestamps.qr_scannet = now()`, `task_logs.terminal_bekraeftet = terminal_id`
+**Aktiverer:** Vejesystem starter vejesekvens (indvejning klar — chauffør kører på vægt)
+
+**🟡 Åbne tekniske spørgsmål til Thomas** (afklares før implementation):
+- QR-format: URL eller signeret JSON-token?
+- Security: time-bound token? Bruger-auth ved scan? Forhindr deling af QR-billede?
+- Backend API-kontrakt mellem chauffør-app og vejesystem (REST/webhook/event)
+- Offline-fallback: hvad sker når vejesystem er nede?
 
 ### Trin 4 — Bekræftelse + lastning
 **App:** chauffeur
