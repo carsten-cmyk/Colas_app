@@ -1,8 +1,8 @@
 ---
 type: workflow-improvement-plan
-status: draft — afventer implementering
+status: F-blok implementeret 2026-05-29 — kun branch-protection mangler (manuel GitHub UI)
 created: 2026-05-28
-last_updated: 2026-05-28
+last_updated: 2026-05-29
 owner: Carsten
 ---
 
@@ -273,6 +273,84 @@ external_url: https://...
 ```
 **Hvorfor:** Tovejs-link mellem code og PM-tool. Når ticket lukkes, kan agenten automatisk arkivere sektion-mappen.
 **Prioritet:** 🟡 Should-have
+
+---
+
+## F. Agency-readiness (LÅST 2026-05-29 — F1-F12 implementeret, F13-F14 deferred)
+
+> **Hvad:** Tiltag der gør repoet klar til at agency-bidragsydere kan arbejde sammen med os via PRs.
+
+### F1. Root TS/ESLint/Prettier-config + commitlint ✅
+- `.prettierrc.json` + `.prettierignore` (LF, single-quote, no-semi, 100-width)
+- `commitlint.config.cjs` extends config-conventional + projekt-scopes
+- Per-app eslint/tsconfig forbliver app-specifikke (allerede eksisterer)
+
+### F2. GitHub Actions CI ✅
+- `commitlint`-job validerer PR-titel + commits
+- `token-check`-job scanner produktion-kode for hex + raw px (fejler PR)
+- `formand`: fuld pipeline (typecheck + lint + test + build)
+- `vognmand` + `chauffeur-web`: typecheck + lint (continue-on-error indtil dev)
+- `chauffeur` (RN): typecheck
+
+### F3. GitHub-templates + CODEOWNERS ✅
+- `.github/ISSUE_TEMPLATE/bug_report.md`
+- `.github/ISSUE_TEMPLATE/feature_request.md`
+- `.github/ISSUE_TEMPLATE/section_request.md` (kobler til /interview-workflow)
+- `.github/CODEOWNERS` med Carsten som owner for kritiske paths
+- Pull-request-template (eksisterede allerede)
+
+### F4. CONTRIBUTING.md komplet revision ✅
+- Branch-strategi (trunk-based + squash-merge, ingen develop-branch)
+- Conventional commits (CI-håndhævet)
+- PR-flow med auto-merge ved 1 approver
+- Sektion-arbejde via Claude's agents
+
+### F5. AI_GUIDELINES.md ✅
+- Projekt-stil (React + Hooks, TS strict, Container/Presenter)
+- Tokens UFRAVIGELIGT
+- Frosne projekt-beslutninger med ref + dato
+- Claude agent-suite + auto-orchestration
+
+### F6. DEFINITION_OF_DONE.md ✅
+- 4 niveauer: komponent / sektion / PR / release
+- Tjekliste per niveau
+- Red flags + eskaleringsflow
+
+### F7. Section STATUS.md-template ✅
+- `.claude/sections/_status_template.md`
+- Agency-vendt subset af section-manifest
+
+### F8. AGENCY_ONBOARDING.md ✅
+- 5-minutters læse-tid
+- Repo-tur + must-read docs + agent-oversigt
+- Git-flow + første-dag-tjekliste
+
+### F9. Branch protection på main ⏳ (manuel GitHub UI)
+- `.github/BRANCH_PROTECTION_SETUP.md` (vejledning oprettet)
+- **Carsten skal udføre dette i GitHub-UI inden agency starter**
+- Krav: PR-flow, 1 approver, status-checks grønne, restrict-push til carsten-cmyk
+
+### F10. Git-agent PR-flow ✅
+- `.claude/agents/git-agent.md` opdateret
+- Dev/test/live-fase: auto-opret feature-branch + push + åbn PR via `gh pr create`
+- Prototype-fase: manuel commit-flow bevares
+- Auto-merge sker af GitHub (ikke af agent) når 1 reviewer godkender
+
+### F11. Branch-naming konvention i CONTRIBUTING ✅
+Implementeret som del af F4.
+
+### F12. Auto-assign CODEOWNERS reviewer ✅
+Implementeret via `.github/CODEOWNERS` i F3.
+
+### F13. Reviewer-agent inline GitHub PR-kommentarer ⏳ DEFERRED
+- Kræver GitHub API-integration + bot-token
+- Ikke kritisk for agency-start (manuel review virker)
+- Implementer i fase 2 sammen med E-blokken (Slack/Asana MCP)
+
+### F14. Agency-onboarding via worktrees ⏳ DEFERRED
+- Kræver mere modent agent-orchestration-setup
+- Bruger Agent-tool's eksisterende `isolation: "worktree"`-feature
+- Implementer når første agency-task starter
 
 ---
 

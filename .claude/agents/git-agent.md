@@ -17,6 +17,7 @@ Tjek altid section-manifestets `current_phase` for de berørte sektioner (kan ud
 
 **Trigger**: KUN explicit `/git`-kommando fra brugeren.
 **Push**: KUN når brugeren eksplicit beder om det.
+**PR-flow**: IKKE aktiv — direct commit til local main + manuel push.
 **Auto-trigger**: AKTIVERET IKKE.
 **Carsten styrer selv** — ingen automatik.
 
@@ -27,13 +28,20 @@ Tjek altid section-manifestets `current_phase` for de berørte sektioner (kan ud
 - Auto-trigger efter `reviewer_signoff = GODKENDT` på en komponent (signal modtages via section-manifest-opdatering)
 - Auto-trigger ved `architect`-agent-afslutning (når SPEC-filer er produceret)
 
-**Push**: Kun ved `/git`-kommando med "push"-argument.
-**Auto-trigger**: AKTIVERET for commit, IKKE for push.
+**PR-flow OBLIGATORISK** (F10 — LÅST 2026-05-29):
+- ALDRIG direct push til `main` — main er protected
+- Auto-opret feature-branch fra `main` hvis ikke allerede på en
+- Commit på feature-branch
+- Push branch til remote
+- Åbn PR via `gh pr create` med pre-udfyldt template (se "PR-flow" nedenfor)
+- Stop og rapporter PR-URL til bruger — vent på godkendelse
+
+**Auto-trigger**: AKTIVERET for commit + PR. Auto-merge sker af GitHub når 1 reviewer godkender (ikke af agent).
 
 ### 🔴 Live-fase
 
-**Auto-tag**: Når section-manifest skifter til `live`, tagges sidste commit med `[sektion-slug]-v[version]` (fx `asfaltbestilling-v1.0`).
-**Push-gate**: Kan IKKE pushe medmindre section-manifest er `live` ELLER brugeren eksplicit override'r.
+**Auto-tag**: Når section-manifest skifter til `live`, tagges sidste commit på main med `[sektion-slug]-v[version]` (fx `asfaltbestilling-v1.0`) EFTER PR er merged.
+**Push-gate**: Kan IKKE pushe direkte til main — alt via PR (branch-protection blokkerer alligevel).
 
 ---
 
@@ -117,9 +125,86 @@ EOF
 ## Specielle commands
 
 - `/git` — manuel commit (prototype-fase default, dev-fase manuel)
-- `/git push` — eksplicit push til origin
-- `/git push --force-push` — push selvom section-manifest ikke er `live` (kræver bekræftelse)
+- `/git push` — eksplicit push til origin (prototype-fase only; dev/test/live bruger PR-flow)
+- `/git push --force-push` — push selvom section-manifest ikke er `live` (kræver bekræftelse — kun prototype-fase)
 - `/git tag-section [sektion-slug]` — manuel tag (når sektion markeres live)
+- `/git pr` — opret PR for current feature-branch (dev-fase shortcut)
+
+---
+
+## PR-flow (F10 — LÅST 2026-05-29)
+
+I dev/test/live-fase SKAL al kode gå via PR. Du orkestrerer dette:
+
+### 1. Branch-handling
+
+Hvis current branch er `main`:
+- **Opret** ny feature-branch automatisk baseret på committet:
+  - Single-komponent commit: `feature/[sektion]-[komponent]` (fx `feature/asfaltbestilling-StatusPill`)
+  - Multi-komponent commit: `feature/[sektion]-round-[N]` hvis bygget af architect
+  - Bugfix: `fix/[sektion]-[issue-id]`
+  - Docs: `docs/[topic]`
+  - Chore: `chore/[topic]`
+- **Switch til branchen**: `git checkout -b [navn]`
+
+Hvis allerede på feature-branch: bruge den.
+
+### 2. Commit (samme som prototype-fase smart grouping)
+
+Per-sektion grupperet, conventional commits format, audit-trail i body.
+
+### 3. Push branch til remote
+
+```bash
+git push -u origin [branch-navn]
+```
+
+### 4. Åbn PR via gh CLI
+
+```bash
+gh pr create \
+  --base main \
+  --head [branch-navn] \
+  --title "[conventional-commit-format type(scope): subject]" \
+  --body "$(cat <<'EOF'
+[PR-template-indhold udfyldt]
+
+## Sektion-reference
+- Section-manifest: `.claude/sections/[app]/[sektion].md`
+- CONTRACT: `Docs/[App]/[sektion]/CONTRACT.md`
+- Komponenter: [liste]
+
+## Audit-trail
+- Builder-signoff: [dato, agent]
+- Reviewer-signoff: [dato, agent, status]
+- Review rounds: [N]
+
+## CI-checks
+Forventet: lint + typecheck + test + commitlint + token-check grønne
+
+## Reviewers
+Auto-assigned via CODEOWNERS.
+EOF
+)"
+```
+
+### 5. Rapporter til bruger
+
+Returner PR-URL til bruger:
+```
+✓ PR åbnet: https://github.com/carsten-cmyk/Colas_app/pull/[N]
+   Branch: [branch-navn]
+   Commits: [N]
+   Auto-merge aktiveres når 1 reviewer godkender + alle CI-checks grønne.
+```
+
+**STOP HER**. Auto-merge sker via GitHub når gates passes — du behøver ikke gøre mere.
+
+### 6. Hvis PR-flow fejler
+
+- Hvis branch already exists: foreslå rename eller eskaler til Carsten
+- Hvis push fejler (protection): tjek branch-name + protected paths
+- Hvis `gh` CLI ikke er installeret: rapporter fejl + foreslå manuel `git push` + brugeren opretter PR via GitHub UI
 
 ---
 
