@@ -44,11 +44,11 @@ last_updated: yyyy-mm-dd
 > Fyldes ud i interviewer Fase A. Hver komponent får senere en SPEC.
 > **Rolle-konvention:** Container ejer state via hook(s). Presenter modtager props ind, sender callbacks ud (ingen direkte hook-import). Hook ejer logik. Util er pure functions.
 
-| Komponent | Rolle | Status | SPEC | Handoff |
-|---|---|---|---|---|
-| `[SektionWrapper]` | Container | not-started | `Docs/[App]/SPEC_[Navn].md` | `.claude/handoffs/[section]-[komponent].md` |
-| `[ChildA]` | Presenter | not-started | ... | ... |
-| `[useSektion]` | Hook | not-started | ... | ... |
+| Komponent | Rolle | Status | SPEC | Handoff | Builder-signoff | Reviewer-signoff | Rounds |
+|---|---|---|---|---|---|---|---|
+| `[SektionWrapper]` | Container | not-started | `Docs/[App]/[sektion-slug]/SPEC_[Navn].md` | `Docs/[App]/[sektion-slug]/handoffs/[Navn].md` | — | — | 0 |
+| `[ChildA]` | Presenter | not-started | ... | ... | — | — | 0 |
+| `[useSektion]` | Hook | not-started | ... | ... | — | — | 0 |
 
 **Sub-sektioner / sub-flows (hvis relevant):**
 - `[fx Send til fabrik-modal]`

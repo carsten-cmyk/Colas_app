@@ -48,18 +48,18 @@ last_updated: 2026-05-26
 > Bekræftet i interview-Fase A. 10 komponenter (8 presentere/container + 2 hooks) — opdateret fra oprindelige 8 efter Fase A-beslutninger om at ekstrahere `SendBekraeftelsesModal` og `EkstraBestillingCTA` som egne komponenter.
 > **Rolle-konvention:** Container ejer state via hook(s). Presenter modtager props ind, sender callbacks ud (ingen direkte hook-import).
 
-| # | Komponent | Rolle | Prototype-source | Status | SPEC | Handoff |
-|---|---|---|---|---|---|---|
-| 1 | `AsfaltbestillingSection` | Container | `OrdrePlanScreen.tsx#L1440-L1640` | not-started | `Docs/Formand/SPEC_AsfaltbestillingSection.md` | — |
-| 2 | `DatePillsRow` | Presenter | `OrdrePlanScreen.tsx#L1451-L1484` | not-started | `Docs/Formand/SPEC_DatePillsRow.md` | — |
-| 3 | `ProductBoxV2` | Presenter | `OrdrePlanScreen.tsx#L2595-L2793` | not-started | `Docs/Formand/SPEC_ProductBoxV2.md` | — |
-| 4 | `EkstraBestillingBox` | Presenter | `OrdrePlanScreen.tsx#L2801-L2916` | not-started | `Docs/Formand/SPEC_EkstraBestillingBox.md` | — |
-| 5 | `StatusPill` | Presenter | `OrdrePlanScreen.tsx#L2564-L2588` | not-started | `Docs/Formand/SPEC_StatusPill.md` | — |
-| 6 | `EkstraBestillingCTA` | Presenter (NY ekstraktion) | `OrdrePlanScreen.tsx#L1565-L1580` | not-started | `Docs/Formand/SPEC_EkstraBestillingCTA.md` | — |
-| 7 | `SendTilFabrikCTA` | Presenter | `OrdrePlanScreen.tsx#L1582-L1630` | not-started | `Docs/Formand/SPEC_SendTilFabrikCTA.md` | — |
-| 8 | `SendBekraeftelsesModal` | Presenter (NY ekstraktion) | `OrdrePlanScreen.tsx#L2480-L2545` | not-started | `Docs/Formand/SPEC_SendBekraeftelsesModal.md` | — |
-| 9 | `useAsfaltbestilling` | Hook | (logik spredt i OrdrePlanScreen — skal samles, inkl. `sendAlleForSelectedDate`-orkestrering) | not-started | `Docs/Formand/SPEC_useAsfaltbestilling.md` | — |
-| 10 | `useEkstraBestilling` | Hook | (logik spredt i OrdrePlanScreen + `markSent`-callback til atomic batch fra useAsfaltbestilling) | not-started | `Docs/Formand/SPEC_useEkstraBestilling.md` | — |
+| # | Komponent | Rolle | Prototype-source | Status | SPEC | Handoff | Builder-signoff | Reviewer-signoff | Rounds |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | `AsfaltbestillingSection` | Container | `OrdrePlanScreen.tsx#L1440-L1640` | not-started | `Docs/Formand/asfaltbestilling/SPEC_AsfaltbestillingSection.md` | — | — | — | 0 |
+| 2 | `DatePillsRow` | Presenter | `OrdrePlanScreen.tsx#L1451-L1484` | not-started | `Docs/Formand/asfaltbestilling/SPEC_DatePillsRow.md` | — | — | — | 0 |
+| 3 | `ProductBoxV2` | Presenter | `OrdrePlanScreen.tsx#L2595-L2793` | not-started | `Docs/Formand/asfaltbestilling/SPEC_ProductBoxV2.md` | — | — | — | 0 |
+| 4 | `EkstraBestillingBox` | Presenter | `OrdrePlanScreen.tsx#L2801-L2916` | not-started | `Docs/Formand/asfaltbestilling/SPEC_EkstraBestillingBox.md` | — | — | — | 0 |
+| 5 | `StatusPill` | Presenter | `OrdrePlanScreen.tsx#L2564-L2588` | not-started | `Docs/Formand/asfaltbestilling/SPEC_StatusPill.md` | — | — | — | 0 |
+| 6 | `EkstraBestillingCTA` | Presenter (NY ekstraktion) | `OrdrePlanScreen.tsx#L1565-L1580` | not-started | `Docs/Formand/asfaltbestilling/SPEC_EkstraBestillingCTA.md` | — | — | — | 0 |
+| 7 | `SendTilFabrikCTA` | Presenter | `OrdrePlanScreen.tsx#L1582-L1630` | not-started | `Docs/Formand/asfaltbestilling/SPEC_SendTilFabrikCTA.md` | — | — | — | 0 |
+| 8 | `SendBekraeftelsesModal` | Presenter (NY ekstraktion) | `OrdrePlanScreen.tsx#L2480-L2545` | not-started | `Docs/Formand/asfaltbestilling/SPEC_SendBekraeftelsesModal.md` | — | — | — | 0 |
+| 9 | `useAsfaltbestilling` | Hook | (logik spredt i OrdrePlanScreen — skal samles, inkl. `sendAlleForSelectedDate`-orkestrering) | not-started | `Docs/Formand/asfaltbestilling/SPEC_useAsfaltbestilling.md` | — | — | — | 0 |
+| 10 | `useEkstraBestilling` | Hook | (logik spredt i OrdrePlanScreen + `markSent`-callback til atomic batch fra useAsfaltbestilling) | not-started | `Docs/Formand/asfaltbestilling/SPEC_useEkstraBestilling.md` | — | — | — | 0 |
 
 **Sub-sektioner / sub-flows (interne modes — IKKE separate komponenter):**
 - Aflys-årsag picker — intern mode i `ProductBoxV2` (Reason-picker), styret af container-state `cancellingDayId` (se C2-flow i `asfaltbestilling/FLOWS.md`)

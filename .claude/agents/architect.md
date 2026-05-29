@@ -16,16 +16,24 @@ Når du modtager en skærm eller feature, skal du:
    - `Docs/Formand/CONTEXT.md` — forretningskontekst og PLAN-systemet
    - `.claude/docs/FUNCTIONAL_FLOWS.md` — eksisterende cross-app flows
    - `.claude/docs/core/DESIGN_SYSTEM.md` — tokens og patterns
+   - **`.claude/docs/COMPONENT_REGISTRY.md`** — eksisterende komponenter på tværs af apps (LÅST 2026-05-28 som obligatorisk pre-read)
    - Relevant PRD: `Docs/[App]/PRD.md`
    - Relevant prototype: find den i `apps/[app]/src/prototypes/` eller `apps/[app]/src/`
 
-2. **Analysér prototypen**:
+2. **Tjek COMPONENT_REGISTRY (OBLIGATORISK før SPECs):**
+   - For hver komponent du overvejer at planlægge: tjek om den ALLEREDE findes i registry
+   - 🟢-mærkede komponenter SKAL genbruges hvis de matcher use-case (fx `EtaBadge`, `TemperaturBadge`, `ProgressBar`)
+   - 🌍-mærkede komponenter er cross-app-kandidater — overvej om din nye komponent også bør flyttes til `shared/`
+   - Hvis du foreslår en NY komponent der ligner en eksisterende: dokumentér i SPEC HVORFOR den ikke bare bruger den eksisterende
+   - Når en NY komponent er bygget: tilføj den til registry (eller flag i SPEC at det skal ske post-build)
+
+3. **Analysér prototypen**:
    - Hvilke UI-elementer er der?
    - Hvilke data vises?
    - Hvilke interaktioner sker?
    - Hvilke eksisterende komponenter kan genbruges?
 
-3. **Visual Pattern Inventory** (OBLIGATORISK før SPECs skrives):
+4. **Visual Pattern Inventory** (OBLIGATORISK før SPECs skrives):
 
    Når den nye feature integrerer i en EKSISTERENDE skærm, skal du systematisk dokumentere de visuelle mønstre der allerede findes der. Nye komponenter SKAL matche disse mønstre — ikke opfinde egen stil.
 
@@ -52,16 +60,16 @@ Når du modtager en skærm eller feature, skal du:
 
    Hvis ingen eksisterende pattern findes (helt ny skærm), brug `DESIGN_SYSTEM.md`-eksempler og notér det eksplicit.
 
-4. **Identificér nye komponenter**:
+5. **Identificér nye komponenter**:
    - Tjek `apps/[app]/src/components/` for eksisterende — genbyg aldrig
    - List kun komponenter der mangler
    - Angiv type: `ui/` (atomar), `screens/[screen]/` (screen-specifik), `layout/`
 
-5. **Bestem build-rækkefølge** (altid bottom-up):
+6. **Bestem build-rækkefølge** (altid bottom-up):
    - Leaf-komponenter (ingen dependencies) → sammensat → screen
    - Angiv hvilke komponenter der kan bygges parallelt
 
-6. **Identificér cross-app flows**:
+7. **Identificér cross-app flows**:
    - Skriver denne skærm data som andre apps læser?
    - Læser den data som andre apps skriver?
    - Opdater `.claude/docs/FUNCTIONAL_FLOWS.md` hvis nye flows identificeres
