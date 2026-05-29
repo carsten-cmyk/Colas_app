@@ -1,0 +1,38 @@
+# CODEOWNERS — auto-assign reviewer per path
+# Syntax: path/glob @owner-or-team
+# Læs mere: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+
+# Default owner — alt der ikke er specifikt assigned
+*                               @carsten-cmyk
+
+# Apps — per-app owners (Carsten indtil agency-leads er sat op)
+apps/formand/                   @carsten-cmyk
+apps/vognmand/                  @carsten-cmyk
+apps/chauffeur/                 @carsten-cmyk
+apps/chauffeur-web/             @carsten-cmyk
+apps/fabrik/                    @carsten-cmyk
+apps/kunde/                     @carsten-cmyk
+
+# Shared types — kritisk single source of truth
+shared/types/                   @carsten-cmyk
+
+# Workflow + agent-definitioner — kun Carsten må ændre
+.claude/agents/                 @carsten-cmyk
+.claude/sections/_template.md   @carsten-cmyk
+.claude/handoffs/_template.md   @carsten-cmyk
+.claude/docs/STATUS_VOKABULAR.md @carsten-cmyk
+.claude/docs/DATOFORMAT.md      @carsten-cmyk
+.claude/docs/FUNCTIONAL_FLOWS.md @carsten-cmyk
+.claude/docs/DESIGN_SYSTEM.md   @carsten-cmyk
+
+# Workflow upgrades / standards
+WORKFLOW_UPGRADES_PLANNED.md    @carsten-cmyk
+CONTRIBUTING.md                 @carsten-cmyk
+AI_GUIDELINES.md                @carsten-cmyk
+DEFINITION_OF_DONE.md           @carsten-cmyk
+
+# GitHub-konfig + CI
+.github/                        @carsten-cmyk
+.prettierrc.json                @carsten-cmyk
+commitlint.config.cjs           @carsten-cmyk
+tsconfig.json                   @carsten-cmyk

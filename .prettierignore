@@ -1,0 +1,12 @@
+node_modules
+dist
+build
+.next
+.turbo
+.expo
+*.lock
+package-lock.json
+.claude/scheduled_tasks.lock
+.claude/screenshots
+Docs/**/*.pdf
+coverage

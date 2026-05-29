@@ -2,18 +2,86 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   push:
     branches: [main]
 
 jobs:
+  # ────────────────────────────────────────────────────────
+  # COMMIT-VALIDATION (alle PRs)
+  # ────────────────────────────────────────────────────────
+  commitlint:
+    name: Commitlint — conventional commits
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install commitlint
+        run: |
+          npm install --no-save @commitlint/cli @commitlint/config-conventional
+
+      - name: Validate PR commits
+        run: |
+          npx commitlint --from=origin/${{ github.base_ref }} --to=HEAD
+
+      - name: Validate PR title
+        run: |
+          echo "${{ github.event.pull_request.title }}" | npx commitlint
+
+  # ────────────────────────────────────────────────────────
+  # TOKEN-VIOLATIONS check (custom Colas-rule)
+  # ────────────────────────────────────────────────────────
+  token-check:
+    name: Token-violations — ingen hex eller raw px i src/components
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan for hex-farver i produktion-kode
+        run: |
+          set +e
+          # Find hex-farver i src/components/ (produktion, ikke prototyper)
+          HEX_HITS=$(grep -rn -E "(#[0-9A-Fa-f]{3,8})\b" apps/*/src/components/ \
+            --include='*.tsx' --include='*.ts' \
+            | grep -v '// allow-hex' | grep -v '\.test\.' | grep -v '\.stories\.')
+
+          if [ -n "$HEX_HITS" ]; then
+            echo "❌ Hex-farver fundet i produktion-kode:"
+            echo "$HEX_HITS"
+            exit 1
+          fi
+          echo "✓ Ingen hex-farver i produktion-kode"
+
+      - name: Scan for raw px-værdier i className
+        run: |
+          set +e
+          PX_HITS=$(grep -rn -E "className=\"[^\"]*\[[0-9]+px\]" apps/*/src/components/ \
+            --include='*.tsx' \
+            | grep -v '// allow-px')
+
+          if [ -n "$PX_HITS" ]; then
+            echo "❌ Raw px-værdier fundet i className:"
+            echo "$PX_HITS"
+            exit 1
+          fi
+          echo "✓ Ingen raw px i className"
+
+  # ────────────────────────────────────────────────────────
+  # FORMAND — fuld pipeline
+  # ────────────────────────────────────────────────────────
   formand:
-    name: Formand — typecheck, lint, test
+    name: Formand — typecheck, lint, test, build
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: apps/formand
-
     steps:
       - uses: actions/checkout@v4
 
@@ -38,13 +106,73 @@ jobs:
       - name: Build
         run: npm run build
 
+  # ────────────────────────────────────────────────────────
+  # VOGNMAND — typecheck + lint (test/build kommer når sat op)
+  # ────────────────────────────────────────────────────────
+  vognmand:
+    name: Vognmand — typecheck, lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/vognmand
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npm run typecheck
+        continue-on-error: true  # Tillad fejl indtil vognmand er fuld dev
+
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+  # ────────────────────────────────────────────────────────
+  # CHAUFFEUR-WEB — typecheck + lint
+  # ────────────────────────────────────────────────────────
+  chauffeur-web:
+    name: Chauffeur-web — typecheck, lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/chauffeur-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npm run typecheck
+        continue-on-error: true
+
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+  # ────────────────────────────────────────────────────────
+  # CHAUFFEUR (RN) — typecheck
+  # ────────────────────────────────────────────────────────
   chauffeur:
-    name: Chauffeur — typecheck
+    name: Chauffeur (RN) — typecheck
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: apps/chauffeur
-
     steps:
       - uses: actions/checkout@v4
 
