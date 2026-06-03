@@ -5,9 +5,10 @@
  */
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronRight, List, LayoutGrid, Clock, Repeat, Factory, Scale } from 'lucide-react'
+import { ChevronRight, List, LayoutGrid, Clock, Repeat, Factory, Scale, CloudRain } from 'lucide-react'
 import { MOCK_ORDRER } from '@/mocks/ordrer'
 import { erGodkendt } from '@/mocks/disponeringState'
+import { formatDatoLang, formatDatoMedUgedag } from '@/utils/dato'
 import type { Ordre, DagDisponering } from '@/types/vognmand'
 
 type Tab = 'alle' | 'aabne' | 'disponeret'
@@ -57,16 +58,6 @@ function sortOrdrer(ordrer: Ordre[]): Ordre[] {
     if (au && bu) return au.localeCompare(bu)
     return a.startDate.localeCompare(b.startDate)
   })
-}
-
-function fmtDato(iso: string): string {
-  const d = new Date(iso + 'T00:00:00')
-  return d.toLocaleDateString('da-DK', { weekday: 'short', day: 'numeric', month: 'short' })
-}
-
-function fmtDatoKort(iso: string): string {
-  const d = new Date(iso + 'T00:00:00')
-  return d.toLocaleDateString('da-DK', { day: 'numeric', month: 'numeric' })
 }
 
 function førsteLæsAggregeret(dage: DagDisponering[]): string {
@@ -204,11 +195,15 @@ function OrdreKort({ ordre, onDisponer }: OrdreKortProps) {
           {visibleDage.map(dag => {
             const dagStatus = getDagStatus(dag)
             const dagBadge = STATUS_BADGE[dagStatus]
+            const erAnnulleret = dag.annulleretAarsag === 'vejr'
             return (
-              <div key={dag.dato} className="px-5 py-3 flex items-center gap-3">
+              <div
+                key={dag.dato}
+                className={`px-5 py-3 flex items-center gap-3 ${erAnnulleret ? 'bg-warn-bg' : ''}`}
+              >
                 {/* Dato for udlægning */}
                 <span className="font-inter text-xs font-medium text-text-secondary w-32 flex-shrink-0 capitalize">
-                  {fmtDato(dag.dato)}
+                  {formatDatoMedUgedag(dag.dato)}
                 </span>
 
                 {/* Bestilte biler */}
@@ -231,9 +226,19 @@ function OrdreKort({ ordre, onDisponer }: OrdreKortProps) {
                   {dagBadge.label}
                 </span>
 
-                {/* Kommentar fra formand */}
-                <span className="flex-1 font-inter text-xs text-text-muted italic">
-                  {dag.kommentar ?? ''}
+                {/* Kommentar fra formand — med vejr-annullerings-pille */}
+                <span className="flex-1 flex flex-col gap-xxxs">
+                  {erAnnulleret && (
+                    <span className="inline-flex items-center gap-xxxs px-xs py-xxs rounded-md bg-yellow text-deep-teal font-poppins font-semibold text-xs uppercase tracking-wide self-start">
+                      <CloudRain size={14} className="flex-shrink-0" aria-hidden="true" />
+                      Ordre annulleret pga. vejr
+                    </span>
+                  )}
+                  {dag.kommentar && (
+                    <span className={`font-inter text-text-muted italic ${erAnnulleret ? 'text-xxs mt-xxxs' : 'text-xs'}`}>
+                      {dag.kommentar}
+                    </span>
+                  )}
                 </span>
               </div>
             )
@@ -263,7 +268,7 @@ function OrdreKort({ ordre, onDisponer }: OrdreKortProps) {
               }}
             >
               <span className="font-inter text-[11px] text-text-muted leading-relaxed">
-                Første del af ordre kørt på ordrenummer: {tk.ordrenr} ({fmtDatoKort(tk.fraDato)}–{fmtDatoKort(tk.tilDato)}):
+                Første del af ordre kørt på ordrenummer: {tk.ordrenr} ({formatDatoLang(tk.fraDato)}–{formatDatoLang(tk.tilDato)}):
                 {' '}
                 <span className="font-medium text-deep-teal">
                   {tk.biler.map(b => `Bil ${b.reg} (${b.chauffør})`).join(', ')}

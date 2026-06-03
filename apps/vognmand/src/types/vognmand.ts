@@ -1,3 +1,15 @@
+/** Per-produkt kørselsfelter — FUNCTIONAL_FLOWS § "Per-produkt kørselsfelter — formand styrer overgange" */
+// TODO: Erstat med Supabase når klar — synkroniseret fra formands plan_dag_produkt-tabel
+export interface ProduktKørsel {
+  produktId: string
+  recipeName: string
+  tonsPlanned: number
+  /** HH:MM — null = "starter sekventielt efter forrige produkt" */
+  foersteLaesPaaPlads: string | null
+  /** Minutter mellem hvert læs for dette produkt */
+  intervalMin: number | null
+}
+
 export interface DagDisponering {
   dato: string              // YYYY-MM-DD
   bestilteBiler: number
@@ -10,6 +22,12 @@ export interface DagDisponering {
   førsteLæsPåPlads?: string
   /** Minutter mellem hvert læs på pladsen (formandens specifikation) */
   intervalMinutter?: number
+  /** Årsag til annullering — streng-union så vi kan udvide til fx 'uvejr' | 'materiel' senere */
+  annulleretAarsag?: 'vejr'
+  /** Anbefaling fra formand: biltype per de 3 første læs-positioner (idx 0=1. læs, 1=2. læs, 2=3. læs) */
+  startRaekkefoelge?: [string | null, string | null, string | null]
+  /** Per-produkt kørselsfelter — udfyldt kun ved ordrer med 2+ produkter på dagen */
+  produkter?: ProduktKørsel[]
 }
 
 export interface TidligereKørtBil {

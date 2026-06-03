@@ -9,6 +9,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, List, LayoutGrid } from 'lucide-react'
 import { MOCK_ORDRER } from '@/mocks/ordrer'
+// DATO-NOTE: Gantt-headeren viser kun ugedag-initialer + dato-tal i komprimerede kalender-celler —
+// disse er ikke fulde datoer i tekst-form og konverteres ikke til lang-format (jf. DATOFORMAT.md).
+// Periode-labelen (fmtShort) bruger kortformat ("13. mar") da det er en komprimeret range-overskrift.
 import type { Ordre, DagDisponering } from '@/types/vognmand'
 
 type ViewMode = 'uge' | '14-dage' | 'maaned'

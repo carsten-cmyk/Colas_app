@@ -6,12 +6,13 @@
  */
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Search, Truck, Clock, Repeat, Factory, Scale } from 'lucide-react'
+import { ChevronLeft, Search, Truck, Clock, Repeat, Factory, Scale, CloudRain } from 'lucide-react'
 import { MOCK_ORDRER } from '@/mocks/ordrer'
 import { MOCK_BILER, MOCK_CHAUFFOERER } from '@/mocks/biler'
 import { markGodkendt } from '@/mocks/disponeringState'
 import { BilProfilModal } from './BilProfilModal'
-import type { DagDisponering } from '@/types/vognmand'
+import { formatDatoMedUgedag } from '@/utils/dato'
+import type { DagDisponering, ProduktKørsel } from '@/types/vognmand'
 import type { Bil, Chauffør } from '@/mocks/biler'
 
 type DagStatus = 'roed' | 'orange' | 'groen' | 'gul'
@@ -30,11 +31,6 @@ const STATUS_BADGE: Record<DagStatus, { cls: string; label: string }> = {
   orange: { cls: 'bg-warn-bg text-deep-teal',           label: 'Delvist disponeret' },
   groen:  { cls: 'bg-good-bg text-good',                label: 'Fuldt disponeret' },
   gul:    { cls: 'bg-yellow/25 text-deep-teal',         label: 'Ændret af formand' },
-}
-
-function fmtDato(iso: string): string {
-  const d = new Date(iso + 'T00:00:00')
-  return d.toLocaleDateString('da-DK', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
 /** Pure helper — beregner HH:MM + minutter. Returnér '—' ved ugyldigt input. */
@@ -465,23 +461,58 @@ export function VognmandDisponeringsScreen() {
                     const badge = STATUS_BADGE[dagStatus]
                     const isDragOver = dragOverDato === dag.dato
                     const mangler = dag.bestilteBiler - disponerede.length
+                    const erAnnulleret = dag.annulleretAarsag === 'vejr'
+                    const harAnbefaling = dag.startRaekkefoelge?.some(v => v !== null) ?? false
 
                     return (
+                      <div key={dag.dato}>
+                        {/* Start-rækkefølge-banner — vises kun hvis formand har angivet anbefaling */}
+                        {harAnbefaling && (
+                          <div className="mx-5 mt-xs mb-xxs rounded-md bg-soft-aqua border border-light-aqua px-md py-xs">
+                            <div className="font-poppins text-sm font-medium text-deep-teal mb-xxxs">
+                              Formand anbefaler start-rækkefølge
+                            </div>
+                            <div className="flex items-center gap-md mb-xxxs">
+                              {dag.startRaekkefoelge!.map((biltype, i) => (
+                                <span key={i} className="inline-flex items-center gap-xxxs font-inter text-xs text-text-primary">
+                                  <span className="font-semibold">Nr. {i + 1}:</span> {biltype ?? '—'}
+                                </span>
+                              ))}
+                            </div>
+                            <p className="font-inter text-xxs text-text-muted">
+                              Du kan afvige — ring til formand hvis det ikke kan lade sig gøre.
+                            </p>
+                          </div>
+                        )}
                       <div
-                        key={dag.dato}
-                        className="px-5 py-3 grid items-start"
+                        className={`px-5 py-3 grid items-start${erAnnulleret ? ' bg-warn-bg' : ''}`}
                         style={{ gridTemplateColumns: '8rem 5.5rem 6rem 1fr 9rem 1fr' }}
                       >
-                        <span className="font-inter text-xs font-medium text-text-secondary capitalize pt-1.5">
-                          {fmtDato(dag.dato)}
-                        </span>
+                        <div className="flex flex-col gap-xxxs pt-1.5">
+                          <span className="font-inter text-xs font-medium text-text-secondary capitalize">
+                            {formatDatoMedUgedag(dag.dato)}
+                          </span>
+                          {erAnnulleret && (
+                            <span className="inline-flex items-center gap-xxxs px-xs py-xxs rounded-md bg-yellow text-deep-teal font-poppins font-semibold text-xs uppercase tracking-wide self-start">
+                              <CloudRain size={16} className="flex-shrink-0" aria-label="Vejrannullering" />
+                              Ordre annulleret pga. vejr
+                            </span>
+                          )}
+                        </div>
                         <span className="font-inter text-xs font-medium text-text-secondary pt-1.5">
                           {dag.bestilteBiler}
                         </span>
                         <span className="font-inter text-xs text-text-secondary pt-1.5">
-                          {dag.førsteLæsPåPlads
-                            ? <>{dag.førsteLæsPåPlads}{' '}<span className="text-text-muted font-normal">+{dag.intervalMinutter} min</span></>
-                            : '—'
+                          {/* Multi-produkt: vis kompakt "X produkter" */}
+                          {dag.produkter && dag.produkter.length >= 2
+                            ? (
+                              <span className="inline-flex items-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-soft-aqua/60 border border-light-aqua px-xs py-xxs rounded-md">
+                                {dag.produkter.length} produkter
+                              </span>
+                            )
+                            : dag.førsteLæsPåPlads
+                              ? <>{dag.førsteLæsPåPlads}{' '}<span className="text-text-muted font-normal">+{dag.intervalMinutter} min</span></>
+                              : '—'
                           }
                         </span>
 
@@ -511,6 +542,10 @@ export function VognmandDisponeringsScreen() {
                               const fabrikMøde = dag.tidFabrikTilPlads != null && ankomstPlads !== '—'
                                 ? addMinutesToHHMM(ankomstPlads, -dag.tidFabrikTilPlads)
                                 : dag.mødetidFabrik ?? '—'
+                              // Anbefaling-pille: vis for de 3 første læs når formand har angivet startRaekkefoelge
+                              // Prototype: match via biltype-prefix (fx "6 Aks" matcher "6 Aks · 32 tons")
+                              const anbefalingForPos = idx < 3 ? (dag.startRaekkefoelge?.[idx] ?? null) : null
+                              const anbefalingMatch = anbefalingForPos !== null && (bil?.biltype.startsWith(anbefalingForPos) ?? false)
                               return (
                                 <span
                                   key={reg}
@@ -521,6 +556,12 @@ export function VognmandDisponeringsScreen() {
                                   <span className="font-inter text-xxs font-semibold bg-deep-teal/10 text-deep-teal px-1.5 py-px rounded-full flex-shrink-0">
                                     {læsNr}. læs
                                   </span>
+                                  {/* Anbefaling-pille for de 3 første positioner */}
+                                  {anbefalingForPos !== null && (
+                                    <span className={`font-inter text-xxs ml-xxs ${anbefalingMatch ? 'text-good' : 'text-text-muted'}`}>
+                                      {anbefalingMatch ? '✓' : `(anbef. ${anbefalingForPos})`}
+                                    </span>
+                                  )}
                                   <Truck size={9} className="text-text-muted flex-shrink-0" />
                                   <button
                                     onClick={() => setProfileReg(reg)}
@@ -565,6 +606,60 @@ export function VognmandDisponeringsScreen() {
                         <span className="font-inter text-xs text-text-muted italic self-start pt-1.5 pl-3">
                           {dag.kommentar ?? ''}
                         </span>
+                      </div>
+
+                      {/* Per-produkt kørsels-segmenter — kun ved multi-produkt-ordrer */}
+                      {/* FUNCTIONAL_FLOWS § "Per-produkt kørselsfelter — formand styrer overgange" */}
+                      {dag.produkter && dag.produkter.length >= 2 && (
+                        <div className="mx-5 mb-xs flex flex-col gap-xxs">
+                          {dag.produkter.map((p: ProduktKørsel, idx: number) => {
+                            const erSekventiel = p.foersteLaesPaaPlads == null && idx > 0
+                            // Vis tid-gab-zone: hvis forrige produkt er færdigt + gap inden dette starter
+                            const forrigeProd = idx > 0 ? dag.produkter![idx - 1] : null
+                            const harTidGab = !erSekventiel && forrigeProd?.foersteLaesPaaPlads != null && p.foersteLaesPaaPlads != null
+                            return (
+                              <div key={p.produktId}>
+                                {/* Tid-gab-zone mellem produkter med eksplicitte starttider */}
+                                {harTidGab && (
+                                  <div className="flex items-center gap-xs py-xxs px-xs my-xxs border-dashed border border-hairline rounded-md bg-surface-2">
+                                    <span className="font-inter text-xxs text-text-muted italic">
+                                      Skift fra {forrigeProd!.recipeName} → {p.recipeName}
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-sm px-xs py-xxs rounded-md bg-surface-2 border border-hairline">
+                                  {/* Produkt-nummer badge */}
+                                  <span className="font-inter text-xxs font-semibold bg-deep-teal/10 text-deep-teal px-xs py-xxs rounded-full flex-shrink-0 w-[20px] text-center">
+                                    {idx + 1}
+                                  </span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="font-inter text-xs font-medium text-text-primary">{p.recipeName}</span>
+                                    <span className="font-inter text-xxs text-text-muted ml-xs">{p.tonsPlanned} t</span>
+                                  </div>
+                                  <div className="flex items-center gap-xs flex-shrink-0">
+                                    {erSekventiel ? (
+                                      <span className="font-inter text-xxs text-text-muted italic">
+                                        Sekventielt efter forrige
+                                      </span>
+                                    ) : (
+                                      <>
+                                        <span className="font-inter text-xs font-semibold text-deep-teal tabular-nums">
+                                          {p.foersteLaesPaaPlads ?? '—'}
+                                        </span>
+                                        {p.intervalMin != null && (
+                                          <span className="font-inter text-xxs text-text-muted">
+                                            +{p.intervalMin} min
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
                       </div>
                     )
                   })}

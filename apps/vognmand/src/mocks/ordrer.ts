@@ -1,5 +1,24 @@
 // TODO: Erstat med Supabase når klar
-import type { Ordre, MaterielLinje } from '@/types/vognmand'
+import type { Ordre, MaterielLinje, ProduktKørsel } from '@/types/vognmand'
+
+// Per-produkt mock for o1 dag 2026-03-17 — demonstrerer multi-produkt-mode
+// TODO: Erstat med Supabase når klar — synkroniseret fra formands plan_dag_produkt
+const MOCK_PRODUKTER_O1_1703: ProduktKørsel[] = [
+  {
+    produktId: 'p1',
+    recipeName: 'GAB I',
+    tonsPlanned: 70,
+    foersteLaesPaaPlads: '07:15',
+    intervalMin: 20,
+  },
+  {
+    produktId: 'p2',
+    recipeName: 'SMA 11S',
+    tonsPlanned: 250,
+    foersteLaesPaaPlads: null,   // sekventielt — starter efter GAB I er færdig
+    intervalMin: 15,
+  },
+]
 
 // TODO: Erstat med Supabase — materiel-linjer hentes fra PLAN per ordre
 const MOCK_MATERIEL_O1: MaterielLinje[] = [
@@ -21,10 +40,10 @@ export const MOCK_ORDRER: Ordre[] = [
     startDate: '2026-03-16',
     endDate: '2026-03-18',
     dage: [
-      // Mandag 16/3 — ingen disponeret → rød
-      { dato: '2026-03-16', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 45, førsteLæsPåPlads: '07:15', intervalMinutter: 15 },
-      // Tirsdag 17/3 — delvist disponeret → orange
-      { dato: '2026-03-17', bestilteBiler: 3, disponeredeBiler: 1, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 45, kommentar: 'Smal adgangsvej', førsteLæsPåPlads: '07:15', intervalMinutter: 15 },
+      // Mandag 16/3 — ingen disponeret → rød — TODO: Erstat med Supabase når klar
+      { dato: '2026-03-16', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 45, førsteLæsPåPlads: '07:15', intervalMinutter: 15, startRaekkefoelge: ['6 Aks', '7 Aks', null] },
+      // Tirsdag 17/3 — delvist disponeret → orange · multi-produkt (GAB I + SMA 11S)
+      { dato: '2026-03-17', bestilteBiler: 3, disponeredeBiler: 1, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 45, kommentar: 'Smal adgangsvej', førsteLæsPåPlads: '07:15', intervalMinutter: 15, produkter: MOCK_PRODUKTER_O1_1703 },
       // Onsdag 18/3 — fuldt disponeret → grøn
       { dato: '2026-03-18', bestilteBiler: 2, disponeredeBiler: 2, ændretAfFormand: false, mødetidFabrik: '07:00', tidFabrikTilPlads: 60, førsteLæsPåPlads: '07:15', intervalMinutter: 15 },
     ],
@@ -96,7 +115,7 @@ export const MOCK_ORDRER: Ordre[] = [
     tidsvindue: 'nat',
     dage: [
       // Tirsdag–torsdag 17–19/3
-      { dato: '2026-03-17', bestilteBiler: 2, disponeredeBiler: 2, ændretAfFormand: false, mødetidFabrik: '22:00', tidFabrikTilPlads: 20 },
+      { dato: '2026-03-17', bestilteBiler: 2, disponeredeBiler: 2, ændretAfFormand: false, mødetidFabrik: '22:00', tidFabrikTilPlads: 20, annulleretAarsag: 'vejr' },
       { dato: '2026-03-18', bestilteBiler: 2, disponeredeBiler: 1, ændretAfFormand: false, mødetidFabrik: '22:00', tidFabrikTilPlads: 20 },
       { dato: '2026-03-19', bestilteBiler: 2, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '22:00', tidFabrikTilPlads: 20 },
     ],
