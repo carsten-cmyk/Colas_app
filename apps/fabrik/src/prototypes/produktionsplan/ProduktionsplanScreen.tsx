@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Clock, Truck, Factory, CloudRain, Plus, Layers } from 'lucide-react'
+import { Clock, Truck, Factory, CloudRain, Plus, Layers, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 
 // ============================================================================
 // Prototype: Fabrik · Produktionsplan
@@ -34,6 +34,7 @@ type Ordre = {
   biltype: string
   intervalMin: number
   minusRegn: boolean
+  annulleretAarsag?: 'vejr'  // Ordren ER aflyst pga. regn — adskilt fra minusRegn (kun advisory)
   kommentar?: string
   biler: Bil[]
   siloNr?: number
@@ -149,6 +150,7 @@ const MOCK_ORDRER: Ordre[] = [
     biltype: '5 Aks',
     intervalMin: 25,
     minusRegn: false,
+    annulleretAarsag: 'vejr',
     biler: lavBiler('B-1046', '10:00', 5, 25, []),
   },
   {
@@ -257,11 +259,6 @@ function lavBiler(
   })
 }
 
-function dagensDatoFormatted(): string {
-  // Bevidst statisk for prototype så snapshots/screenshots er deterministiske
-  return '1. juni 2026'
-}
-
 // Finder næste bil i ordren: prioriterer 'undervejs' med ETA, fallback til næste 'planlagt' efter nu
 function findNaesteBil(biler: Bil[]): Bil | null {
   const undervejs = biler.find(b => b.status === 'undervejs')
@@ -347,9 +344,17 @@ function MiniEtaBadge({
   )
 }
 
-const ROW_HEIGHT_PX = 124
+const ROW_HEIGHT_PX = 148
 
-function Timeline({ ordrer }: { ordrer: Ordre[] }) {
+function Timeline({
+  ordrer,
+  bekraeftedeAflysninger,
+  onBekraeftAflysning,
+}: {
+  ordrer: Ordre[]
+  bekraeftedeAflysninger: Set<string>
+  onBekraeftAflysning: (ordreId: string) => void
+}) {
   // Tidsmarkører hver 15. min
   const ticks: number[] = []
   for (let t = DAG_START_MIN; t <= DAG_SLUT_MIN; t += 15) ticks.push(t)
@@ -386,7 +391,12 @@ function Timeline({ ordrer }: { ordrer: Ordre[] }) {
               </div>
             )}
             {synligeOrdrer.map(ordre => (
-              <OrdreLaneInfo key={ordre.id} ordre={ordre} />
+              <OrdreLaneInfo
+                key={ordre.id}
+                ordre={ordre}
+                erBekraeftet={bekraeftedeAflysninger.has(ordre.id)}
+                onBekraeft={() => onBekraeftAflysning(ordre.id)}
+              />
             ))}
           </div>
         </div>
@@ -422,7 +432,12 @@ function Timeline({ ordrer }: { ordrer: Ordre[] }) {
           {/* Lanes — bil-spor */}
           <div className="divide-y divide-hairline" style={{ width: `${DAG_BREDDE_PX}px` }}>
             {synligeOrdrer.map(ordre => (
-              <OrdreLaneCars key={ordre.id} ordre={ordre} nuPx={nuPx} />
+              <OrdreLaneCars
+                key={ordre.id}
+                ordre={ordre}
+                nuPx={nuPx}
+                erBekraeftet={bekraeftedeAflysninger.has(ordre.id)}
+              />
             ))}
           </div>
         </div>
@@ -440,32 +455,54 @@ function Timeline({ ordrer }: { ordrer: Ordre[] }) {
   )
 }
 
-function OrdreLaneInfo({ ordre }: { ordre: Ordre }) {
+function OrdreLaneInfo({
+  ordre,
+  erBekraeftet,
+  onBekraeft,
+}: {
+  ordre: Ordre
+  erBekraeftet: boolean
+  onBekraeft: () => void
+}) {
   const naesteBil = useMemo(() => findNaesteBil(ordre.biler), [ordre.biler])
 
   return (
-    <div className="flex items-stretch bg-surface" style={{ height: `${ROW_HEIGHT_PX}px` }}>
+    <div
+      className={`flex items-stretch ${ordre.annulleretAarsag === 'vejr' && !erBekraeftet ? 'bg-warn-bg' : 'bg-surface'}`}
+      style={{ height: `${ROW_HEIGHT_PX}px` }}
+    >
       {/* Info-kolonne */}
       <div className="w-[240px] shrink-0 px-md py-xs border-r border-hairline flex flex-col justify-center">
-        {/* Linje 1: asfalttype + recept + tons */}
-        <div className="flex items-center justify-between gap-xxs">
-          <div className="flex items-center gap-xxs min-w-0">
-            <span className="font-poppins font-semibold text-sm text-text-primary">
-              {ordre.asfalttype}
+        {/* Minus-regn-ikon — flag på selve ordren/produktet, forbliver i info-kolonnen */}
+        {ordre.minusRegn && (
+          <div className="flex items-center gap-xxs mb-xxxs">
+            <span
+              title="Minus regn — kun ved tørvejr"
+              className="inline-flex items-center justify-center w-5 h-5 rounded-sm bg-deep-teal text-white shrink-0"
+            >
+              <CloudRain className="w-3 h-3" aria-hidden="true" />
             </span>
-            <span className="font-inter text-xxs text-text-muted shrink-0">{ordre.receptNummer}</span>
-            {ordre.minusRegn && (
-              <span
-                title="Minus regn — kun ved tørvejr"
-                className="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-deep-teal text-white shrink-0"
-              >
-                <CloudRain className="w-3 h-3" aria-hidden="true" />
+          </div>
+        )}
+        {/* Linje 1: recept-nummer + tons (recept prominent — fabriksmestrens primære reference) */}
+        <div className="flex items-center justify-between gap-xxs">
+          <span className="font-poppins font-semibold text-sm text-text-primary">
+            {ordre.receptNummer}
+          </span>
+          <div className="flex flex-col items-end shrink-0">
+            <span className="font-poppins font-semibold text-sm text-text-primary">
+              {ordre.forventetMaengde}t
+            </span>
+            {ordre.morgenTons > 0 && (
+              <span className="font-inter text-xxs text-text-muted">
+                {ordre.morgenTons} t morgen
               </span>
             )}
           </div>
-          <span className="font-poppins font-semibold text-sm text-text-primary shrink-0">
-            {ordre.forventetMaengde}t
-          </span>
+        </div>
+        {/* Linje 2: asfalttype (minus-regn-ikon er flyttet til badge-rækken øverst) */}
+        <div className="font-poppins font-semibold text-sm text-text-primary mt-xxxs">
+          {ordre.asfalttype}
         </div>
         {/* Linje 2: udførselssted */}
         <div className="mt-xxxs font-inter text-xs text-text-secondary truncate">
@@ -490,6 +527,25 @@ function OrdreLaneInfo({ ordre }: { ordre: Ordre }) {
 
       {/* Næste bil-kolonne */}
       <div className="w-[160px] shrink-0 px-md py-xs flex flex-col justify-center">
+        {/* Aflyst-vejr badge-stack — vises øverst når ordre er annulleret og ikke bekræftet */}
+        {ordre.annulleretAarsag === 'vejr' && !erBekraeftet && (
+          <div className="flex flex-col items-start gap-xxxs mb-xs pt-xxs">
+            <span
+              title="Ordre annulleret pga. vejr"
+              className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-md bg-yellow text-deep-teal font-poppins font-semibold text-xxs uppercase tracking-wide"
+            >
+              <CloudRain className="w-3 h-3 shrink-0" aria-hidden="true" />
+              Aflyst — vejr
+            </span>
+            <button
+              onClick={onBekraeft}
+              className="inline-flex items-center justify-center gap-xxxs px-xs py-xxxs rounded-md bg-deep-teal text-white font-inter text-xxs font-semibold hover:opacity-90"
+            >
+              <Check className="w-3 h-3" aria-hidden="true" />
+              OK, set
+            </button>
+          </div>
+        )}
         <div className="font-inter text-xxs text-text-muted uppercase tracking-wide">Næste bil</div>
         {naesteBil ? (
           naesteBil.status === 'undervejs' ? (() => {
@@ -523,7 +579,7 @@ function OrdreLaneInfo({ ordre }: { ordre: Ordre }) {
   )
 }
 
-function OrdreLaneCars({ ordre, nuPx }: { ordre: Ordre; nuPx: number }) {
+function OrdreLaneCars({ ordre, nuPx, erBekraeftet }: { ordre: Ordre; nuPx: number; erBekraeftet: boolean }) {
   const synligeBiler = ordre.biler.filter(b => {
     const min = hhmmTilMinutter(b.forventetAnkomstFabrik)
     return min >= DAG_START_MIN && min <= DAG_SLUT_MIN
@@ -561,14 +617,14 @@ function OrdreLaneCars({ ordre, nuPx }: { ordre: Ordre; nuPx: number }) {
         style={{ left: `${nuPx}px` }}
         aria-hidden="true"
       />
-      {/* Piller */}
+      {/* Piller — opacity-50 ved aflyst ordre (signalerer "disse biler kommer ikke") */}
       {synligeBiler.map(bil => {
         const min = hhmmTilMinutter(bil.forventetAnkomstFabrik)
         const px = (min - DAG_START_MIN) * PX_PER_MIN
         return (
           <div
             key={bil.id}
-            className="absolute"
+            className={`absolute ${ordre.annulleretAarsag === 'vejr' && !erBekraeftet ? 'opacity-50' : ''}`}
             style={{ left: `${px}px`, top: '50%', transform: 'translate(-50%, -50%)' }}
           >
             <MiniEtaBadge bil={bil} erForsteLaes={bil.id === forsteBilId} biltype={ordre.biltype} />
@@ -581,9 +637,11 @@ function OrdreLaneCars({ ordre, nuPx }: { ordre: Ordre; nuPx: number }) {
 
 function ReceptAggregat({
   ordrer,
+  totalDagTons,
   anbefalinger,
 }: {
   ordrer: Ordre[]
+  totalDagTons: number
   anbefalinger: Array<{ asfalttype: string; ordrer: Ordre[] }>
 }) {
   const perAsfalttype = useMemo(() => {
@@ -603,6 +661,17 @@ function ReceptAggregat({
       </div>
 
       <ul className="divide-y divide-hairline">
+        {/* Total-række — øverst, tydeligt markeret */}
+        <li className="px-md py-xs bg-soft-aqua">
+          <div className="flex items-center justify-between">
+            <span className="font-poppins font-semibold text-sm text-deep-teal uppercase tracking-wide">
+              Total i dag
+            </span>
+            <span className="font-poppins font-semibold text-md text-deep-teal">
+              {totalDagTons.toLocaleString('da-DK')} t
+            </span>
+          </div>
+        </li>
         {perAsfalttype.map(([type, { total, antal }]) => (
           <li key={type} className="px-md py-xs">
             <div className="flex items-center justify-between">
@@ -841,9 +910,32 @@ function SiloRaekke({
 // Screen
 // ============================================================================
 
+function formatDanskLangDato(dato: Date): string {
+  return dato.toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
 export function ProduktionsplanScreen() {
   const [siloer, setSiloer] = useState<Silo[]>(MOCK_SILOER_INITIAL)
   const [ordrer, setOrdrer] = useState<Ordre[]>(MOCK_ORDRER)
+  const [bekraeftedeAflysninger, setBekraeftedeAflysninger] = useState<Set<string>>(new Set())
+  // Seed-dato: 1. juni 2026 matcher NU_HHMM og dagensDatoFormatted() i prototypen
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date('2026-06-01'))
+
+  function navigerDag(delta: number) {
+    setSelectedDate(prev => {
+      const naeste = new Date(prev)
+      naeste.setDate(naeste.getDate() + delta)
+      return naeste
+    })
+  }
+
+  function goToday() {
+    setSelectedDate(new Date('2026-06-01'))
+  }
+
+  function handleBekraeftAflysning(ordreId: string) {
+    setBekraeftedeAflysninger(prev => new Set(prev).add(ordreId))
+  }
 
   const totalDagTons = useMemo(
     () => ordrer.reduce((sum, o) => sum + o.forventetMaengde, 0),
@@ -901,26 +993,46 @@ export function ProduktionsplanScreen() {
               Produktionsplan
             </h1>
             <p className="font-inter text-xs text-text-muted">
-              {dagensDatoFormatted()} · Nu kl. {NU_HHMM}
+              Nu kl. {NU_HHMM}
             </p>
           </div>
-          <div className="flex items-center gap-md">
-            <div className="text-right">
-              <div className="font-inter text-xxs text-text-muted uppercase tracking-wide">
-                Total i dag
-              </div>
-              <div className="font-poppins font-semibold text-lg text-text-primary">
-                {totalDagTons.toLocaleString('da-DK')} t
-              </div>
+          {/* Dato-navigator — stil fra formand/GanttScreen linje 246-267 */}
+          <div className="flex items-center gap-xxxs">
+            <button
+              onClick={() => navigerDag(-1)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-hairline text-text-muted hover:bg-soft-aqua hover:text-deep-teal transition-colors"
+              aria-label="Forrige dag"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <div className="px-sm py-xs font-inter text-sm font-medium bg-white border border-hairline rounded-lg text-text-primary min-w-[180px] text-center">
+              {formatDanskLangDato(selectedDate)}
             </div>
+            <button
+              onClick={goToday}
+              className="px-sm py-xs font-inter text-xs font-medium bg-white border border-hairline rounded-lg text-text-muted hover:bg-soft-aqua hover:text-deep-teal transition-colors"
+            >
+              I dag
+            </button>
+            <button
+              onClick={() => navigerDag(1)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-hairline text-text-muted hover:bg-soft-aqua hover:text-deep-teal transition-colors"
+              aria-label="Næste dag"
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
         </div>
       </header>
 
       {/* Hoved-grid */}
       <div className="p-md flex gap-md items-start">
-        <Timeline ordrer={ordrer} />
-        <ReceptAggregat ordrer={ordrer} anbefalinger={anbefalinger} />
+        <Timeline
+          ordrer={ordrer}
+          bekraeftedeAflysninger={bekraeftedeAflysninger}
+          onBekraeftAflysning={handleBekraeftAflysning}
+        />
+        <ReceptAggregat ordrer={ordrer} totalDagTons={totalDagTons} anbefalinger={anbefalinger} />
       </div>
 
       {/* Silo-række */}
