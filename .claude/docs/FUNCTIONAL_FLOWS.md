@@ -163,6 +163,268 @@ orders.asfalt_koersel[].egen_bil: boolean (default false)
 
 ---
 
+### Variant: Multi-produkt — sekventiel kørsel per produkt (LÅST 2026-06-03)
+
+**Forretningsregel:** En asfaltbestilling kan indeholde flere produkter (fx 180t SMA 11S + 120t GAB 0/16). Bilerne kører **sekventielt per produkt**, aldrig flettet. Det ene produkt køres helt færdig (inkl. sidste-læs-rest) før næste produkt påbegyndes.
+
+**Eksempel-flow** (ordre med 180t SMA 11S + 120t GAB 0/16, bil-kapacitet ≈25t):
+
+1. Bil 1, 2, 3, 4, 5, 6, 7 kører **SMA 11S** sekventielt (7 × 25t = 175t)
+2. Bil 8 kører **sidste læs SMA**: rest 5t (mindre end fuld lastvogn)
+3. Bil 9 starter på **GAB 0/16** fra bunden — fuldt læs
+4. Bil 10, 11, 12 fortsætter GAB sekventielt
+5. Bil 13 kører **sidste læs GAB**: rest 20t
+
+**Konsekvenser for beregninger:**
+
+- **"Forventet sidste læs" er per produkt** — IKKE én tid per ordre. Beregnes:
+  - `forventet_sidste_laes[produkt] = (ceil(produkt.tons / bil_kapacitet) − 1) × interval + foerste_laes_paa_plads + akkumuleret_offset_fra_tidligere_produkter`
+  - For første produkt: `akkumuleret_offset = 0`
+  - For produkt N: `akkumuleret_offset = sum(antal_biler_for_produkt[1..N-1]) × interval`
+- **UI-pille** i `VejeseddelRow` hedder `Forventet sidste læs` (ikke "Sidste læs") indtil chauffør faktisk har afhentet med `er_sidste_laes: true` — først da bliver det realiseret sidste læs
+- **Sidste-læs-frigivelses-flow** (Variant ovenfor) trigges PER PRODUKT — overflødige biler kan frigives når sidste-læs af det igangværende produkt er allokeret, OG der ikke er flere produkter i køen. Hvis næste produkt afventer, holdes flåden intakt.
+
+**Datamodel-konsekvens:**
+```
+orders.produkter[]: {
+  produkt_id: string,
+  asfalttype: string,
+  recept: string,
+  tons: number,
+  raekkefolge: number,           // 1, 2, 3 — kørselsrækkefølge
+  status: 'venter' | 'aktiv' | 'faerdig',
+  sidste_laes_vejeseddel_id?: string,  // sættes når sidste-læs er identificeret
+}
+```
+
+**UI-konsekvens i `OrdrePlanScreen` / `UdfoerselContent`:**
+- Vejesedler-tabellen grupperes per produkt (én sektion per produkt, sorteret efter `raekkefolge`)
+- "Forventet sidste læs"-pille vises på den sidste planlagte bil per produkt — kan blive til "Sidste læs" når faktisk afhentet
+- Cross-app: vognmandens disponering og fabrikkens produktionsplan respekterer rækkefølge (én asfalttype produceres ad gangen i fabrik)
+
+**🟡 Åbne spørgsmål:**
+- Hvad sker hvis sidste-læs af produkt A er fejlbehæftet (fx bilen taber læs) — skal vi køre en ekstra runde af produkt A før vi skifter til B, eller justere planen?
+- Skal formand kunne ændre `raekkefolge` på produkter (fx hvis kunden ringer og prioriterer GAB først)? Antagelse: ja, men kun indtil første-læs er afgang fra fabrik.
+
+#### Start-rækkefølge — formandens anbefaling af de første 3 læs (LÅST 2026-06-03)
+
+**Forretningsregel:** Formand kan angive en anbefalet biltype-rækkefølge for de **3 første læs** på en dag. Anbefalingen gælder kun biltyper (ikke specifikke køretøjer) og er IKKE hård låsning hos vognmand. Vognmand kan afvige, men forventes at ringe og forhandle hvis han ikke kan/vil følge anbefalingen.
+
+**Hvorfor 3?** Det er antallet vi har brug for til at få intervaller ordentligt i gang om morgenen. Efter de 3 første kører flåden i steady state og rækkefølge er mindre kritisk.
+
+**Datamodel-udvidelse** (på `DayPlan` eller per-dag-bil-bestillings-niveau):
+
+```ts
+startRaekkefoelge?: [string | null, string | null, string | null]
+// Array af længde 3. Værdier:
+// - biltype-streng (fx 'Grab', 'Træk', 'Solo') = anbefalet biltype på den position
+// - null = ingen anbefaling for den position
+// Tomme positioner er gyldige — formand kan vælge fx kun Nr. 1 + 3 uden Nr. 2.
+```
+
+**Tidligere `foersteLaes: boolean` på `VehicleOrder` udgår** — feltet slettes fra både type og UI. Ingen migration nødvendig (prototype).
+
+**UI — formand-side (Asfaltkørsel-sektion i OrdrePlanScreen):**
+
+Bil-listen forbliver uændret (Grab × 3, Træk × 2 etc.). UNDER bil-listen (efter "Tilføj biltype"-knappen) tilføjes en ny blok:
+
+```
+Start-rækkefølge (anbefaling til vognmand)
+─────────────────────────────────────────
+Vælg de 3 første biler i rækkefølge.
+Anbefalingen er ikke bindende — vognmand kan afvige.
+
+  Nr. 1:  [Vælg biltype ▼]
+  Nr. 2:  [Vælg biltype ▼]
+  Nr. 3:  [Vælg biltype ▼]
+```
+
+- Hver slot er en `<select>` der viser:
+  - Placeholder "Ingen anbefaling"
+  - Optionerne = de unikke biltyper fra dagens bil-bestilling (kun typer der har antal > 0)
+- Slots kan udfyldes uafhængigt (sekventielt ikke krævet — Nr. 1 og 3 uden Nr. 2 er gyldigt)
+- Hvis dagen har < 3 biler bestilt totalt, vises kun det relevante antal slots
+- **Egen bil-flow**: Hele blokken skjules (ikke relevant — én chauffør, ingen rækkefølge-koordinering)
+
+**UI — vognmand-side (VognmandDisponeringsScreen):**
+
+Over disponerings-tabellen vises en anbefalings-banner når formand har sat `startRaekkefoelge`:
+
+```
+┌─ Formand anbefaler start-rækkefølge ──────────────────────────┐
+│ Nr. 1: Grab    Nr. 2: Træk    Nr. 3: Grab                     │
+│ Du kan afvige — ring til formand hvis det ikke kan lade sig   │
+│ gøre.                                                          │
+└────────────────────────────────────────────────────────────────┘
+```
+
+Banner-stil: `bg-soft-aqua border border-light-aqua rounded-md px-md py-xs`. Tekstniveauer: header `font-poppins text-sm font-medium text-deep-teal`, anbefalings-pilles `text-xs`, fodnote `text-xxs text-text-muted`.
+
+For de første 3 læs-positioner i tabellen vises også en lille **anbefalings-pille** ved siden af "X. læs"-badgen: `(anbef. Grab)` i `text-xxs text-text-muted`. Når vognmand har tildelt en bil til positionen, og typen matcher anbefalingen → pille forsvinder (eller skifter til ✓). Hvis han har valgt anden biltype → pille beholder originalen som påmindelse.
+
+**Cross-app status:** ✅ Spec låst. Implementering dispatches.
+
+**Edge cases:**
+
+| Situation | Håndtering |
+|---|---|
+| Færre end 3 biler bestilt | Vis kun de relevante slots (1 eller 2). Egen bil-flow: blokken skjules helt. |
+| Formand vælger ingen anbefaling | Vognmand-banner skjules. Disponering fungerer som hidtil. |
+| Vognmand vælger anden biltype end anbefaling | Lille muted "(anbef. X)"-pille forbliver som påmindelse. Ingen blokering. |
+| Vognmand kan ikke skaffe anbefalet biltype | Telefonopkald til formand → formand opdaterer eller accepterer afvigelse. |
+| Samme biltype valgt flere gange (fx Grab på Nr. 1 og Nr. 3) | Gyldigt — Grab × 3 i bestillingen tillader dette. UI tjekker IKKE for unikke værdier. |
+
+---
+
+#### Per-produkt kørselsfelter — formand styrer overgange (LÅST 2026-06-03)
+
+**Forretningsregel:** Ordrer med flere produkter har typisk en "under-asfalt" først og "top-lag" oveni — med eventuelt en reparations-pause imellem. Formand definerer overgangen ved at sætte felter PER PRODUKT i Asfaltkørsel-sektionen i stedet for ét fælles sæt for hele dagen.
+
+**Felter per produkt:**
+```ts
+produkt: {
+  // ... eksisterende felter (tons, recept, raekkefolge, status)
+  foersteLaesPaaPlads?: string   // HH:mm — første læs på plads for DETTE produkt
+                                  // null = "starter når forrige produkt er færdigt"
+  intervalMin?: number            // minutter mellem læs for DETTE produkt
+                                  // Hvert produkt kan have eget interval
+}
+```
+
+**Default-adfærd:**
+- Hvis `foersteLaesPaaPlads === null` → produkt N starter når produkt N-1's sidste vejeseddel er udvejet på fabrik (sekventielt direkte)
+- Hvis udfyldt → produkt N starter på den angivne tid (eller efter forrige produkt, hvad der kommer SENEST)
+
+**UI — formand (Asfaltkørsel-sektion):**
+- Hvis ordren har 1 produkt: nuværende layout uændret (ét fælles felt-sæt)
+- Hvis ordren har 2+ produkter: ét felt-sæt PER produkt, stablet vertikalt med produkt-header
+- Reparations-pauser er IMPLICITTE (intet pause-felt) — formand sætter bare en senere start-tid på næste produkt så bliver gabet automatisk synligt
+
+**UI-mønster: Ja/Nej-toggle for produkt 2+ (LÅST 2026-06-03)**
+
+Det hyppigste tilfælde er sekventiel kørsel uden tids-buffer mellem produkter. For at undgå unødig kompleksitet i den almindelige case, bruges et toggle-mønster:
+
+- **Produkt 1 (index 0)**: viser felter (Første læs + Interval) **altid** — det er det første produkt og kræver start-tid
+- **Produkt 2 og frem (index ≥ 1)**: viser **toggle** "Køres direkte efter forrige produkt?" med Ja/Nej:
+  - **Ja (default)**: felter er skjult. Server-side betyder dette `foersteLaesPaaPlads === null` → sekventielt direkte efter forrige produkts sidste-læs.
+  - **Nej**: felter udvides (Første læs + Interval) så formand kan angive specifik start-tid (med buffer-periode imellem)
+
+**Toggle-tilstand er afledt direkte af data**, ikke separat state:
+- `ppParams.foersteLaesPaaPlads === null` ⟺ toggle = Ja
+- `ppParams.foersteLaesPaaPlads !== null` ⟺ toggle = Nej
+
+**Toggle-switching:**
+- Ja → Nej: `foersteLaesPaaPlads` sættes til en sensible default (forrige produkts tid + 2 timer; fallback `10:00`)
+- Nej → Ja: `foersteLaesPaaPlads` sættes til `null`
+
+**Hvorfor toggle-mønstret (UX-rationale):**
+- 95% af multi-produkt-ordrer kører sekventielt — toggle gør den almindelige case 0-klik
+- Felter dukker kun op når formand bevidst vil have buffer → mindre visuel støj
+- Eksplicit toggle gør det klart at "ingen tid sat" = bevidst valgt, ikke glemt input
+- Default = Ja matcher tons-drevet aktivt-produkt-logik på serveren (se "Produkt-skift-sikring under eksekvering")
+
+**UI — vognmand (Disponering):**
+- Disponerings-tabellen viser produkt-bånd i tidsrækkefølge
+- Tid-gab mellem produkter er synligt som tom-zone i tidslinjen
+- Læs-nummerering fortsætter på tværs af produkter (ikke nulstilles per produkt)
+
+**UI — fabrik (Produktionsplan):**
+- Tidslinjen viser produktion-skift med eventuelt tid-gab
+- Fabriksmesteren ved at de skal stoppe produktion mellem to forskellige recepter
+
+**🟡 Åbne spørgsmål:**
+- Hvad hvis produkt 1 bliver forsinket og dermed forsinker produkt 2's planlagte start? Antagelse: produkt 2's `foersteLaesPaaPlads` fungerer som "tidligst start" — hvis produkt 1 sluttede senere, så fortsætter B sekventielt fra produkt 1's faktiske slut.
+- Skal formand kunne ændre `foersteLaesPaaPlads` mens dagen kører? Antagelse: ja, men kun for produkter der IKKE er startet endnu.
+
+#### Produkt-skift-sikring under eksekvering (LÅST 2026-06-03)
+
+Risiko: Når aktivt produkt skifter fra A til B, må en chauffør IKKE ende med at hente forkert produkt på fabrik. Dette løses med tre lag der hver fungerer som safety net:
+
+**Lag 1 — Server som sandhed (udvidet 2026-06-03)**
+"Aktivt produkt" beregnes server-side fra ordrens reelle tilstand — vejeseddel-drevet, ikke tons-tællings-drevet:
+
+```
+For hvert produkt på ordren:
+  produkt.faerdig = (sum af UDVEJEDE vejesedler for produkt) >= produkt.tons
+
+aktivt_produkt = første produkt i raekkefolge hvor:
+  - produkt.faerdig === false   AND
+  - (produkt.foersteLaesPaaPlads === null
+     ELLER nuværende_tid >= produkt.foersteLaesPaaPlads − driveTimeMinutes)
+```
+
+**Trigger-tidspunkt for produkt-skift:** I præcis det øjeblik den sidste vejeseddel for produkt A er udvejet på fabrik (status `paa_vej_til_plads` eller senere), beregnes ny `aktivt_produkt`. Næste chauffør der NFC-scanner får produkt B's instruktion.
+
+**Chauffør er passiv:** Han kører bare runder. App + fabrik fortæller ham hvad næste læs er. Ingen tons-tælling eller tid-tjek i appen — alt er server-side.
+
+App'en spørger serveren ved hver væsentlig handling (task-åbning, fabrik-ankomst, etc.) — ALDRIG fra cache. Hvis offline, viser app sidst-kendte tilstand med "🟡 Ikke synkroniseret"-flag og opdaterer ved første netforbindelse.
+
+**Buffer-periode** (når produkt A er færdig FØR produkt B's start-tid):
+- Aktivt produkt = null
+- Chauffør-app viser banner: "Vent — næste læs (produkt B) starter kl. HH:mm. Du kan tage pause."
+- Først når `nuværende_tid >= produkt_B.foersteLaesPaaPlads − driveTimeMinutes` bliver B aktivt
+
+**Lag 2 — Fabrik-scanning er final source of truth**
+Når chauffør NFC-scanner ved Danvægt-læseren, fortæller fabrik-systemet HAM hvad han skal hente: silo X, produkt B, recept Y. Selv hvis hans app stadig viser produkt A (telefon offline, push fejlet, cache stale), så er fabrik-skærmens instruktion korrekt. App'en opdaterer sig efter scanning. Konsekvens: en chauffør kan ALDRIG ende med at hente forkert produkt — fabrikkens vejekortlæser er gatekeeper.
+
+**Lag 3 — Produkt-skift-banner i chauffør-appen**
+Når server registrerer at produkt A er afsluttet (sidste-læs A udvejet på fabrik), pushes besked til alle aktive chauffører på ordren:
+> "Produkt-skift: Næste læs er nu **GAB 0/16** (var: SMA 11S). Tjek silo-nummer ved ankomst fabrik."
+
+Næste-læs-kortet i appen får visuelt update: ny farve på produkt-pille, nyt silo-nummer, ny recept. Hvis chauffør er undervejs til fabrik når skiftet sker, ser han det inden ankomst.
+
+**Tre lag = tre safety nets:**
+- Hvis push fejler → app polling fanger ved næste sync
+- Hvis app polling fejler → fabrik-scanning fanger ved ankomst
+- Hvis chauffør ignorerer banner → fabriksmester ser ham komme og kan korrigere mundtligt
+
+---
+
+### Variant: Chauffør-afslutning af opgave (LÅST 2026-06-03)
+
+**Forretningsregel (Fase 1):** Formand styrer afslutning af opgave manuelt via telefonopkald. Ingen automatisk frigivelse i Fase 1 — eventuel app-driven push-bekræftelse udskydes til Fase 2.
+
+**Flow:**
+
+```
+1. Sidste-læs identificeres (sum_allokeret >= bestilt - bil_kapacitet)
+   → Sidste-læs-frigivelses-variant trigges (se nedenfor)
+2. Formand ringer hver chauffør efterhånden som han kan frigive dem
+   → "Vi er igennem opgaven. Du kan stoppe for i dag.
+      Vil du afslutte opgaven i appen?"
+3. Chauffør åbner sin app → trykker "Afslut dag" på den aktive opgave
+4. Vejesedlen for chaufførens næste planlagte tur (der ikke kommer)
+   får status: 'dag_afsluttet'
+5. Vejesedlen vises automatisk i formandens VejesedlerTable
+   med eksisterende "Dag afsluttet"-badge — gråtonet,
+   ikke bag collapsible (se VejesedlerTable.tsx behandling)
+```
+
+**Genbrug af eksisterende mekanik:**
+- `Vejeseddel.status = 'dag_afsluttet'` enum eksisterer allerede (`apps/formand/src/types/order.ts:211`)
+- Mock-data har eksempler (`apps/formand/src/mocks/vejesedler.ts:198, 216, 239`)
+- `VejesedlerTable.tsx` håndterer allerede gruppering + visning (`linje 72-83`)
+- Ingen nye UI-elementer kræves — kun NY trigger fra chauffør-app
+
+**Multi-produkt: chauffør frigives først når HELE ordren er færdig**
+Hvis en chauffør er på produkt A og produkt B venter, kører han videre på produkt B (sekventielt, jf. multi-produkt-reglen ovenfor). Frigivelse via formand sker først når sidste-læs af SIDSTE produkt er identificeret.
+
+**Edge cases:**
+
+| Situation | Håndtering (Fase 1) |
+|---|---|
+| Chauffør glemmer at trykke "Afslut dag" | Formand ser ingen `dag_afsluttet`-badge på vejesedlen → ringer igen. Manuel oversight. |
+| Chauffør har allerede taget næste læs på fabrik | Retur-flow trigges (se "Retur-flow for biler i transit" ovenfor) |
+| Chauffør er undervejs men ikke ved fabrik | Formand siger "kør hjem". Chauffør lukker i app. Vejeseddel-status `dag_afsluttet`. |
+| Formand glemmer at ringe | Chauffør kan ende med at køre til fabrik for endnu et læs. Fabriks-NFC-scan fanger det (server siger "ordre færdig, intet næste læs"). Chauffør får besked + kontakter formand. |
+
+**🟡 Fase 2-udvidelser (forskudt):**
+- App-driven frigivelse: formand klikker "Frigiv chauffør" → push til chauffør → bekræft-task
+- Automatisk påmindelse til formand hvis chauffør ikke bekræfter inden N min
+- Auto-frigivelse hvis sidste-læs er udlagt og chauffør har ingen aktiv læs-task
+
+---
+
 ### Variant: "Sidste læs"-frigivelse af overflødige chauffører (LÅST 2026-05-27)
 
 **Trigger:** Når formand allokerer sidste-læs (`er_sidste_laes: true` på en vejeseddel) ELLER systemet automatisk identificerer at `sum(allokerede_tons) >= bestilt_total - bil_kapacitet` for resten af dagen.
@@ -224,6 +486,182 @@ orders.asfalt_koersel[].egen_bil: boolean (default false)
 - **Push fejler:** Hvad sker hvis push-notifikation ikke når frem (telefonen er offline)? Fallback: chauffør får besked ved næste app-åbning + SMS hvis kritisk.
 - **Reserve-bil-valg:** Skal reserve-bilen vælges baseret på position (tættest på fabrik), læs-nummer (sidste i køen), eller chauffør-præference? Default: sidste i køen (mindst forstyrrelse).
 - **Afvisnings-konsekvens:** Hvis vognmand AFVISER frigivelse første gang og sidste-læs senere fejler, har vi tabt tid på automatik vs. manuel. Skal afvisning logges + advare hvis sidste-læs fejler bagefter?
+
+### Variant: Formand aflyser en dag pga. regn (LÅST 2026-06-03)
+
+**Forretningsregel:** Når formanden markerer en dag på asfaltbestillingen som aflyst pga. regn (via minus-regn-flag eller dedikeret aflys-handling), skal vognmanden se det tydeligt på sin ordre.
+
+**Trigger:** Formand toggler aflysnings-status på dag-niveau i `OrdrePlanScreen` → `dag.annulleretAarsag = 'vejr'` propagerer til vognmandens mock/datalag.
+
+**Vognmand-visning:**
+
+- **Liste-view** (`VognmandListeScreen`): På den aflyste dag-række — hele rækken får baggrund `bg-warn-bg` (pale yellow). I "Kommentar"-kolonnen vises en prominent pille:
+  ```
+  inline-flex items-center gap-xxxs px-xs py-xxs rounded-md
+  bg-yellow text-deep-teal
+  font-poppins font-semibold text-xs uppercase tracking-wide
+  ```
+  med `CloudRain`-ikon + tekst "Ordre annulleret pga. vejr". Evt. eksisterende `dag.kommentar`-tekst vises under pillen i `font-inter text-xxs text-text-muted`.
+
+- **Disponerings-view** (`VognmandDisponeringsScreen` på `/disponering/[ordreId]`): Dag-rækken får samme `bg-warn-bg` baggrund + samme vejr-pille under dato-teksten. Identisk token-sæt som liste-view så vognmanden genkender markeringen på tværs af skærme.
+
+**Data-model:**
+```ts
+type DagDisponering = {
+  // ... eksisterende felter
+  annulleretAarsag?: 'vejr'  // streng-union, kan udvides
+}
+```
+
+Feltet er optional. `undefined` = ikke aflyst. Streng-union fremfor boolean så vi senere kan udvide til `'kunde-aflysning' | 'fabrik-nedbrud' | etc.` uden migration.
+
+**Cross-app status:** ✅ Implementeret i vognmand-prototyper. Formand-side mangler — aflysning sker pt. ved manuel mock-data-edit, ikke via UI-handling fra formanden. Næste skridt: Formand skal kunne aflyse en dag fra sit OrdrePlanScreen og se status-feedback når aflysningen er propageret.
+
+#### Data-bevarelse ved dag-aflysning (LÅST 2026-06-03)
+
+**Hovedregel:** Aflysning er på DAG-niveau, ikke ordre-niveau. Ordre-ID er stabilt gennem hele forløbet. Al data der er logget på den aflyste dag op til aflysningstidspunktet skal BEVARES og gennemgå normal afregning. Aflysningen påvirker kun den **fremtidige planlægning** for dagen, ikke det allerede udførte.
+
+**Bevarede data på den aflyste dag (still goes through afregning):**
+
+| Datatype | Kilde | Afregningsflow |
+|---|---|---|
+| Chauffør-timer | Chauffør-app (registreret før aflysning) | Formand godkender i Udførelse/Afregning som normalt |
+| Bil-afregning (bil + tons) | Chauffør-app + vejekort | Tons der ER kørt indgår i akkord/time-afregning |
+| Tons-data | Vejekort fra fabrik (faktisk leveret) | Indgår i normal afregning og rapportering |
+| Materiel-afregning | Formand registrerer per dag på Materiel-sektionen | Logges på dagen som normalt |
+
+Alt det her er IKKE optional cleanup — det er obligatorisk audit-trail. Formanden skal kunne lukke afregning for den arbejdede del af dagen INDEN ordren replanlægges.
+
+**Datamodel: Booking vs. Ordre (LÅST 2026-06-03)**
+
+To begreber på forskellige niveauer:
+
+- **Ordre** = den varige enhed (entreprise-niveau). Stabilt ordre-ID gennem hele forløbet inkl. aflysninger. Akkumulerer historik på tværs af bookings.
+- **Booking** = et planlægnings-artefakt for en specifik dag: bil-bestilling + asfalt-bestilling + materielplan. Har egen lifecycle: `planlagt → bekræftet → udført` ELLER `aflyst-vejr`.
+
+Aflysning **sletter ikke** ordren — den lukker booking'en og opretter en ny. Eksekveret data (timer, kørte tons, materiel) bliver hængende på ORDREN, ikke på booking'en, så det overlever booking-lifecycle.
+
+**Replanlægnings-flow (PLAN → Formand → Vognmand + Fabrik):**
+
+1. **Trigger:** Formand markerer dag som aflyst (vejr) → booking-status sættes til `aflyst-vejr`
+2. **Booking lukkes** — bliver synlig i historik men forsvinder fra "aktive opgaver" hos vognmand. Den oprindelige booking REDIGERES IKKE — den lukkes som den var, så audit-trailen er klar.
+3. **PLAN-system reagerer:** PLAN flytter uafsluttede leverancer (resterende asfalt-mængde, holdpakke for dagen) til ny dato og sender opdaterede data tilbage til formand
+4. **Formand modtager nye data** for samme ordre — UI viser "Genplanlagt fra [oprindelig dato] pga. vejr" på den nye dag
+5. **Formand opretter ny booking på samme ordre** for den nye dato:
+   - Ny bil-bestilling for resterende mængde
+   - Ny asfalt-bestilling fra fabrik
+   - Samme ordre-ID — separat booking-ID
+6. **Cross-app notifikation** (vigtigt — propageres til begge sider):
+   - **Vognmand**: Eksisterende `ændretAfFormand`-badge (samme mekanik som ved andre formand-ændringer) tændes på ordren. Vognmand ser den lukkede booking i historik + den nye booking til disponering. Han skal disponere fra bunden — ingen automatisk overførsel af tidligere disponering.
+   - **Fabrik**: Modtager nye instrukser om biler og tons for den nye dato (fabrik-mester ser den i sin produktionsplan). Den oprindelige asfalt-bestilling forsvinder fra fabrik's aktive plan på den aflyste dato.
+
+**UX-princip:** "Slet booking + opret ny" frem for "tilpas booking" — fordi:
+- Aflysning er ikke en delvis ændring; det er en komplet planlægnings-reset
+- Tilpasning ville overskrive den oprindelige bookings data (mister audit-trail)
+- Vognmand undgår at gætte hvad der stadig gælder af hans disponering
+- Klar visuel signal: gammel forsvinder, ny dukker op
+
+**Retur-flow for biler i transit ved aflysning (LÅST 2026-06-03)**
+
+Hvis dagen aflyses mens nogle biler allerede har taget læs på fabrik og er undervejs (eller venter på pladsen uden at have udlagt), skal læsset returneres til fabrik. Asfaltens kvalitet falder hurtigt, så vi kan ikke bare lade bilerne vente.
+
+**Forretningsregler:**
+
+1. **Kun biler MED læs der IKKE er udlagt** indgår i retur-flow. Hvis chauffør allerede har udlagt læsset på pladsen, er det leveret — formand giver bare besked "stop for i dag, vi tager resten i morgen", og dagens udlagte afregnes normalt.
+2. **Formand identificerer og markerer biler individuelt** — én ad gangen efter telefonisk samtale med hver chauffør. Ingen bulk-action; det er for nuanceret (hver bil kan være i forskellig position).
+3. **Retur-task kan ikke afvises af chauffør** — formandens beslutning står. Chauffør får task i app og udfører.
+4. **Retur sker samme dag** — ingen overnatning. Læs returneres til afsender-fabrik (samme fabrik som læsset blev hentet på).
+5. **Materiel håndteres IKKE** i retur-flow. Materiel-biler/-trailere står på pladsen eller hvor de er, indtil arbejdet genoptages næste dag. Det er fysisk acceptabelt (modsat asfalt der stivner).
+6. **Fabrik-side beslutning om genbrug** — fabriksmesteren beslutter pr. produkt om returneret asfalt genbruges, kasseres eller blandes. App'ens rolle er at DOKUMENTERE returen via vejeseddel; ikke at træffe genbrugs-beslutning.
+
+**Flow-trin:**
+
+```
+1. Aflysning besluttes af formand (dag-niveau)
+2. Formand identificerer biler i transit / på plads uden udlæg
+3. PER BIL: Formand ringer chauffør → bekræfter retur
+4. Formand markerer i app: original vejeseddel får `retur_initieret = true`
+   → system genererer retur-task til chauffør
+5. Chauffør modtager task: "Kør retur til fabrik [X] med læs"
+   - Kan ikke afvises
+6. Chauffør udfører retur:
+   a. Ankomst fabrik → indvejer bil fuld (genbrug af eksisterende vejeflow)
+   b. Aflæsser i fabrik efter instruks fra fabriksmester (silo / spild)
+   c. Udvejer tom
+7. System genererer modparts-vejeseddel:
+   - type: 'retur-laesset'
+   - tons: negative (− original tons)
+   - kobles til original vejeseddel via `relateret_vejeseddel_id`
+   - oprindelig vejeseddel bevares uændret (audit-trail)
+8. Tons-bogføring:
+   - Net leveret = sum(positive vejesedler) − sum(retur-vejesedler)
+   - Ikke-leverede tons flyttes til replanlægning via PLAN
+9. Chaufførens timer afregnes normalt (kørsel ud + retur = normal kørselstid, ingen returlæs-tillæg — det blev jo aldrig udlagt på plads)
+```
+
+**Datamodel:**
+
+```ts
+type Vejeseddel = {
+  // ... eksisterende felter
+  type?: 'normal' | 'retur-laesset'    // default 'normal'
+  retur_initieret?: boolean             // formand har markeret denne til retur
+  retur_initieret_tidspunkt?: string    // ISO
+  retur_initieret_af?: string           // formand-navn
+  relateret_vejeseddel_id?: string      // peger på original ved type='retur-laesset'
+}
+```
+
+**UI-konsekvenser:**
+
+- **Formand**: På vejesedler-listen får hver oprindelig vejeseddel en "Send retur"-handling (kun synlig hvis bilen IKKE har udlagt OG dagen er aflyst). Klik åbner bekræftelses-dialog ("Har du talt med chauffør [X]?") → marker vejeseddel + generér retur-task.
+- **Formand**: Retur-vejesedler vises i listen med `bg-warn-bg` + `-X tons` i rødt + ikon der signalerer "retur".
+- **Chauffør**: Ny task-type "Retur til fabrik" — kan ikke afvises, samme veje-flow som normal afhentning men spejlet ("indvejer fuld → aflæsser → udvejer tom" i stedet for "indvejer tom → læsser → udvejer fuld").
+- **Fabrik**: Indkommende retur-bil vises i produktionsplan-tidslinjen som en BLÅ pille med "RETUR"-label (eller tilsvarende kontrast til normal-piller). Fabriksmester får ikon/notifikation om at beslutte genbrug/spild — men app'en kræver ikke aktiv handling for at lukke flowet.
+
+**🟡 Implementerings-status (2026-06-03):** Spec låst. **Kode-implementering venter til næste session.** Pille-rename ("Sidste læs" → "Forventet sidste læs") og returlæs-fjernelse er allerede gennemført i denne session som forberedelse.
+
+**Badge-lifecycle — hvornår forsvinder "Ændret af formand"? (LÅST 2026-06-03)**
+
+Eksplicit bekræftelse fjerner badge — ingen "har set"-tracking. Hver app er ansvarlig for sit eget signal:
+
+| App | Trigger der fjerner badge |
+|---|---|
+| **Vognmand** | Vognmand re-disponerer biler på den nye booking OG trykker "Bekræft ordre" (samme handling der allerede lukker `ændretAfFormand`-flag i normal-flow Trin 5). Ingen automatisk dismiss — vognmand skal aktivt acceptere ændringen. |
+| **Fabrik** | Eksplicit **"OK, set"-knap** på den ændrede ordre i produktionsplanen. Klik → badge + advarsels-baggrund fjernes. Fabriksmesteren har ingen anden formel bekræftelses-handling (silo-tildeling er ikke garanteret), så knappen er nødvendig. |
+
+Begge apps har **uafhængig lifecycle** — vognmand kan have bekræftet uden at fabrik har, og omvendt. Hver app rydder sit eget signal.
+
+Hvis dagen udløber (overgang til historik) uden bekræftelse → badge forsvinder automatisk fra aktive lister, men markeringen forbliver i historik som "håndteret uden bekræftelse".
+
+**Historik-bevarelse på ordren:**
+
+Ordren er en **append-only log** af dage. Hver dag har sin egen sektion med:
+- Status (planlagt / udført / aflyst-vejr / aflyst-andet)
+- Bestilte biler + tons for den dag
+- Faktisk udførte timer + leverede tons
+- Afregnings-status (afventer godkendelse / godkendt)
+- Eventuelle bemærkninger
+
+**Tidligere udførte dage** (både den aflyste dag op til aflysning, og dage før) skal forblive synlige på deres faktiske udførselsdato med deres afregningsdata — uanset om senere dage på ordren bliver aflyst eller replanlagt. Der slettes IKKE noget.
+
+**UI-konsekvens:**
+- Ordrekortet viser dage kronologisk
+- Aflyste dage: `bg-warn-bg` + vejr-pille (som beskrevet ovenfor) + den arbejdede dels afregning forbliver synlig
+- Replanlagte nye dage: markeret som "Genplanlagt" indtil ny bestilling er bekræftet
+- Historik kan ikke redigeres (afregning er låst efter godkendelse)
+
+**Cross-app status:** 🟡 ÅBNT — Data-bevarelse er besluttet 2026-06-03, men implementering kræver:
+- PLAN-integration (modtage genplanlægnings-data)
+- Append-only dag-struktur i mock-data (`Ordre.dage[]` med per-dag-status og locked afregning)
+- Formand-UI til at se "historik vs. ny planlægning" på samme ordre
+- Vognmand-UI til at se historik af tidligere udførte dage på en ordre der har haft aflysning
+
+**Åbne spørgsmål:**
+- Hvad sker hvis chaufføren stadig var på vej til fabrik kl. 09:00 da aflysningen kom kl. 08:55? Skal hans transport-timer dækkes selvom han ikke nåede at hente læs?
+- Hvad hvis materiellet allerede er kørt ud på pladsen — skal returkørsel logges separat?
+- Skal aflyste dage have en "ÅRSAG"-felt der er mere granuleret end bare 'vejr' (fx kunde-aflysning, fabrik-nedbrud)?
+- Kan en aflysning REVERSERES samme dag hvis vejret skifter (fx aflyst kl. 06:30, vejret klarer op kl. 09:00 og man kan arbejde alligevel)?
 
 ---
 
@@ -475,33 +913,28 @@ orders.asfalt_koersel[].egen_bil: boolean (default false)
 - **Forretningsregel:** Hvis chauffør kører flere materiel-enheder på samme bil/reg.nr → ÉN samlet afregning per chauffør (gruppering på `regnr`), IKKE per materiel-enhed.
 **Handling:** Formand kan redigere felter — eller godkende direkte hvis de stemmer.
 
-### Trin 4a — Returlæs-timer (LÅST 2026-05-27)
-**App:** formand
-**Komponent:** `ReturlaesRow` (NY) — vises i bil-afregnings-expander under de eksisterende køretimer fra app
-**Forretningsregel:** Når en chauffør slutter dagen med rest-asfalt på bilen ELLER materiel der skal retur til fabrikken, registrerer formanden ekstra timer for chaufførens retur-kørsel. Det er chaufførens kompensation for at køre tomt tilbage.
+### Trin 4a — Returlæs-timer (🚫 FLYTTET TIL FASE 2 — 2026-06-03)
 
-**UI-detaljer:**
-- Knap **"+ Returlæs"** vises som default i bunden af expanderen (under eksisterende køretimer-række)
-- Ved klik: ny række med felt for **timer** (decimal-tal, fx 1,5) + valgfri kommentar-felt + **× fjern**-knap
-- Etiket: "Returlæs (rest asfalt eller materiel retur til fabrik)"
-- Værdien LÆGGES TIL den samlede afregning (chauffør får løn for køretimer + returlæs-timer)
-- **Kun formand kan tilføje** — chauffør har ikke selv mulighed for at indberette returlæs-timer (formand er den der ved at retur-kørslen var nødvendig)
+**Status (LÅST 2026-06-03):** Returlæs-funktionalitet er **fjernet fra Fase 1**. Håndteres udenfor app i første omgang (manuel registrering hos vognmand eller via eksisterende time-rapport). Genoptages i Fase 2 — se "Fase 2 udvidelser"-sektion nederst i dokumentet.
 
-**Hvorfor manuel + ikke automatisk fra GPS:**
-- GPS kan ikke skelne mellem "kører hjem efter arbejde" og "kører til fabrik med returlæs"
-- Formand har konteksten — han ved om bilen havde rest-asfalt eller materiel med
-- Manuel registrering = klar audit-trail for afregning
+**Tidligere låst spec bevares nedenfor som reference til Fase 2-implementering** — men UI + datafelter SKAL fjernes fra Fase 1-koden:
 
-**Skriver til:** `time_registreringer.returlaes` med `{ timer: number, kommentar?: string, registreret_af_formand: bool, registreret_tidspunkt: timestamp }`. Null hvis ingen returlæs.
+~~**Forretningsregel:** Når en chauffør slutter dagen med rest-asfalt på bilen ELLER materiel der skal retur til fabrikken, registrerer formanden ekstra timer for chaufførens retur-kørsel. Det er chaufførens kompensation for at køre tomt tilbage.~~
 
-**UI-rækkefølge i expanderen:**
-1. Køretimer (fra chauffør-app)
-2. Ventetid (fra chauffør-app)
-3. Pause (fra chauffør-app — kun asfalt-time)
-4. **Returlæs** (NY — manuel formand-indtastning)
-5. Total-linje
-6. Chauffør-kommentar
-7. Godkend-knap
+~~**UI-detaljer:**~~
+- ~~Knap **"+ Returlæs"** vises som default i bunden af expanderen (under eksisterende køretimer-række)~~
+- ~~Ved klik: ny række med felt for **timer** (decimal-tal, fx 1,5) + valgfri kommentar-felt + **× fjern**-knap~~
+- ~~Etiket: "Returlæs (rest asfalt eller materiel retur til fabrik)"~~
+- ~~Værdien LÆGGES TIL den samlede afregning (chauffør får løn for køretimer + returlæs-timer)~~
+- ~~**Kun formand kan tilføje** — chauffør har ikke selv mulighed for at indberette returlæs-timer~~
+
+~~**Skriver til:** `time_registreringer.returlaes` med `{ timer: number, kommentar?: string, registreret_af_formand: bool, registreret_tidspunkt: timestamp }`.~~
+
+**Fjernet fra Fase 1-kode:**
+- `Afregning.returlaes_timer` (type-felt)
+- `Afregning.returlaes_kommentar` (type-felt)
+- "+ Returlæs"-knap + relateret UI i `OrdrePlanScreen` (afregnings-expander)
+- `updateAfregningField`-kald for `returlaes_timer` / `returlaes_kommentar`
 
 ### Trin 5 — Formand godkender afregning (direkte, ingen modal)
 **App:** formand
@@ -812,6 +1245,77 @@ hvor `densitet_kg_per_m3` er heltal fra `recepter[receptkode].densitet` (fx 2400
 
 ### Trin 5 — Fase 2 (ikke i MVP)
 **Forretningsønske:** Temperaturregistrering flyttes til chauffør-app så formanden kan stå i marken. UI-mønstret i `TemperaturBadge` skal designes med tanke på dette — datafeltet (`plan_vejebilag.temperatur`) er det samme uanset hvem der skriver.
+
+---
+
+## Flow 9b: Ekstra tons på dagen — Formand → Fabrik (telefon) → PLAN → Apps (LÅST 2026-06-03)
+
+**Beslutning (LÅST 2026-06-03):** Funktionen "Ekstra bestilling" i `OrdrePlanScreen` Asfaltbestilling-rækken **fjernes** fra Fase 1. Hvis formand har brug for ekstra tons på dagen — fx fordi kunden vil have ekstra meter, eller plan-fejl undervejs — ringer han direkte til fabrikken og bestiller mundtligt. PLAN-systemet opdateres med de nye forventede tons, og data-pull til apps sker automatisk.
+
+**Hvorfor fjernet:**
+- App-baseret ekstra-bestilling kompliccerede data-modellen (separate `ekstra_bestillinger`-objekter)
+- Fabrik skal alligevel bekræfte mundtligt at kapacitet er ledig
+- Telefonopkald er allerede del af workflow → minimal ekstra friktion
+- PLAN er allerede source-of-truth for tons-figurer; det er renere at lade PLAN holde de officielle tal
+
+**Flow:**
+
+```
+1. Formand opdager behov for ekstra tons på dagen
+2. Formand ringer fabrik direkte → bekræfter mundtligt om kapacitet er ledig
+   - Hvis fabrik kan IKKE levere: telefonopkaldet håndterer afvisningen.
+     App'en ser intet — formand finder anden løsning udenfor app.
+3. Fabrik opdaterer PLAN med nye tons-figurer for dagen
+   (eller PLAN opdateres manuelt af formand/koordinator)
+4. PLAN pusher opdaterede tons til formand-app
+   - Felter ramt: ordre.produkter[].tons stiger (eller dag.tonsForventet)
+   - Eksisterende produkt-boks viser ny værdi
+5. Banner-markering i formand-app:
+   "Tons opdateret af Fabrik" — vises som info-banner øverst i
+   Asfaltbestilling-rækken indtil formand klikker "OK, set"
+6. Vejeseddel-listen udvides automatisk
+   - Flere tons → flere planlagte vejesedler genereret
+   - "Forventet sidste læs"-pille flyttes til ny sidste bil per produkt
+7. Vognmand ser opdaterede tons naturligt i sin liste
+   - INGEN "Ændret af formand"-badge — fordi det IKKE er formand
+     der ændrede; det er PLAN der pusher ny realitet
+   - Vognmand opdaterer disponering hvis flere biler behoves
+8. Fabrik ser opdateret produktionsplan med ny tons-total
+   (samme PLAN-pull-mekanik som anden plan-data)
+```
+
+**UI-konsekvenser:**
+
+- **Formand**: Fjernet UI: `EkstraBestillingBox`, "+ Ekstra"-knap, ekstra-bestilling-state, ekstra-bestilling-mock. Bevaret: Eksisterende produkt-bokse (`ProductBoxV2`) — det er her tons-stigningen vises.
+- **Formand**: Ny info-banner i Asfaltbestilling-rækken når PLAN har opdateret tons — tekst "Tons opdateret af Fabrik [tidspunkt]" + lille "OK, set"-knap der dismisser banneret. Banner persisterer indtil dismissed.
+- **Vognmand**: Ingen ny mekanik. Eksisterende tons-felt opdateres automatisk via samme data-pull-pipeline som al anden ordre-data. Vognmand ser bare nyt antal og handler.
+- **Fabrik**: Samme — produktionsplan opdateres via PLAN-pull. Ingen nye notifikationer eller knapper.
+
+**"Send til fabrik"-knappens udvidelse (LÅST 2026-06-03):**
+
+Knappen i `OrdrePlanScreen` Asfaltbestilling-rækken udvides med fabriksnavnet nederst — bottom-aligned, lille font (`text-xxs`). Tekst-hierarki bliver:
+```
+[Truck-ikon]
+Send til fabrik          ← font-poppins text-sm
+N bestillinger klar      ← font-inter text-xxs (eksisterende status)
+[mt-auto spacer]
+PROD A EAST KØGE PH      ← font-inter text-xxs (ny — bottom-aligned)
+```
+
+Fabriksnavnet hentes fra **ordrens tildelte standard-fabrik**. I prototypen hardcodes til "PROD A EAST KØGE PH" (samme værdi som mock-vejesedlerne bruger), eller læses fra `ordre.fabrik` hvis det findes på top-niveau.
+
+**Datamodel-konsekvens (kun deletion):**
+
+- `EkstraBestilling`-interface fjernes
+- `ekstra_bestillinger`-tabel fjernes fra Supabase-skemaet (når relevant)
+- `ordre.produkter[].tons` bliver eneste tons-felt (ingen separat ekstra-tons-felt)
+- `tons_opdateret_af_fabrik?: { tidspunkt: string, dismissed: boolean }` tilføjes per-dag for banner-tracking
+
+**Samles på en bil — afgrænsning ift. denne ændring:**
+
+"Samles på en bil"-checkbox forbliver **kun på PRODUKTER** (`ProductBoxV2`). Den fjernes fra ekstra-bestilling-konstruktet (som ikke længere findes). Brugs-mønstret er uændret: typisk små ordrer hvor flere produkter hentes på samme bil — trigges multi-produkt-loading-flow i chauffør-appen (9-trins fabrik-script, se `[[project_samles_paa_en_bil_marker]]` og Flow 12).
+
+**🟡 Implementerings-status:** Spec LÅST 2026-06-03. Kode-ændring dispatches efter denne sektion.
 
 ---
 
@@ -1570,3 +2074,33 @@ afregninger                                   // fra Colas til vognmand
   - Chauffør-app surfacer feltet i fase 2 (TBD: badge på ordre-kort eller i task-detail). Vognmand bruger feltet til disponering — fx undgå chauffører der ikke vil/kan tage natarbejde
 - **Helligdage skal markeres som weekend i Gantt (produktion)** — Prototypens weekend-tint (`bg-surface-2`/`bg-good-bg` på dag-headers + cells) skal i produktion udvides til en dansk kalender med mærkedage: nytårsdag, skærtorsdag, langfredag, 2. påskedag, store bededag, Kr. himmelfartsdag, 2. pinsedag, juleaften, juledag, 2. juledag, nytårsaftensdag. Helligdage skal rendres med SAMME visuelle stil som weekender. Konsekvens for `tidsvindue: 'weekend'`-overlay: bør udvides til at dække helligdage også (TBD ved Supabase-kobling — kræver enten helligdagskalender-tabel eller server-side beregning)
 - **Chauffør-app erstatter Danvægt-vejekort via NFC HCE (antagelse, afventer kunde-bekræftelse)** — Den planlagte arkitektur er at chauffør-appen fungerer som virtuelt NFC-kort: chaufføren holder telefonen hen til Danvægt-læseren, der identificerer ham som med dagens fysiske kort. Teknik: **Host Card Emulation (HCE)** på Android, Apple Wallet-pass på iOS. **Forudsætning:** Danvægt-læseren skal bruge **13,56 MHz NFC (ISO 14443-A/B)**. "RFID" er bredt — kun NFC-frekvensen kan emuleres. Hvis læseren er 125 kHz LF-RFID eller UHF, virker det IKKE og kræver hardware-skift hos Danvægt. Konsekvenser ved positiv bekræftelse: (1) chauffør-app skal hver morgen hente et nyt "kort-ID" via PLAN-integration (svarer til dagens kort-omkodning), (2) backup-flow nødvendigt for glemt telefon/fladt batteri/NFC-fejl, (3) iOS-flåde kræver Apple Wallet-pass-integration eller standardisering på Android. Se `Docs/Formand/AFKLARING_Multi-produkt_og_Vejekort.md` Q23-29 for åbne spørgsmål.
+
+---
+
+## Fase 2 udvidelser
+
+Funktionalitet der er IDENTIFICERET og delvist DESIGNET, men ikke skal i Fase 1. Håndteres udenfor app eller via eksisterende systemer i første omgang. Reaktiveres i Fase 2 efter feedback fra brugere på Fase 1.
+
+### F2-1: Returlæs-flow (forskudt fra 2026-06-03)
+
+**Original status:** LÅST 2026-05-27 (Flow 4 Trin 4a) — fuld UI-spec + datamodel klar.
+
+**Hvorfor flyttet til Fase 2:**
+- Returlæs er en relativ sjælden hændelse (rest-asfalt eller materiel der skal retur)
+- Manuel registrering i Fase 1 sker udenfor app (vognmand-time-rapport eller telefonisk)
+- Fase 1-fokus er på de daglige hyppige flows; returlæs er et "afregningstillæg" der kan tilføjes senere uden brud
+
+**Fase 2-scope:**
+- Genaktivér UI i `BilAfregningExpander` / `MaterielAfregningExpander` (formand-side)
+- Datafelt `time_registreringer.returlaes: { timer, kommentar, registreret_af_formand, registreret_tidspunkt }`
+- "+ Returlæs"-knap, gen-formand-only registrering, total-linje inkluderer returlæs-timer
+- Se gennemstreget spec i Flow 4 Trin 4a for fuld detalje
+
+**Bevarede åbne spørgsmål til Fase 2:**
+- Skal chaufføren kunne FORESLÅ returlæs-timer (formand godkender)? — overvejes ved Fase 2-genstart
+- Skal returlæs-timer have egen sats (anden end normale køretimer)?
+- Hvordan håndteres returlæs der spænder over midnat?
+
+### F2-2: (placeholder for fremtidige udvidelser)
+
+Tilføj nye Fase 2-items her efterhånden som de identificeres og udskydes.
