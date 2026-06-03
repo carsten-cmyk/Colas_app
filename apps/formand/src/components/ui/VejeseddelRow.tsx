@@ -171,16 +171,16 @@ export function VejeseddelRow({
         {vejeseddel.vejeseddelNr ?? <Dash />}
       </td>
 
-      {/* Nummerplade + evt. "Sidste læs"-pille */}
+      {/* Nummerplade + evt. "Forventet sidste læs"-pille */}
       <td className="font-inter text-xs text-text-primary px-xs py-xs tabular-nums">
         <span className="inline-flex items-center gap-xs">
           {vejeseddel.regnr}
           {vejeseddel.er_sidste_laes && (
             <span
               className="font-inter text-xxs font-semibold px-xs py-xxxs rounded-full bg-yellow text-deep-teal whitespace-nowrap"
-              title="Sidste læs — indeholder rest af bestilt total"
+              title="Forventet sidste læs — estimat for bil med rest-mængde indtil faktisk afhentet"
             >
-              Sidste læs
+              Forventet sidste læs
             </span>
           )}
         </span>

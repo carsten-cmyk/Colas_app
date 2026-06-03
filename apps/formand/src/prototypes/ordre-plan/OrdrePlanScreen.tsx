@@ -22,6 +22,7 @@ import {
   MessageSquare,
   Layers,
   AlertTriangle,
+  Info,
 } from 'lucide-react'
 import { TopBar } from '@/components/layout/TopBar'
 import { BottomTabBar } from '@/components/layout/BottomTabBar'
@@ -50,6 +51,12 @@ interface DayPlan {
   morgenTons?: number  // morgen-bekræftelse
   cancelled: boolean
   cancelReason?: CancelReason
+  /** Flow 9b: PLAN har opdateret tons på dagen — vises som banner i Asfaltbestilling-rækken */
+  // TODO: Erstat med Supabase når klar — hent fra plan_dag_opdatering-tabel
+  tonsOpdateretAfFabrik?: {
+    tidspunkt: string  // ISO
+    dismissed: boolean
+  }
 }
 
 interface MockProduct {
@@ -92,7 +99,6 @@ interface VehicleOrder {
   id: string
   type: string
   antal: number
-  foersteLaes?: boolean
 }
 
 interface KørselPause {
@@ -109,6 +115,15 @@ interface KørselDayParams {
   firstLoadTime?: string
   lastLoadTime: string
   pauses: KørselPause[]
+}
+
+/** Per-produkt kørselsfelter — formand styrer overgange (FUNCTIONAL_FLOWS § "Per-produkt kørselsfelter") */
+// TODO: Erstat med Supabase når klar — gemmes på plan_dag_produkt-rækken
+interface ProduktKørselParams {
+  /** HH:mm — null = "starter sekventielt efter forrige produkt" */
+  foersteLaesPaaPlads: string | null
+  /** Minutter mellem hvert læs for dette produkt */
+  intervalMin: number | null
 }
 
 const VEHICLE_TYPES: { label: string; tons: number }[] = [
@@ -130,28 +145,6 @@ const DEFAULT_KØRSEL_PARAMS: KørselDayParams = {
   firstLoadTime:   undefined,
   lastLoadTime:    '15:00',
   pauses:          [],
-}
-
-// ─── Ekstra-bestilling ──────────────────────────────────────────────────────
-// Drip-bestilling der opstår når formand løbende på dagen bestiller mere asfalt
-// end den oprindelige morgen-tons rakte.
-//   - "Samles på en bil" (puljelaes) ON: ekstra deler bil med andre ekstras (samme ordre, samme dag)
-//     → implicit gruppe; ingen eksplicit parring
-//   - "Samles på en bil" (multilaes) ON: ekstra udvider scope til andre ordrer (samme dag);
-//     union af produkter i dropdown → fordeling om aftenen via vejesedler/bilafregning
-// De to scopes er adskilte og kan kombineres. "Multilæs" som visuel kategori fjernet — se fordeling-mekanikken.
-// TODO: Erstat med Supabase når klar — fordeling pr. ordre afgøres om aftenen via vejesedler.
-interface EkstraBestilling {
-  id: string
-  date: string             // YYYY-MM-DD — samme dag som morgen-bestillingen
-  productId: string        // produkt-reference
-  tons: number
-  samlesPaaEnBil: boolean  // deler bil med andre ekstras på samme ordre+dato — label: "Samles på en bil"
-  puljelaes: boolean       // data-flag bevaret for vejeseddel-kompatibilitet — ikke vist i UI
-  multilaes: boolean       // data-flag bevaret for vejeseddel-kompatibilitet — ikke vist i UI (samleordre-konceptet erstatter)
-  // Faste defaults — fjernet som UI-toggle (samleordre-mode håndterer cross-ordre fordeling)
-  andreOrdrer: string[]
-  sent: boolean
 }
 
 // ─── Andre ordrer på dagen (for multilæs-picker + ordre-pille-strip) ──────
@@ -255,7 +248,7 @@ const INITIAL_PRODUCTS: MockProduct[] = [
     temperaturmaaling: 2,
     days: [
       { id: 'd2-1', day: 1, date: '2026-03-16', tonsPlanned: 250, cancelled: false },
-      { id: 'd2-2', day: 2, date: '2026-03-17', tonsPlanned: 250, cancelled: false },
+      { id: 'd2-2', day: 2, date: '2026-03-17', tonsPlanned: 250, cancelled: false, tonsOpdateretAfFabrik: { tidspunkt: '2026-03-17T06:14:00', dismissed: false } },
       { id: 'd2-3', day: 3, date: '2026-03-18', tonsPlanned: 252, cancelled: false },
     ],
   },
@@ -548,10 +541,6 @@ interface ChauffoerAfregning {
   pause?: number
   tons_koert?: number            // fra PLAN vejebilag (mock for nu)
   chauffoer_kommentar?: string
-  // Returlæs — manuel formand-registrering
-  // null = ikke aktiveret, 0+ = aktiv med timer-værdi
-  returlaes_timer?: number | null
-  returlaes_kommentar?: string
   // State
   godkendt_af_formand: boolean
   godkendt_tidspunkt?: string
@@ -838,9 +827,6 @@ export function OrdrePlanScreen() {
   const [selectedPlanDate, setSelectedPlanDate] = useState<string>(
     initialPlanDate ?? dateToString(TODAY)
   )
-  // Ekstra-bestillinger pr. dato
-  // TODO: Erstat med Supabase når klar
-  const [ekstraBestillinger, setEkstraBestillinger] = useState<EkstraBestilling[]>([])
   // "Samles på en bil" per produkt+dag: key = `${productId}__${dayId}`
   // TODO: Erstat med Supabase når klar
   const [productSamlesFlags, setProductSamlesFlags] = useState<Record<string, boolean>>({})
@@ -887,6 +873,24 @@ export function OrdrePlanScreen() {
       { id: 'vo-d22-1', type: '6 Aks', antal: 2 },
     ],
   })
+  // TODO: Erstat med Supabase når klar — anbefaling gemmes på ordrens dag-post
+  // Demo: d2-1 (2026-03-16) viser anbefaling til vognmand-siden
+  const [startRaekkefoelge, setStartRaekkefoelge] = useState<Record<string, [string | null, string | null, string | null]>>({
+    'd2-1': ['6 Aks', '7 Aks', null],
+  })
+
+  function updateStartRaekkefoelge(dayId: string, position: 0 | 1 | 2, value: string | null) {
+    setStartRaekkefoelge(prev => ({
+      ...prev,
+      [dayId]: (() => {
+        const current = prev[dayId] ?? [null, null, null] as [string | null, string | null, string | null]
+        const next = [...current] as [string | null, string | null, string | null]
+        next[position] = value
+        return next
+      })()
+    }))
+  }
+
   const [kørselParams, setKørselParams] = useState<Record<string, KørselDayParams>>({})
   // TODO: Erstat med Supabase når klar — km-værdi gemmes på ordren, default fra Google API
   const GOOGLE_KM = 36 // Google-beregnet køreafstand — bruges som hint hvis formand redigerer
@@ -895,6 +899,23 @@ export function OrdrePlanScreen() {
   const [materielKommentar, setMaterielKommentar] = useState<Record<string, string>>({})
   const [vognmandBekraeftelser] = useState<Record<string, VognmandBekraeftelse>>(INITIAL_VOGNMAND_BEKRAEFTELSER)
   const [vognmandMaterielBekraeftelse] = useState<VognmandMaterielBekraeftelse>(INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE)
+
+  // Per-produkt kørselsfelter — key = `${productId}__${dayId}`
+  // TODO: Erstat med Supabase når klar — gemmes på plan_dag_produkt per ordre
+  // Demo: d1-1 (GAB I 2026-03-17) har foersteLaesPaaPlads=07:15, intervalMin=20
+  //       d2-2 (SMA 11S 2026-03-17) har foersteLaesPaaPlads=null (sekventielt), intervalMin=15
+  const [produktKørselParams, setProduktKørselParams] = useState<Record<string, ProduktKørselParams>>({
+    'p1__d1-1': { foersteLaesPaaPlads: '07:15', intervalMin: 20 },
+    'p2__d2-2': { foersteLaesPaaPlads: null,    intervalMin: 15 },
+  })
+
+  function updateProduktKørsel(productId: string, dayId: string, field: keyof ProduktKørselParams, value: string | number | null) {
+    const key = `${productId}__${dayId}`
+    setProduktKørselParams(prev => ({
+      ...prev,
+      [key]: { ...(prev[key] ?? { foersteLaesPaaPlads: null, intervalMin: null }), [field]: value },
+    }))
+  }
 
   // ── Udlægning state (løftet til root så AfregningContent + UdfoerselContent deler det) ──
   // TODO: Erstat med Supabase når klar — hent fra plan_vejebilag + dagplan
@@ -944,9 +965,6 @@ export function OrdrePlanScreen() {
       .filter((x): x is { product: MockProduct; day: DayPlan } => !!x.day)
   }, [products, selectedPlanDate])
 
-  // Ekstra-bestillinger for valgt dag
-  const ekstraForSelectedDate = ekstraBestillinger.filter(eb => eb.date === selectedPlanDate)
-
   // Default ordre/produkt på dato-skift: hvis det fokuserede produkt ikke har et
   // day-objekt for selectedPlanDate, skift til første produkt der HAR en day på dagen.
   // Sikrer at Spec-grid altid viser noget meningsfuldt.
@@ -991,30 +1009,20 @@ export function OrdrePlanScreen() {
     ))
   }
 
-  function addEkstraBestilling() {
-    // Tom default så "Vælg produkt"-placeholder vises i dropdown'en
-    setEkstraBestillinger(prev => [
-      ...prev,
-      {
-        id: `eb-${Date.now()}`,
-        date: selectedPlanDate,
-        productId: '',
-        tons: 0,
-        samlesPaaEnBil: false,
-        puljelaes: false,   // data-flag — ikke vist i UI
-        multilaes: false,   // data-flag — ikke vist i UI
-        andreOrdrer: [],
-        sent: false,
-      },
-    ])
-  }
-
-  function updateEkstraBestilling(id: string, patch: Partial<EkstraBestilling>) {
-    setEkstraBestillinger(prev => prev.map(eb => eb.id === id ? { ...eb, ...patch } : eb))
-  }
-
-  function removeEkstraBestilling(id: string) {
-    setEkstraBestillinger(prev => prev.filter(eb => eb.id !== id))
+  /** Flow 9b: Formand kvitterer for Fabrik-opdaterede tons — skjuler banner */
+  function dismissTonsOpdateret(productId: string, dayId: string) {
+    setProducts(prev => prev.map(p =>
+      p.id === productId
+        ? {
+            ...p,
+            days: p.days.map(d =>
+              d.id === dayId && d.tonsOpdateretAfFabrik
+                ? { ...d, tonsOpdateretAfFabrik: { ...d.tonsOpdateretAfFabrik, dismissed: true } }
+                : d
+            ),
+          }
+        : p
+    ))
   }
 
   // Samleordrens dato — bruges af 'Tilføj ordre'-flow til at kalde Dagsoversigt
@@ -1044,9 +1052,6 @@ export function OrdrePlanScreen() {
       .filter(({ day }) => !sentDayIds.has(day.id))
       .map(({ day }) => day.id)
     setSentDayIds(prev => new Set([...prev, ...dayIds]))
-    // Send også ikke-sendte ekstra-bestillinger for dagen
-    const ekstraIds = ekstraForSelectedDate.filter(eb => !eb.sent && eb.tons > 0).map(eb => eb.id)
-    setEkstraBestillinger(prev => prev.map(eb => ekstraIds.includes(eb.id) ? { ...eb, sent: true } : eb))
   }
 
   function removeResource(id: string) {
@@ -1491,8 +1496,39 @@ export function OrdrePlanScreen() {
                 )}
               </div>
 
+              {/* Flow 9b: Tons opdateret af Fabrik — banner over produkt-bokse */}
+              {(() => {
+                // Vis banner hvis mindst ét produkt på valgt dag har tonsOpdateretAfFabrik (ikke dismissed)
+                const aktivBanner = productsForSelectedDate.find(
+                  ({ day }) => day.tonsOpdateretAfFabrik && !day.tonsOpdateretAfFabrik.dismissed
+                )
+                if (!aktivBanner) return null
+                const { product, day } = aktivBanner
+                const tidspunkt = day.tonsOpdateretAfFabrik!.tidspunkt
+                const kl = new Date(tidspunkt).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })
+                return (
+                  <div className="flex items-center gap-xs px-sm py-xs rounded-md bg-warn-bg border border-warning mb-xs">
+                    <Info size={15} className="text-deep-teal flex-shrink-0" aria-label="Information" />
+                    <div className="min-w-0">
+                      <span className="font-inter text-sm font-medium text-text-primary leading-tight block">
+                        Tons opdateret af Fabrik
+                      </span>
+                      <span className="font-inter text-xxs text-text-muted leading-tight">
+                        i dag kl. {kl}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => dismissTonsOpdateret(product.id, day.id)}
+                      className="ml-auto inline-flex items-center gap-xxxs px-xs py-xxxs rounded-md bg-deep-teal text-white font-inter text-xxs font-semibold whitespace-nowrap flex-shrink-0"
+                    >
+                      OK, set
+                    </button>
+                  </div>
+                )
+              })()}
+
               {/* items-stretch + flex-1 på bokse: alle kolonner stretcher til samme højde
-                  (drevet af højeste boks, fx ekstra med åben multilæs-picker).
+                  (drevet af højeste boks).
                   StatusPills havner aligned på én linje. */}
               <div className="flex gap-xs flex-wrap items-stretch">
                 {/* Produkt-bokse for valgt dag — status-pill under (ingen send-knap, kun statusfelt) */}
@@ -1547,47 +1583,10 @@ export function OrdrePlanScreen() {
                   })
                 })()}
 
-                {/* Ekstra-bestilling-bokse for valgt dag */}
-                {ekstraForSelectedDate.map(eb => {
-                  return (
-                    <div key={eb.id} className="flex flex-col gap-xs">
-                      <EkstraBestillingBox
-                        ekstra={eb}
-                        products={products}
-                        onUpdate={(patch) => updateEkstraBestilling(eb.id, patch)}
-                        onRemove={() => removeEkstraBestilling(eb.id)}
-                      />
-                      <StatusPill
-                        kind={eb.sent ? 'sendt' : 'afventer'}
-                        afventerLabel={eb.tons <= 0 ? 'Indtast tons' : 'Klar til afsendelse'}
-                      />
-                    </div>
-                  )
-                })}
-
-                {/* + Ekstra-bestilling-knap */}
-                {productsForSelectedDate.length > 0 && (
-                  <div className="flex flex-col gap-xs">
-                    <button
-                      onClick={addEkstraBestilling}
-                      className="w-[160px] min-h-[172px] flex-1 rounded-xl border border-dashed border-hairline-2 bg-white hover:border-dark-teal hover:bg-soft-aqua flex flex-col items-center justify-center gap-xs p-sm transition-colors group"
-                    >
-                      <div className="w-9 h-9 rounded-full bg-soft-aqua group-hover:bg-white border border-hairline flex items-center justify-center">
-                        <Plus size={18} className="text-deep-teal" />
-                      </div>
-                      <span className="font-inter font-semibold text-xs text-text-primary text-center">Ekstra-bestilling</span>
-                      <span className="font-inter text-xxs text-text-muted text-center px-xxs leading-tight">Bestil ekstra asfalt til dagen</span>
-                    </button>
-                    {/* Tom placeholder så højde matcher andre kolonner med status-pill */}
-                    <div className="w-[160px] h-[24px]" aria-hidden="true" />
-                  </div>
-                )}
-
-                {/* "Send til fabrik" CTA — én delt knap der sender alle ikke-sendte */}
+                {/* "Send til fabrik" CTA — én delt knap der sender alle ikke-sendte produkter */}
                 {productsForSelectedDate.length > 0 && (() => {
                   const ikkeSendteProdukter = productsForSelectedDate.filter(({ day }) => !sentDayIds.has(day.id))
-                  const ikkeSendteEkstra = ekstraForSelectedDate.filter(eb => !eb.sent && eb.tons > 0)
-                  const totalIkkeSendt = ikkeSendteProdukter.length + ikkeSendteEkstra.length
+                  const totalIkkeSendt = ikkeSendteProdukter.length
                   const disabled = totalIkkeSendt === 0
                   return (
                     <div className="flex flex-col gap-xs">
@@ -1595,20 +1594,27 @@ export function OrdrePlanScreen() {
                         onClick={() => setShowConfirmSend(true)}
                         disabled={disabled}
                         className={[
-                          'w-[160px] min-h-[172px] flex-1 rounded-xl flex flex-col items-center justify-center gap-xs p-sm transition-all border',
+                          'w-[160px] min-h-[172px] flex-1 rounded-xl flex flex-col items-center p-sm transition-all border',
                           disabled
                             ? 'bg-[#F5F5F5] border-hairline opacity-40 cursor-not-allowed'
                             : 'bg-warning border-warning hover:opacity-90 active:scale-[0.98]',
                         ].join(' ')}
                       >
-                        <div className={`w-10 h-10 rounded-full ${disabled ? 'bg-white' : 'bg-deep-teal/15'} flex items-center justify-center`}>
-                          <Truck size={20} className="text-deep-teal" />
+                        {/* Center-gruppe: ikon + label + status — vertikalt centreret via my-auto */}
+                        <div className="my-auto flex flex-col items-center gap-xs">
+                          <div className={`w-10 h-10 rounded-full ${disabled ? 'bg-white' : 'bg-deep-teal/15'} flex items-center justify-center`}>
+                            <Truck size={20} className="text-deep-teal" />
+                          </div>
+                          <span className="font-poppins font-medium text-sm text-deep-teal text-center leading-tight">
+                            Send til fabrik
+                          </span>
+                          <span className="font-inter text-xxs text-deep-teal/70 text-center px-xxs leading-tight">
+                            {disabled ? 'Intet at sende' : `${totalIkkeSendt} bestilling${totalIkkeSendt === 1 ? '' : 'er'} klar`}
+                          </span>
                         </div>
-                        <span className="font-poppins font-medium text-sm text-deep-teal text-center leading-tight">
-                          Send til fabrik
-                        </span>
-                        <span className="font-inter text-xxs text-deep-teal/70 text-center px-xxs leading-tight">
-                          {disabled ? 'Intet at sende' : `${totalIkkeSendt} bestilling${totalIkkeSendt === 1 ? '' : 'er'} klar`}
+                        {/* Fabriksnavn — bottom-aligned (sidste flex-child) */}
+                        <span className="font-inter text-xxs text-deep-teal/70 text-center leading-tight">
+                          PROD A EAST KØGE PH
                         </span>
                       </button>
                       {sentKommentarer[selectedPlanDate] ? (
@@ -1662,7 +1668,7 @@ export function OrdrePlanScreen() {
                   const totalCapacity = singleLoadCapacity * (roundsPerTruck || 1)
                   const capacityOk = totalCapacity >= day.tonsPlanned
 
-                  function updateOrder(id: string, field: 'type' | 'antal' | 'foersteLaes', value: string | number | boolean) {
+                  function updateOrder(id: string, field: 'type' | 'antal', value: string | number) {
                     setKørselOrders(prev => ({
                       ...prev,
                       [day.id]: (prev[day.id] ?? []).map(o => o.id === id ? { ...o, [field]: value } : o),
@@ -1695,10 +1701,26 @@ export function OrdrePlanScreen() {
                             <div className="flex items-center gap-xs flex-wrap justify-end">
                               <span className="inline-flex items-center gap-sm px-sm py-xxxs rounded-lg bg-[#E7F4EE] font-inter text-xs font-medium text-text-primary whitespace-nowrap">
                                 <span>{orders.reduce((s, o) => s + o.antal, 0)} biler bestilt</span>
-                                <span className="text-text-muted">·</span>
-                                <span>Interval {params.intervalMinutes != null ? `${params.intervalMinutes} min` : '–'}</span>
-                                <span className="text-text-muted">·</span>
-                                <span>Første læs {params.firstLoadTime || '–'}</span>
+                                {/* Multi-produkt: vis "Multi-produkt" i stedet for ét sæt tal */}
+                                {(() => {
+                                  const dagProdukter = products.filter(p => p.days.some(d => d.date === day.date))
+                                  if (dagProdukter.length >= 2) {
+                                    return (
+                                      <>
+                                        <span className="text-text-muted">·</span>
+                                        <span>{dagProdukter.length} produkter · per-produkt interval</span>
+                                      </>
+                                    )
+                                  }
+                                  return (
+                                    <>
+                                      <span className="text-text-muted">·</span>
+                                      <span>Interval {params.intervalMinutes != null ? `${params.intervalMinutes} min` : '–'}</span>
+                                      <span className="text-text-muted">·</span>
+                                      <span>Første læs {params.firstLoadTime || '–'}</span>
+                                    </>
+                                  )
+                                })()}
                               </span>
                               {/* Vognmand status badge */}
                               {bekraeftelse ? (
@@ -1788,17 +1810,6 @@ export function OrdrePlanScreen() {
                                         <X size={14} />
                                       </button>
                                     </div>
-                                    {o.type === 'Grab' && (
-                                      <label className="inline-flex items-center gap-xxxs cursor-pointer ml-xxxs">
-                                        <input
-                                          type="checkbox"
-                                          checked={o.foersteLaes ?? false}
-                                          onChange={e => updateOrder(o.id, 'foersteLaes', e.target.checked)}
-                                          className="accent-dark-teal w-[14px] h-[14px]"
-                                        />
-                                        <span className="font-inter text-xs text-text-secondary">Angiv som første læs</span>
-                                      </label>
-                                    )}
                                   </div>
                                 )
                               })}
@@ -1809,6 +1820,39 @@ export function OrdrePlanScreen() {
                                 <Plus size={15} />
                                 Tilføj biltype
                               </button>
+
+                              {/* Start-rækkefølge — anbefaling til vognmand */}
+                              {orders.length > 0 && (
+                                <div className="mt-md pt-sm border-t border-hairline">
+                                  <h4 className="font-poppins text-sm font-medium text-text-primary mb-xxs">
+                                    Start-rækkefølge (anbefaling til vognmand)
+                                  </h4>
+                                  <p className="font-inter text-xs text-text-muted mb-xs">
+                                    Vælg de 3 første biler i rækkefølge. Anbefalingen er ikke bindende — vognmand kan afvige.
+                                  </p>
+                                  <div className="flex flex-col gap-xs">
+                                    {([0, 1, 2] as const).map(pos => {
+                                      const currentValue = (startRaekkefoelge[day.id] ?? [null, null, null])[pos]
+                                      const availableTypes = Array.from(new Set(orders.filter(o => o.antal > 0).map(o => o.type)))
+                                      return (
+                                        <div key={pos} className="flex items-center gap-sm">
+                                          <span className="font-inter text-sm font-medium text-text-primary w-[60px]">
+                                            Nr. {pos + 1}:
+                                          </span>
+                                          <select
+                                            value={currentValue ?? ''}
+                                            onChange={e => updateStartRaekkefoelge(day.id, pos, e.target.value || null)}
+                                            className="font-inter text-sm border border-hairline rounded-md px-xs py-xxs bg-surface flex-1"
+                                          >
+                                            <option value="">Ingen anbefaling</option>
+                                            {availableTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                          </select>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                             {orders.length > 0 && (
                               <div className="flex flex-col gap-xs mt-md">
@@ -1847,35 +1891,159 @@ export function OrdrePlanScreen() {
 
                           <hr className="border-hairline" />
 
-                          {/* Første læs + Interval */}
-                          <div>
-                            <p className="font-inter text-xs font-semibold text-text-primary mb-xs">
-                              Kørsel: {activeProduct.factory.name} – Søvej 6D, 4900 Nakskov
-                            </p>
-                            <div className="grid grid-cols-2 gap-xs">
-                              <div className="flex flex-col gap-xxxs">
-                                <label className="font-inter text-xxs text-text-muted">Første læs</label>
-                                <input
-                                  type="time"
-                                  value={params.firstLoadTime ?? ''}
-                                  onChange={e => updateParam('firstLoadTime', e.target.value || undefined)}
-                                  className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                                />
+                          {/* Første læs + Interval — per-produkt ved multi-produkt-ordrer */}
+                          {/* FUNCTIONAL_FLOWS § "Per-produkt kørselsfelter — formand styrer overgange" */}
+                          {(() => {
+                            // Produkter der er aktive på denne dato — match på date, ikke day.id
+                            // (hvert produkt har egne day-ids: d1-X, d2-X — men samme date kan optræde i flere)
+                            const dagProdukter = products
+                              .map(p => ({ product: p, dayEntry: p.days.find(d => d.date === day.date) }))
+                              .filter((x): x is { product: MockProduct; dayEntry: DayPlan } => !!x.dayEntry)
+
+                            const erMultiProdukt = dagProdukter.length >= 2
+
+                            return (
+                              <div>
+                                <p className="font-inter text-xs font-semibold text-text-primary mb-xs">
+                                  Kørsel: {activeProduct.factory.name} – Søvej 6D, 4900 Nakskov
+                                </p>
+
+                                {/* Single-produkt: bevar nuværende layout */}
+                                {!erMultiProdukt && (
+                                  <div className="grid grid-cols-2 gap-xs">
+                                    <div className="flex flex-col gap-xxxs">
+                                      <label className="font-inter text-xxs text-text-muted">Første læs</label>
+                                      <input
+                                        type="time"
+                                        value={params.firstLoadTime ?? ''}
+                                        onChange={e => updateParam('firstLoadTime', e.target.value || undefined)}
+                                        className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
+                                      />
+                                    </div>
+                                    <div className="flex flex-col gap-xxxs">
+                                      <label className="font-inter text-xxs text-text-muted">Interval</label>
+                                      <div className="flex items-center gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs focus-within:border-dark-teal">
+                                        <input
+                                          type="number"
+                                          value={params.intervalMinutes ?? ''}
+                                          onChange={e => updateParam('intervalMinutes', e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value) || 1))}
+                                          className="w-full font-inter text-xs text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                        <span className="font-inter text-xxs text-text-muted">min</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Multi-produkt: ét felt-sæt per produkt stablet vertikalt */}
+                                {erMultiProdukt && (() => {
+                                  /** Inline helper — undgår duplikering mellem produkt-1 og produkt-2+-NEJ-case */
+                                  const FelterBlok = ({ productId, dayId, pp }: { productId: string; dayId: string; pp: ProduktKørselParams }) => (
+                                    <div className="grid grid-cols-2 gap-xs">
+                                      <div className="flex flex-col gap-xxxs">
+                                        <label className="font-inter text-xxs text-text-muted">Første læs på plads</label>
+                                        <input
+                                          type="time"
+                                          value={pp.foersteLaesPaaPlads ?? ''}
+                                          onChange={e => updateProduktKørsel(productId, dayId, 'foersteLaesPaaPlads', e.target.value || null)}
+                                          className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
+                                        />
+                                      </div>
+                                      <div className="flex flex-col gap-xxxs">
+                                        <label className="font-inter text-xxs text-text-muted">Interval (min)</label>
+                                        <div className="flex items-center gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs focus-within:border-dark-teal">
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            value={pp.intervalMin ?? ''}
+                                            onChange={e => updateProduktKørsel(productId, dayId, 'intervalMin', e.target.value === '' ? null : Math.max(1, parseInt(e.target.value) || 1))}
+                                            className="w-full font-inter text-xs text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                          />
+                                          <span className="font-inter text-xxs text-text-muted">min</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )
+
+                                  return (
+                                    <div className="flex flex-col gap-xs">
+                                      {dagProdukter.map(({ product: p, dayEntry }, i) => {
+                                        const key = `${p.id}__${dayEntry.id}`
+                                        const ppParams = produktKørselParams[key] ?? { foersteLaesPaaPlads: null, intervalMin: null }
+
+                                        /** Default-tid ved JA → NEJ: forrige produkts tid + 2 timer, ellers 10:00 */
+                                        const defaultTidVedNej = (): string => {
+                                          if (i > 0) {
+                                            const prevEntry = dagProdukter[i - 1]
+                                            const prevKey = `${prevEntry.product.id}__${prevEntry.dayEntry.id}`
+                                            const prevTid = produktKørselParams[prevKey]?.foersteLaesPaaPlads
+                                            if (prevTid) {
+                                              const [h, m] = prevTid.split(':').map(Number)
+                                              const totalMin = h * 60 + m + 120
+                                              return `${String(Math.floor(totalMin / 60) % 24).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`
+                                            }
+                                          }
+                                          return '10:00'
+                                        }
+
+                                        return (
+                                          <div key={p.id} className="border-l-2 border-dark-teal/30 pl-sm pb-xs">
+                                            <h5 className="font-poppins text-xs font-semibold text-text-primary mb-xxs">
+                                              Produkt {i + 1}: {p.recipeName} ({dayEntry.tonsPlanned} t)
+                                            </h5>
+
+                                            {i === 0 ? (
+                                              /* Produkt 1: første produkt — felter vises altid */
+                                              <FelterBlok productId={p.id} dayId={dayEntry.id} pp={ppParams} />
+                                            ) : (
+                                              /* Produkt 2+: toggle først, felter kun ved NEJ */
+                                              <>
+                                                <div className="flex items-center justify-between gap-xs mb-xs">
+                                                  <span className="font-inter text-xs text-text-secondary">
+                                                    Køres direkte efter forrige produkt?
+                                                  </span>
+                                                  {/* Segmented control — samme mønster som Planlægning·Udførelse·Afregning-toggle */}
+                                                  <div className="flex bg-surface-2 rounded-md p-xxxs border border-hairline">
+                                                    <button
+                                                      onClick={() => updateProduktKørsel(p.id, dayEntry.id, 'foersteLaesPaaPlads', null)}
+                                                      className={[
+                                                        'px-xs py-xxxs rounded-sm font-inter text-xxs font-semibold transition-colors',
+                                                        ppParams.foersteLaesPaaPlads === null
+                                                          ? 'bg-dark-teal text-white'
+                                                          : 'text-text-muted hover:bg-soft-aqua',
+                                                      ].join(' ')}
+                                                    >
+                                                      Ja
+                                                    </button>
+                                                    <button
+                                                      onClick={() => updateProduktKørsel(p.id, dayEntry.id, 'foersteLaesPaaPlads', defaultTidVedNej())}
+                                                      className={[
+                                                        'px-xs py-xxxs rounded-sm font-inter text-xxs font-semibold transition-colors',
+                                                        ppParams.foersteLaesPaaPlads !== null
+                                                          ? 'bg-dark-teal text-white'
+                                                          : 'text-text-muted hover:bg-soft-aqua',
+                                                      ].join(' ')}
+                                                    >
+                                                      Nej
+                                                    </button>
+                                                  </div>
+                                                </div>
+
+                                                {/* Felter vises KUN når toggle = NEJ (foersteLaesPaaPlads !== null) */}
+                                                {ppParams.foersteLaesPaaPlads !== null && (
+                                                  <FelterBlok productId={p.id} dayId={dayEntry.id} pp={ppParams} />
+                                                )}
+                                              </>
+                                            )}
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  )
+                                })()}
                               </div>
-                              <div className="flex flex-col gap-xxxs">
-                                <label className="font-inter text-xxs text-text-muted">Interval</label>
-                                <div className="flex items-center gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs focus-within:border-dark-teal">
-                                  <input
-                                    type="number"
-                                    value={params.intervalMinutes ?? ''}
-                                    onChange={e => updateParam('intervalMinutes', e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value) || 1))}
-                                    className="w-full font-inter text-xs text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                                  />
-                                  <span className="font-inter text-xxs text-text-muted">min</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                            )
+                          })()}
 
                           {/* Info-linje */}
                           <div className="grid grid-cols-2 gap-xs">
@@ -2792,127 +2960,6 @@ function ProductBoxV2({
         <span className="font-inter text-xxs text-text-muted">Samles på en bil</span>
       </label>
 
-    </div>
-  )
-}
-
-// ─── EkstraBestillingBox ──────────────────────────────────────────────────────
-// Drip-bestilling boks — samme dimensioner som ProductBoxV2, gul accent for at
-// signalere at det er en tilføjelse løbende på dagen, ikke morgen-planlægning.
-// Indeholder én "Samles på en bil"-checkbox (samlesPaaEnBil) per ekstra-bestilling.
-// Cross-ordre scope-toggle ("+ andre ordrer") er fjernet — samleordre-konceptet håndterer fordeling på tværs.
-
-function EkstraBestillingBox({
-  ekstra, products,
-  onUpdate, onRemove,
-}: {
-  ekstra: EkstraBestilling
-  products: MockProduct[]
-  onUpdate: (patch: Partial<EkstraBestilling>) => void
-  onRemove: () => void
-}) {
-  const produktOptions = products.map(p => ({ value: p.id, label: p.recipeName }))
-
-  if (ekstra.sent) {
-    return (
-      <div className="relative w-[160px] min-h-[172px] flex-1 bg-warn-bg rounded-xl flex flex-col p-sm pb-lg gap-xs border border-yellow/40">
-        <div className="flex items-center gap-xxxs">
-          <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-yellow text-deep-teal font-poppins font-bold text-xxs">E</span>
-          <span className="font-poppins font-semibold text-xs text-deep-teal">Ekstra</span>
-        </div>
-        <div>
-          <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block mb-xxxs">Produkt</span>
-          {(() => {
-            const p = products.find(pr => pr.id === ekstra.productId)
-            return p ? (
-              <>
-                <span className="font-poppins font-semibold text-sm text-text-primary block leading-tight">{p.recipeName}</span>
-                <span className="font-inter text-xxs text-text-muted">{p.recipeCode}</span>
-              </>
-            ) : <span className="font-poppins font-semibold text-sm text-text-primary">–</span>
-          })()}
-        </div>
-        <div>
-          <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block mb-xxxs">Sendt</span>
-          <span className="font-poppins font-bold text-lg text-text-primary tabular-nums">{ekstra.tons}t</span>
-        </div>
-        {ekstra.samlesPaaEnBil && (
-          <span className="inline-flex items-center gap-[5px] font-inter text-xxs text-deep-teal">
-            <Layers size={10} />
-            Samles på en bil
-          </span>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <div className="relative w-[160px] min-h-[172px] flex-1 bg-warn-bg rounded-xl flex flex-col p-sm pb-lg gap-xs transition-all border border-yellow/40 hover:border-yellow">
-      {/* Slet-knap */}
-      <button
-        onClick={onRemove}
-        aria-label="Fjern ekstra-bestilling"
-        className="absolute top-[8px] right-[8px] w-5 h-5 rounded-full flex items-center justify-center text-text-muted hover:bg-bad/10 hover:text-bad transition-colors"
-      >
-        <X size={12} />
-      </button>
-
-      {/* Header — E Ekstra badge-row, natural højde */}
-      <div className="flex items-center gap-xxxs">
-        <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-yellow text-deep-teal font-poppins font-bold text-xxs">E</span>
-        <span className="font-poppins font-semibold text-xs text-deep-teal">Ekstra</span>
-      </div>
-
-      {/* Spacer — skubber Tons + Produkt + checkbox til bunden, så de aligner
-          med Forventet + Morgen + checkbox på ProductBoxV2. */}
-      <div className="flex-1" />
-
-      {/* Tons-input — aligner med "Forventet" på ProductBoxV2 */}
-      <div>
-        <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block mb-xxxs">Tons</span>
-        <div className="flex items-center gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xxxs focus-within:border-dark-teal transition-colors">
-          <input
-            type="number"
-            value={ekstra.tons || ''}
-            onChange={e => onUpdate({ tons: Math.max(0, parseInt(e.target.value, 10) || 0) })}
-            className="font-poppins font-semibold text-lg text-text-primary bg-transparent border-none outline-none w-full tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-            placeholder="0"
-          />
-          <span className="font-inter text-xxs text-text-muted flex-shrink-0">tons</span>
-        </div>
-      </div>
-
-      {/* Produkt-dropdown — aligner med "Morgen tons" på ProductBoxV2.
-          Wrappet i samme stil-container som tons-input + select bumpet til text-lg
-          så højden matcher Morgen tons-boksen. */}
-      <div>
-        <span className="font-inter text-xxs text-text-muted uppercase tracking-widest block mb-xxxs">Produkt</span>
-        <div className="flex items-center bg-white border border-hairline rounded-lg px-xs py-xxxs focus-within:border-dark-teal transition-colors">
-          <select
-            value={ekstra.productId}
-            onChange={e => onUpdate({ productId: e.target.value })}
-            className="w-full font-poppins font-semibold text-lg text-text-primary bg-transparent border-none outline-none appearance-none"
-          >
-            <option value="">Vælg</option>
-            {produktOptions.map(opt => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* "Samles på en bil"-checkbox — per ekstra-bestilling (bottom-aligned via flex-1 spacer øverst) */}
-      <label className="inline-flex items-center gap-xxxs cursor-pointer">
-        <input
-          type="checkbox"
-          checked={ekstra.samlesPaaEnBil ?? false}
-          onChange={e => onUpdate({ samlesPaaEnBil: e.target.checked })}
-          className="w-3 h-3 accent-deep-teal"
-        />
-        <span className="font-inter text-xxs text-text-muted">Samles på en bil</span>
-      </label>
     </div>
   )
 }
@@ -4450,55 +4497,7 @@ function AfregningContent({ vognmandBekraeftelse, todayDay, isSamleordreMode, sa
                                       )}
                                     </div>
 
-                                    {/* ── Returlæs — manuel formand-registrering ──────── */}
-                                    {afrData?.returlaes_timer == null ? (
-                                      <button
-                                        type="button"
-                                        disabled={isGodkendt}
-                                        onClick={() => updateAfregningField(afregKey, 'returlaes_timer', 0)}
-                                        className="font-inter text-xs text-dark-teal hover:text-deep-teal cursor-pointer inline-flex items-center gap-xxxs mt-xs disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                      >
-                                        <Plus size={12} />
-                                        Returlæs (rest asfalt/materiel retur til fabrik)
-                                      </button>
-                                    ) : (
-                                      <div className="mt-xs flex flex-wrap items-end gap-xs">
-                                        <div className="flex flex-col gap-xxxs">
-                                          <label className="font-inter text-xxs text-text-muted uppercase tracking-widest">Returlæs</label>
-                                          <input
-                                            type="number"
-                                            step="0.5"
-                                            value={afrData.returlaes_timer ?? ''}
-                                            disabled={isGodkendt}
-                                            onChange={e => updateAfregningField(afregKey, 'returlaes_timer', parseFloat(e.target.value) || 0)}
-                                            className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-sm tabular-nums w-[120px] focus:outline-none focus:border-dark-teal disabled:opacity-60"
-                                          />
-                                        </div>
-                                        <div className="flex flex-col gap-xxxs flex-1">
-                                          <label className="font-inter text-xxs text-text-muted uppercase tracking-widest">&nbsp;</label>
-                                          <input
-                                            type="text"
-                                            placeholder="Kommentar (valgfri)"
-                                            value={afrData.returlaes_kommentar ?? ''}
-                                            disabled={isGodkendt}
-                                            onChange={e => updateAfregningField(afregKey, 'returlaes_kommentar', e.target.value)}
-                                            className="bg-surface border border-hairline rounded-md px-xs py-xxxs text-sm max-w-[280px] w-full focus:outline-none focus:border-dark-teal disabled:opacity-60"
-                                          />
-                                        </div>
-                                        <button
-                                          type="button"
-                                          disabled={isGodkendt}
-                                          aria-label="Fjern returlæs"
-                                          onClick={() => updateAfregningField(afregKey, 'returlaes_timer', null)}
-                                          className="self-end p-xxxs text-text-muted hover:text-error transition-colors disabled:opacity-40 disabled:cursor-not-allowed min-h-[44px] min-w-[44px] flex items-center justify-center"
-                                        >
-                                          <X size={14} />
-                                        </button>
-                                        <p className="w-full font-inter text-xxs text-text-muted mt-xxxs">
-                                          Manuel indtastning af formand — chaufførens kompensation for retur-kørsel
-                                        </p>
-                                      </div>
-                                    )}
+                                    {/* TODO: Fase 2 — returlæs (manuel formand-registrering) flyttes hertil */}
 
                                     {/* A. "Beregnet beløb pr. ordre"-sektionen er fjernet — økonomi er ikke formands domæne */}
 
