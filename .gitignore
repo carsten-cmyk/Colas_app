@@ -65,3 +65,6 @@ debug-storybook.log
 
 # Personal workshop notes
 Transport_Løsning/
+
+# Claude Code local cache
+.claude/screenshots/

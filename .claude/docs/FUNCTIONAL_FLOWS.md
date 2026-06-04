@@ -220,7 +220,28 @@ startRaekkefoelge?: [string | null, string | null, string | null]
 // - biltype-streng (fx 'Grab', 'Træk', 'Solo') = anbefalet biltype på den position
 // - null = ingen anbefaling for den position
 // Tomme positioner er gyldige — formand kan vælge fx kun Nr. 1 + 3 uden Nr. 2.
+
+startTider?: [string | null, string | null, string | null]
+// NYT (LÅST 2026-06-04): Parallelt array af længde 3 — konkret starttidspunkt (HH:mm)
+// per position. Knyttet 1:1 til startRaekkefoelge-positionen.
+// - Nr. 1's tid = ordrens starttidspunkt (se ordreoversigt-regel nedenfor)
+// - null = ingen tid angivet for den position
 ```
+
+**Interval — flyttet ind i Start-rækkefølge-blokken (LÅST 2026-06-04):** Interval-feltet ("Herefter interval") er flyttet op UNDER Nr. 3 i Start-rækkefølge-blokken og styrer kadencen for læs EFTER de 3 eksplicit timede positioner. Det bruger samme underliggende interval-felt som hidtil (`intervalMinutes`/`intervalMin`) — ingen ny interval-datamodel. **"Første læs"-feltet bevares** på sin nuværende plads og fungerer som fallback når formand IKKE har angivet start-rækkefølge med tid.
+
+> ⚠️ **Reconcilering med "Per-produkt kørselsfelter" (nedenfor):** For multi-produkt-ordrer er interval i dag PER PRODUKT (`produkt.intervalMin`). Når interval flyttes til dag-niveau "Herefter interval", gælder per-position-modellen også multi-produkt (besluttet 2026-06-04). Hvis dag-niveau-konsolidering kolliderer med per-produkt-sekventiel-logikken, beholdes per-produkt-interval urørt og afvigelsen noteres her ved implementering.
+
+**Start-rækkefølge er kilde → produktfelter spejler (LÅST 2026-06-04):** Start-rækkefølge-blokken (bil 1's starttid + "Herefter interval") er **eneste indtastningssted**. Produktets felter "Første læs (på plads)" + "Interval (min)" er **read-only spejlinger**:
+- Bil 1's starttid (`startTider[0]`) → vises read-only i "Første læs (på plads)" + synkroniseres til `firstLoadTime` (downstream gantt-summary m.m.)
+- "Herefter interval" (`intervalMinutes`) → vises read-only i "Interval (min)"
+- **Kun produkt 1** spejler. Multi-produkt produkt 2+ beholder sine egne redigerbare felter + Ja/Nej-toggle (den låste per-produkt-model — urørt).
+- **Validering:** Mangler bil 1's tid og/eller interval, vises en **gul alert** (`bg-warn-bg border-warning`) ved produktet: "Du skal udfylde {første læs / interval / begge}". Alert'en er adaptiv (nævner kun det der mangler).
+
+**Afstand til fabrik + drivetid (LÅST 2026-06-04):** "Afstand til fabrik"-feltet ligger i Bilbehov-kolonnen (højre side af Start-rækkefølge-blokken) som et redigerbart km-input. Køretiden afledes som **drivetid = km × 1 min** og vises ved siden af (fx "36 km · 36 min").
+- **Kilde:** km-værdien kommer fra **Google Maps-integrationen** (køreafstand fabrik → udførelsessted). I prototypen er den mocket via `GOOGLE_KM` (default 36).
+- **Override:** Formand kan redigere km manuelt; afviger værdien fra Google-tallet vises et "Google: X km"-hint. `// TODO: Erstat med Supabase/Google API når klar`.
+- **Bruges af:** `roundTime` (rundtid = km × 2 + 15 min læsning + 15 min aflæsning) og "Forventet sidste bil"-beregningen.
 
 **Tidligere `foersteLaes: boolean` på `VehicleOrder` udgår** — feltet slettes fra både type og UI. Ingen migration nødvendig (prototype).
 
@@ -234,14 +255,17 @@ Start-rækkefølge (anbefaling til vognmand)
 Vælg de 3 første biler i rækkefølge.
 Anbefalingen er ikke bindende — vognmand kan afvige.
 
-  Nr. 1:  [Vælg biltype ▼]
-  Nr. 2:  [Vælg biltype ▼]
-  Nr. 3:  [Vælg biltype ▼]
+  Nr. 1:  [Vælg biltype ▼]   [ 06:39 ]
+  Nr. 2:  [Vælg biltype ▼]   [ 06:54 ]
+  Nr. 3:  [Vælg biltype ▼]   [   —   ]
+  Herefter interval:  [ 15 ] min
 ```
 
 - Hver slot er en `<select>` der viser:
   - Placeholder "Ingen anbefaling"
   - Optionerne = de unikke biltyper fra dagens bil-bestilling (kun typer der har antal > 0)
+- **Til højre for hver dropdown** står et `<input type="time">` = starttidspunkt for den position (skrives til `startTider[pos]`)
+- **Under Nr. 3** står "Herefter interval"-feltet (number + "min") — flyttet hertil fra den tidligere separate "Første læs + Interval"-blok. "Første læs"-feltet bliver dog stående nedenfor som fallback.
 - Slots kan udfyldes uafhængigt (sekventielt ikke krævet — Nr. 1 og 3 uden Nr. 2 er gyldigt)
 - Hvis dagen har < 3 biler bestilt totalt, vises kun det relevante antal slots
 - **Egen bil-flow**: Hele blokken skjules (ikke relevant — én chauffør, ingen rækkefølge-koordinering)
@@ -252,7 +276,8 @@ Over disponerings-tabellen vises en anbefalings-banner når formand har sat `sta
 
 ```
 ┌─ Formand anbefaler start-rækkefølge ──────────────────────────┐
-│ Nr. 1: Grab    Nr. 2: Træk    Nr. 3: Grab                     │
+│ Nr. 1: Grab — 06:39    Nr. 2: Træk — 06:54    Nr. 3: —        │
+│ Herefter interval: 15 min                                     │
 │ Du kan afvige — ring til formand hvis det ikke kan lade sig   │
 │ gøre.                                                          │
 └────────────────────────────────────────────────────────────────┘
@@ -260,9 +285,17 @@ Over disponerings-tabellen vises en anbefalings-banner når formand har sat `sta
 
 Banner-stil: `bg-soft-aqua border border-light-aqua rounded-md px-md py-xs`. Tekstniveauer: header `font-poppins text-sm font-medium text-deep-teal`, anbefalings-pilles `text-xs`, fodnote `text-xxs text-text-muted`.
 
+**NYT (LÅST 2026-06-04):** Banneret viser nu **starttidspunkt** ved hver Nr. (fra `startTider`) + en linje med **"Herefter interval: X min"**. Det er samme blå boks som hidtil — informationen udvides blot. Fodnoten "Du kan afvige…" beholdes.
+
 For de første 3 læs-positioner i tabellen vises også en lille **anbefalings-pille** ved siden af "X. læs"-badgen: `(anbef. Grab)` i `text-xxs text-text-muted`. Når vognmand har tildelt en bil til positionen, og typen matcher anbefalingen → pille forsvinder (eller skifter til ✓). Hvis han har valgt anden biltype → pille beholder originalen som påmindelse.
 
-**Cross-app status:** ✅ Spec låst. Implementering dispatches.
+**Starttidspunkt i vognmandens ordreoversigt (LÅST 2026-06-04):** Det starttidspunkt vognmanden ser på ordre-niveau (ordreoversigt/liste + disponerings-header) følger denne regel:
+- Hvis formand HAR angivet start-rækkefølge med tid → **Nr. 1's starttidspunkt** (`startTider[0]`) er ordrens starttidspunkt
+- Hvis ingen start-rækkefølge/tid er valgt → fallback til **første læs** (`førsteLæsPåPlads`)
+
+Dette gælder alle steder vognmanden viser starttidspunkt for ordren (disponering, liste, evt. gantt) så tallet er konsistent på tværs af skærme.
+
+**Cross-app status:** ✅ Spec låst. Implementering dispatches (formand + vognmand prototype-buildere kører 2026-06-04, issue-fri /bg).
 
 **Edge cases:**
 
@@ -694,6 +727,14 @@ Ordren er en **append-only log** af dage. Hver dag har sin egen sektion med:
 **Viser:** Alle gemte transport-data fra Trin 1 (anlæg, beskrivelse, afhentning, aflæsning, betaler-ordrenummer hvis sat)
 **Læser:** `orders.materiel[]` WHERE `gemt = true`
 
+**Per-materiel expandable + arvet info (LÅST 2026-06-04):** Materiel der køres på blokvogn skal hos vognmanden vise den FULDE transport-info per enhed — **arvet 1:1 fra formandens materiellevering-planlægning** (Trin 1's expandable). Hver materiel-enhed kan **foldes ud individuelt** (samme expand-mønster som formand/planlægning) og viser:
+- **Afhentningssted + postnummer** og **Aflæsningssted + postnummer** (arvet fra `orders.materiel[]`)
+- Øvrige info-felter fra formandens expandable (beskrivelse, anlæg, kommentar)
+- **Google-kort** for både afhentning og aflæsning (samme kort-integration/placeholder som formand-prototypen)
+
+Formål: vognmanden får tilstrækkelig kontekst til at disponere korrekt blokvogn/chauffør UDEN at gætte. Ingen ny data skrives her — det er ren read/visning af formandens felter.
+**Issue:** #15 (vognmand-prototype)
+
 ### Trin 3 — Vognmand disponerer transport
 **App:** vognmand
 **Komponent:** Materiel-sektion under `DisponeringsView` (ikke bygget)
@@ -705,6 +746,19 @@ Ordren er en **append-only log** af dage. Hver dag har sin egen sektion med:
 **App:** vognmand
 **Handling:** Når en bil er sat på materiel-linjen, betragtes den som **bekræftet** (samme model som asfalt-kørsel).
 **Skriver til:** `orders.materiel[].bekraeftet_af_vognmand = true`
+
+### Trin 4b — Chauffør modtager materiel-opgave (egen udførsels-variant) (LÅST 2026-06-04)
+**App:** chauffeur / chauffeur-web
+**Komponent:** Materiel-/blokvogns-variant af udførselssiden (ikke bygget) — **visuelt adskilt** fra den normale asfalt-udførsel (`AnkommetUdfoerselsstedScreen`)
+**Forretningsforståelse:** En materiel-opgave er en **transport-opgave**, ikke en læsse-opgave. Chaufføren henter materiel ét sted og afleverer det et andet — han kører IKKE asfalt fra fabrik til plads. Derfor intet indvejning/udvejning/asfalt-flow.
+**Viser:**
+- **Afhentningssted** + adresse og **Aflæsningssted** + adresse — prominent
+- **Google-kort/navigation** til begge adresser
+- Materiel-enhed(er) der skal transporteres (anlæg + beskrivelse)
+- Evt. **kommentar til chauffør** (samme felt som asfalt-flow, se Flow 1 Trin 1)
+**Læser:** `orders.materiel[]` (afhentningssted, aflæsningssted, postnumre, beskrivelse, anlæg, kommentar), `confirmed_transport`
+**Krav:** Touch targets ≥ 44×44px (udendørs brug i bil).
+**Issue:** #16 (chauffør-prototype)
 
 ### Trin 5 — Formand ser bekræftelse + transport-detaljer
 **App:** formand
@@ -966,6 +1020,28 @@ Ordren er en **append-only log** af dage. Hver dag har sin egen sektion med:
 **Brug:** Vognmand sammenligner godkendte afregninger med Colas' faktura — bruger eventuelle afvigelser som reklamationsgrundlag
 **Læser:** `time_registreringer` WHERE `godkendt_af_formand = true` JOIN `afregninger`
 
+### Trin 6b — Vognmand ser chauffør-timer i Chauffør-overblik (Færdselsstyrelse-dokumentation) (LÅST 2026-06-04)
+**App:** vognmand
+**Komponent:** Chauffør-overblik (`/prototyper/chauffoer-overblik`) → foldud per chauffør → **Sektion 1: Timer** (issue #14 [VOGN-DAGO-003])
+**Formål:** Vognmanden skal kunne dokumentere kørslen overfor **Færdselsstyrelsen** — derfor vises chaufførens egen registrering SAMMEN med formandens godkendte tal. **Kun timer, aldrig beløb.**
+
+**Chaufførens registrering (GPS-baseret, 3 felter):**
+- **Kørsel** — inkl. læsning + aflæsning (registreres ved ankomst fabrik/plads); folder ind i kørsel, ikke separate felter
+- **Ventetid** — chauffør holder stille og venter på at komme til udlægger eller ind på fabrik
+- **Pause**
+**Kilde:** `time_registreringer` (samme tabel chaufføren skriver til i Trin 2)
+
+**To linjer i visningen:**
+| Linje | Indhold |
+|---|---|
+| Chauffør timer | Kørsel · Ventetid · Pause (rå fra chauffør-app) |
+| Godkendt af formand | Styret af `afregning_type`: `time` → alle tre · `akkord`/tons → **kun Ventetid** |
+
+**Forretningsregel (time vs. tons):** Chaufføren logger ALTID de samme timer (kørsel/ventetid/pause) uanset afregningstype. Ved **akkord/tons** betales per tons, så formanden godkender **kun ventetid** — kørsel + pause dækkes implicit af tons-raten. Ved **time** godkendes alle tre.
+**Mock:** `apps/vognmand/src/mocks/afregning.ts` (NY) modellerer begge linjer + `afregning_type`. Aligner med `ChauffoerAfregning` (`koretimer`/`ventetid`/`pause`).
+**Adskilt fra Trin 6:** Trin 6 (godkendte afregninger til reklamation/faktura) er en ANDEN side med andet formål. Trin 6b er dag-dokumentation per chauffør.
+**Issue:** #14
+
 ### Afregningstype-styring
 **Hvor markeres time vs. akkord?**
 Afregningstypen `time|akkord` sættes på **AFTALEN mellem Colas og den enkelte vognmand** (ikke pr. bil). Standard: time-afregning. Andre typer (tons-afregning, turaftale) konfigureres i vognmand-aftalen og arves automatisk af alle biler vognmanden disponerer til ordren.
@@ -1212,6 +1288,22 @@ hvor `densitet_kg_per_m3` er heltal fra `recepter[receptkode].densitet` (fx 2400
 **Filtrering:** Materiel-listen på ordren filtreres til poster med `materielNr.startsWith('9-')` (udlægger-konventionen)
 **Handling:** Formand vælger udlægger per læs — bruges til at korrelere hvilken udlægger der lagde hvilken last
 **Skriver til:** `plan_vejebilag.valgt_udlaegger_materielnr` (nyt felt) eller separat `vejeseddel_udlaegger`-mapping (afgør ved Supabase-koblingen)
+
+### Vejeseddel-tabel — telefon-kolonne (2026-06-04)
+- Chauffør-telefonnummer vises som klikbart `tel:`-link umiddelbart til højre for chaufførnavn-kolonnen
+- Datakilde: `Vejeseddel.chauffoerTelefon` (optional string, E.164 eller dansk lang-format `+45 XX XX XX XX`)
+- Fallback: `—` (em-dash) hvis feltet er undefined
+- TODO: Erstat med Supabase `chauffør_tlf`-felt når klar
+
+### Vejeseddel-tabel — multi-produkt statusbars (2026-06-04)
+- Hvis `produktEstimater`-prop er angivet: vises én statusbar per produkt over tabellen
+- Gruppering: per `receptkode` (`Vejeseddel.receptkode`)
+- Overskrift på alle statusbars: produktnavn (fra `recepter`-map) — fallback til receptkode
+- Format: `[Produktnavn]\n{lagt_ud} t af {estimat} t · {%}\n[ProgressBar]`
+- `lagt_ud` = sum af `tons` for `status === 'udlagt'` per receptkode
+- `estimat` = `produktEstimater[receptkode]` — leveres af parent som prop
+- ProgressBar-variant: `good` (≥90%), `warn` (50–89%), `bad` (<50%)
+- Datakilde for estimat: TODO: Erstat med Supabase ordre-produktlinje (tonsTotal) når klar
 
 ---
 

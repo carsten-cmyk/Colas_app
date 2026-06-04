@@ -255,6 +255,13 @@ export interface Vejeseddel {
   /** Puljelæs-flag: bil har flere produkter til samme ordre. Ingen fordeling — tons går direkte.
    * Visuelt label er "Samles på en bil". */
   puljelaesFlag?: boolean
+  /**
+   * Chaufførens telefonnummer — E.164 eller dansk lang-format "+45 XX XX XX XX".
+   * Vises som klikbart tel:-link i VejesedlerTable telefon-kolonne.
+   * Datakilde: vognmandsmodul (chauffør-stamdata).
+   * TODO: Erstat med Supabase chauffør_tlf-felt når klar
+   */
+  chauffoerTelefon?: string
   /** Markeret som sidste læs for dagen (indeholder rest-tons, ikke fuld kapacitet).
    *  Beregnes automatisk fra: tons < bil_kapacitet OG sum(allokeret_tons) >= bestilt_total - bil_kapacitet.
    *  I prototypen sat manuelt i mock — i produktion beregnet i hook eller server-side.
