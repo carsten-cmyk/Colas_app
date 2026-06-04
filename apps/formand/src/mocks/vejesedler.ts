@@ -34,6 +34,7 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     vejeseddelNr: '25-1003-A',
     regnr: 'FH 51 069',
     chauffoerNavn: 'Morten Lund',
+    chauffoerTelefon: '+45 20 11 22 33', // TODO: Erstat med Supabase chauffør_tlf-felt når klar
     receptkode: '82101H',
     fabrikId: 'fab-001',
     fabrikNavn: 'PROD A EAST KØGE PH',
@@ -54,6 +55,7 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     vejeseddelNr: '25-1004-B',
     regnr: 'BD 22 847',
     chauffoerNavn: 'Søren Kristensen',
+    chauffoerTelefon: '+45 40 33 55 66', // TODO: Erstat med Supabase chauffør_tlf-felt når klar
     receptkode: '82101H',
     fabrikId: 'fab-001',
     fabrikNavn: 'PROD A EAST KØGE PH',
@@ -74,6 +76,7 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     vejeseddelNr: null,
     regnr: 'XK 78 312',
     chauffoerNavn: 'Lars Holm',
+    chauffoerTelefon: '+45 50 77 88 99', // TODO: Erstat med Supabase chauffør_tlf-felt når klar
     receptkode: '82101H',
     fabrikId: 'fab-001',
     fabrikNavn: 'PROD A EAST KØGE PH',
@@ -96,6 +99,7 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     vejeseddelNr: '25-1009-F',
     regnr: 'PK 88 201',
     chauffoerNavn: 'Mikkel Hansen',
+    chauffoerTelefon: '+45 22 44 66 88', // TODO: Erstat med Supabase chauffør_tlf-felt når klar
     receptkode: '82101H',
     fabrikId: 'fab-001',
     fabrikNavn: 'PROD A EAST KØGE PH',
@@ -118,6 +122,7 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     vejeseddelNr: '25-1010-A',
     regnr: 'PL 44 901',
     chauffoerNavn: 'Jesper Madsen',
+    chauffoerTelefon: '+45 31 23 45 67', // TODO: Erstat med Supabase chauffør_tlf-felt når klar
     receptkode: '82101H',
     fabrikId: 'fab-001',
     fabrikNavn: 'PROD A EAST KØGE PH',
@@ -137,6 +142,7 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     vejeseddelNr: '25-1011-A',
     regnr: 'TH 33 567',
     chauffoerNavn: 'Brian Olsen',
+    chauffoerTelefon: '+45 60 98 76 54', // TODO: Erstat med Supabase chauffør_tlf-felt når klar
     receptkode: '82101H',
     fabrikId: 'fab-001',
     fabrikNavn: 'PROD A EAST KØGE PH',
@@ -156,6 +162,7 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     vejeseddelNr: '25-1012-A',
     regnr: 'GV 12 445',
     chauffoerNavn: 'Henrik Dahl',
+    chauffoerTelefon: '+45 42 13 57 91', // TODO: Erstat med Supabase chauffør_tlf-felt når klar
     receptkode: '82101H',
     fabrikId: 'fab-001',
     fabrikNavn: 'PROD A EAST KØGE PH',
@@ -177,6 +184,7 @@ export const INITIAL_VEJESEDLER: Vejeseddel[] = [
     vejeseddelNr: null,
     regnr: 'RF 29 114',
     chauffoerNavn: 'Niels Christensen',
+    chauffoerTelefon: '+45 28 36 47 58', // TODO: Erstat med Supabase chauffør_tlf-felt når klar
     receptkode: null,
     fabrikId: 'fab-001',
     fabrikNavn: 'PROD A EAST KØGE PH',

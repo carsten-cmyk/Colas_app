@@ -41,7 +41,7 @@ export const MOCK_ORDRER: Ordre[] = [
     endDate: '2026-03-18',
     dage: [
       // Mandag 16/3 — ingen disponeret → rød — TODO: Erstat med Supabase når klar
-      { dato: '2026-03-16', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 45, førsteLæsPåPlads: '07:15', intervalMinutter: 15, startRaekkefoelge: ['6 Aks', '7 Aks', null] },
+      { dato: '2026-03-16', bestilteBiler: 3, disponeredeBiler: 0, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 45, førsteLæsPåPlads: '07:15', intervalMinutter: 15, startRaekkefoelge: ['6 Aks', '7 Aks', null], startTider: ['06:39', '06:54', null] },
       // Tirsdag 17/3 — delvist disponeret → orange · multi-produkt (GAB I + SMA 11S)
       { dato: '2026-03-17', bestilteBiler: 3, disponeredeBiler: 1, ændretAfFormand: false, mødetidFabrik: '06:30', tidFabrikTilPlads: 45, kommentar: 'Smal adgangsvej', førsteLæsPåPlads: '07:15', intervalMinutter: 15, produkter: MOCK_PRODUKTER_O1_1703 },
       // Onsdag 18/3 — fuldt disponeret → grøn

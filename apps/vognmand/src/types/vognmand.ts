@@ -26,6 +26,11 @@ export interface DagDisponering {
   annulleretAarsag?: 'vejr'
   /** Anbefaling fra formand: biltype per de 3 første læs-positioner (idx 0=1. læs, 1=2. læs, 2=3. læs) */
   startRaekkefoelge?: [string | null, string | null, string | null]
+  /**
+   * Anbefalede starttidspunkter (HH:MM) fra formand — matcher startRaekkefoelge position for position.
+   * null = ingen tid angivet for denne position.
+   */
+  startTider?: [string | null, string | null, string | null]
   /** Per-produkt kørselsfelter — udfyldt kun ved ordrer med 2+ produkter på dagen */
   produkter?: ProduktKørsel[]
 }

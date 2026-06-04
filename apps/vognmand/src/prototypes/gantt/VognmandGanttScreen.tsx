@@ -45,9 +45,15 @@ function isWeekend(d: Date): boolean {
 function førsteLæsAggregeret(dage: DagDisponering[]): string {
   const synlige = dage.filter(d => d.bestilteBiler > 0)
   if (synlige.length === 0) return '—'
-  const første = synlige[0].førsteLæsPåPlads
+  // Regel: brug Nr. 1's startTid hvis formand HAR valgt start-rækkefølge med tid
+  // Fallback: førsteLæsPåPlads (formands planlagte ankomsttid)
+  const resolve = (d: DagDisponering): string | undefined =>
+    d.startRaekkefoelge?.[0] != null && d.startTider?.[0] != null
+      ? d.startTider![0]!
+      : d.førsteLæsPåPlads
+  const første = resolve(synlige[0])
   if (!første) return '—'
-  const ensartet = synlige.every(d => d.førsteLæsPåPlads === første)
+  const ensartet = synlige.every(d => resolve(d) === første)
   return ensartet ? første : 'Varierer'
 }
 

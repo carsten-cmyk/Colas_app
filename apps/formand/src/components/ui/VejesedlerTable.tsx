@@ -3,6 +3,14 @@ import { ChevronRight } from 'lucide-react'
 import type { Vejeseddel, Recept } from '../../types/order'
 import type { UdlaeggerEnhed } from '../../types/udlaegger'
 import { VejeseddelRow } from './VejeseddelRow'
+import { ProgressBar } from './ProgressBar'
+
+/**
+ * Estimeret total tons per produkt — bruges til statusbar-beregning.
+ * Keyet på receptkode (= Vejeseddel.receptkode).
+ * TODO: Erstat med Supabase ordre-estimat når klar
+ */
+export type ProduktEstimater = Record<string, number>
 
 export interface VejesedlerTableProps {
   /** Alle vejesedler for dagens ordre — sorteres internt efter status og tid */
@@ -45,6 +53,13 @@ export interface VejesedlerTableProps {
    * TODO: Erstat med Supabase når klar
    */
   vejeseddelUdlaeggerPerOrdre?: Record<string, Record<string, string>>
+  /**
+   * Estimeret total tons per produkt (receptkode → tons).
+   * Bruges til statusbar-beregning over tabellen.
+   * Hvis ikke angivet vises ingen statusbar.
+   * TODO: Erstat med Supabase ordre-estimat når klar
+   */
+  produktEstimater?: ProduktEstimater
 }
 
 /**
@@ -87,6 +102,7 @@ const HEADER_KOLONNER = [
   'Vejeseddel',
   'Nummerplade',
   'Chauffør',
+  'Telefon',
   'Produkt',
   'Fabrik',
   'Tons',
@@ -104,6 +120,33 @@ export function beregnModtagetTotal(vejesedler: Vejeseddel[]): number {
     .reduce((sum, v) => sum + (v.tons ?? 0), 0)
 }
 
+/**
+ * Beregner statusbar-data per produkt (receptkode).
+ * "Udlagt" = vejesedler med status 'udlagt' (vejebilag modtaget + temperatur registreret).
+ * Returnerer array sorteret alfabetisk på receptkode for stabil visning.
+ */
+function beregnProduktStatusbars(
+  vejesedler: Vejeseddel[],
+  produktEstimater: ProduktEstimater,
+  recepter: Record<string, Recept>,
+): Array<{ receptkode: string; produktNavn: string; udlagtTons: number; estimatTons: number }> {
+  const receptkoder = Object.keys(produktEstimater)
+  return receptkoder
+    .map((receptkode) => {
+      const udlagtTons = vejesedler
+        .filter((v) => v.receptkode === receptkode && v.status === 'udlagt')
+        .reduce((sum, v) => sum + (v.tons ?? 0), 0)
+      const produktNavn = recepter[receptkode]?.navn ?? receptkode
+      return {
+        receptkode,
+        produktNavn,
+        udlagtTons,
+        estimatTons: produktEstimater[receptkode],
+      }
+    })
+    .sort((a, b) => a.receptkode.localeCompare(b.receptkode))
+}
+
 export function VejesedlerTable({
   vejesedler,
   recepter,
@@ -117,6 +160,7 @@ export function VejesedlerTable({
   onSelectOrdreForVs,
   vejeseddelTempPerOrdre,
   vejeseddelUdlaeggerPerOrdre,
+  produktEstimater,
 }: VejesedlerTableProps) {
   void fabriksNavne
   // Collapsible state for udlagte rækker — sammenfoldet som default
@@ -126,6 +170,12 @@ export function VejesedlerTable({
   // Split i aktive (vises altid) + udlagte (bag collapsible)
   const aktive = sorterteVejesedler.filter((v) => v.status !== 'udlagt')
   const udlagte = sorterteVejesedler.filter((v) => v.status === 'udlagt')
+
+  // Statusbars: én per produkt hvis produktEstimater er angivet
+  const statusbars = produktEstimater
+    ? beregnProduktStatusbars(vejesedler, produktEstimater, recepter)
+    : []
+
   return (
     <div className="overflow-hidden rounded-lg border border-hairline bg-surface">
       {vejesedler.length === 0 ? (
@@ -143,6 +193,28 @@ export function VejesedlerTable({
         </div>
       ) : (
         <>
+          {/* Statusbars — én per produkt hvis produktEstimater er angivet */}
+          {statusbars.length > 0 && (
+            <div className="flex flex-col gap-xs px-sm py-xs border-b border-hairline bg-surface">
+              {statusbars.map(({ receptkode, produktNavn, udlagtTons, estimatTons }) => {
+                const pct = estimatTons > 0 ? Math.round((udlagtTons / estimatTons) * 100) : 0
+                const variant = pct >= 90 ? 'good' : pct >= 50 ? 'warn' : 'bad'
+                return (
+                  <div key={receptkode} className="flex flex-col gap-xxxs">
+                    <span className="font-inter text-xs font-semibold text-text-primary">
+                      {produktNavn}
+                    </span>
+                    <ProgressBar
+                      value={pct}
+                      variant={variant}
+                      label={`${udlagtTons.toFixed(1)} t af ${estimatTons} t · ${pct}%`}
+                      ariaLabel={`${produktNavn}: ${udlagtTons.toFixed(1)} t udlagt af ${estimatTons} t estimeret`}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          )}
           <div className="overflow-x-auto">
           <table className="w-full">
             <thead>

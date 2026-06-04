@@ -50,9 +50,15 @@ function addMinutesToHHMM(hhmm: string | undefined, minutes: number): string {
 function førsteLæsAggregeret(dage: DagDisponering[]): string {
   const synlige = dage.filter(d => d.bestilteBiler > 0)
   if (synlige.length === 0) return '—'
-  const første = synlige[0].førsteLæsPåPlads
+  // Regel: brug Nr. 1's startTid hvis formand HAR valgt start-rækkefølge med tid
+  // Fallback: førsteLæsPåPlads (formands planlagte ankomsttid)
+  const resolve = (d: DagDisponering): string | undefined =>
+    d.startRaekkefoelge?.[0] != null && d.startTider?.[0] != null
+      ? d.startTider![0]!
+      : d.førsteLæsPåPlads
+  const første = resolve(synlige[0])
   if (!første) return '—'
-  const ensartet = synlige.every(d => d.førsteLæsPåPlads === første)
+  const ensartet = synlige.every(d => resolve(d) === første)
   return ensartet ? første : 'Varierer'
 }
 
@@ -473,12 +479,26 @@ export function VognmandDisponeringsScreen() {
                               Formand anbefaler start-rækkefølge
                             </div>
                             <div className="flex items-center gap-md mb-xxxs">
-                              {dag.startRaekkefoelge!.map((biltype, i) => (
-                                <span key={i} className="inline-flex items-center gap-xxxs font-inter text-xs text-text-primary">
-                                  <span className="font-semibold">Nr. {i + 1}:</span> {biltype ?? '—'}
-                                </span>
-                              ))}
+                              {dag.startRaekkefoelge!.map((biltype, i) => {
+                                const tid = dag.startTider?.[i] ?? null
+                                return (
+                                  <span key={i} className="inline-flex items-center gap-xxxs font-inter text-xs text-text-primary">
+                                    <span className="font-semibold">Nr. {i + 1}:</span>
+                                    {biltype ?? '—'}
+                                    {tid && (
+                                      <span className="font-inter text-xxs font-semibold text-deep-teal bg-white/70 border border-light-aqua rounded-md px-xs py-xxs tabular-nums">
+                                        {tid}
+                                      </span>
+                                    )}
+                                  </span>
+                                )
+                              })}
                             </div>
+                            {dag.intervalMinutter != null && (
+                              <p className="font-inter text-xxs text-text-secondary mb-xxxs">
+                                Herefter interval: {dag.intervalMinutter} min
+                              </p>
+                            )}
                             <p className="font-inter text-xxs text-text-muted">
                               Du kan afvige — ring til formand hvis det ikke kan lade sig gøre.
                             </p>

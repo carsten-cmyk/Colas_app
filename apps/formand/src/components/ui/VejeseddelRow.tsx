@@ -191,6 +191,21 @@ export function VejeseddelRow({
         {vejeseddel.chauffoerNavn}
       </td>
 
+      {/* Telefon — klikbart tel-link med min. 44px touch target via py-xs */}
+      <td className="font-inter text-xs px-xs py-xs">
+        {vejeseddel.chauffoerTelefon ? (
+          <a
+            href={`tel:${vejeseddel.chauffoerTelefon.replace(/\s/g, '')}`}
+            className="text-deep-teal hover:underline"
+            aria-label={`Ring til ${vejeseddel.chauffoerNavn}: ${vejeseddel.chauffoerTelefon}`}
+          >
+            {vejeseddel.chauffoerTelefon}
+          </a>
+        ) : (
+          <Dash />
+        )}
+      </td>
+
       {/* Produkt + læs-type badge (puljelæs = "Samles på en bil") */}
       <td className="font-inter text-xs text-text-primary px-xs py-xs">
         <div className="flex items-center gap-xs flex-wrap">
