@@ -136,6 +136,35 @@ jobs:
         continue-on-error: true
 
   # ────────────────────────────────────────────────────────
+  # FABRIK — typecheck + lint (test/build kommer når sat op)
+  # ────────────────────────────────────────────────────────
+  fabrik:
+    name: Fabrik — typecheck, lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/fabrik
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npm run typecheck
+        continue-on-error: true  # Tillad fejl indtil fabrik er fuld dev
+
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+  # ────────────────────────────────────────────────────────
   # CHAUFFEUR-WEB — typecheck + lint
   # ────────────────────────────────────────────────────────
   chauffeur-web:

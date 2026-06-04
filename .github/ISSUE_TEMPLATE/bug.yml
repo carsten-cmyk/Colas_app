@@ -1,0 +1,104 @@
+name: 🐛 Bug
+description: En fejl i prototype eller produktion
+title: "[PREFIX-SECTION-NNN] BUG: "
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Issue-ID format
+
+        Titel: `[{APP}{MODE}-{SECTION}-{NNN}] BUG: kort beskrivelse`
+
+        Eksempel: `[FORMUD-VS-042] BUG: VejeseddelRow crasher ved null tons`
+
+  - type: dropdown
+    id: app
+    attributes:
+      label: App
+      options:
+        - formand
+        - vognmand
+        - chauffør
+        - fabrik
+        - kunde
+        - shared
+    validations:
+      required: true
+
+  - type: dropdown
+    id: sektion
+    attributes:
+      label: Sektion
+      options:
+        - asfaltbestilling
+        - bilbestilling
+        - asfaltkørsel
+        - sidste-laes-frigivelse
+        - vejesedler
+        - forundersøgelse
+        - dagsoverblik
+        - transport
+        - materiel
+        - disponering
+        - produktionsplan
+        - login
+    validations:
+      required: true
+
+  - type: dropdown
+    id: prioritet
+    attributes:
+      label: Severity
+      description: Kritisk = blokerer arbejde / data tab. Major = workaround mulig. Minor = kosmetisk.
+      options:
+        - "prioritet:høj"
+        - "prioritet:medium"
+        - "prioritet:lav"
+    validations:
+      required: true
+
+  - type: input
+    id: komponent
+    attributes:
+      label: Komponent (hvis kendt)
+      placeholder: "VejeseddelRow.tsx"
+
+  - type: input
+    id: miljø
+    attributes:
+      label: Miljø
+      placeholder: "prototype / dev / test / live"
+
+  - type: textarea
+    id: hvad-sker-der
+    attributes:
+      label: Hvad sker der
+      description: Beskriv den faktiske adfærd
+    validations:
+      required: true
+
+  - type: textarea
+    id: forventet
+    attributes:
+      label: Hvad burde der ske
+      description: Beskriv den forventede adfærd
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / video
+      description: Træk-og-slip eller paste billeder. Inkludér Netlify-preview-URL hvis relevant.

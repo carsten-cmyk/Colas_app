@@ -1,0 +1,79 @@
+name: 🗂 Fase 2-kandidat
+description: Funktion identificeret men udskudt til Fase 2
+title: "[PREFIX-SECTION-NNN] FASE2: "
+labels: ["type:feature", "fase:2"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Issue-ID format
+
+        Titel: `[{APP}{MODE}-{SECTION}-{NNN}] FASE2: kort beskrivelse`
+
+        Eksempel: `[FORMAF-VS-003] FASE2: Returlæs-flow med chauffør-side push`
+
+        Fase 2-items kommer på master backlog-issue automatisk.
+
+  - type: dropdown
+    id: app
+    attributes:
+      label: App
+      options:
+        - formand
+        - vognmand
+        - chauffør
+        - fabrik
+        - kunde
+        - shared
+    validations:
+      required: true
+
+  - type: dropdown
+    id: sektion
+    attributes:
+      label: Sektion
+      options:
+        - asfaltbestilling
+        - bilbestilling
+        - asfaltkørsel
+        - sidste-laes-frigivelse
+        - vejesedler
+        - forundersøgelse
+        - dagsoverblik
+        - transport
+        - materiel
+        - disponering
+        - produktionsplan
+        - login
+    validations:
+      required: true
+
+  - type: textarea
+    id: hvad
+    attributes:
+      label: Hvad er funktionen
+      description: Kort beskrivelse af den udskudte funktion
+    validations:
+      required: true
+
+  - type: textarea
+    id: hvorfor-venter
+    attributes:
+      label: Hvorfor venter den til Fase 2?
+      description: Hvad gjorde at den blev udskudt? (kompleksitet, dependencies, kunde-prioritet)
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies til Fase 1
+      description: Hvilke Fase 1-features skal være på plads før denne giver mening?
+      placeholder: "Kræver at Supabase auth er klar (FORM-LOGIN-001)"
+
+  - type: textarea
+    id: reference
+    attributes:
+      label: Reference til docs
+      description: Hvor er den dokumenteret i FUNCTIONAL_FLOWS eller andre docs?
+      placeholder: "`.claude/docs/FUNCTIONAL_FLOWS.md` § Fase 2 udvidelser § F2-1"

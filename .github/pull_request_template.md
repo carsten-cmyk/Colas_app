@@ -1,6 +1,13 @@
+## Linket issue
+
+<!-- Skriv `Closes #N` (auto-lukker issue ved merge) eller `Refs #N` (links uden at lukke). -->
+<!-- Eksempel: Closes #42 -->
+
+Closes #
+
 ## Hvad er lavet
 
-<!-- Kort beskrivelse af ændringen -->
+<!-- Kort beskrivelse af ændringen — gentag issue-ID hvis relevant (fx FORMPL-ASB-001) -->
 
 ## Type
 

@@ -1,0 +1,115 @@
+name: 🆕 Feature
+description: Ny funktionalitet (user story) i en eksisterende eller ny sektion
+title: "[PREFIX-SECTION-NNN] "
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Issue-ID format
+
+        Titel skal følge `[{APP}{MODE}-{SECTION}-{NNN}] kort beskrivelse`.
+
+        **Eksempler**:
+        - `[FORMPL-ASB-001] Implementér DateRangePicker for asfaltbestilling`
+        - `[VOGN-DISP-014] Anbefalings-banner for start-rækkefølge`
+        - `[FABR-PROD-007] Tons-aggregat i Recepter-tabellen`
+
+        Se `.claude/docs/ISSUE_NAMING.md` for fulde app/sektion-koder.
+
+  - type: dropdown
+    id: app
+    attributes:
+      label: App
+      description: Hvilken app påvirkes primært? (Cross-app vælges `shared`)
+      options:
+        - formand
+        - vognmand
+        - chauffør
+        - fabrik
+        - kunde
+        - shared
+    validations:
+      required: true
+
+  - type: dropdown
+    id: sektion
+    attributes:
+      label: Sektion
+      description: Hvilken sektion hører funktionen til?
+      options:
+        - asfaltbestilling
+        - bilbestilling
+        - asfaltkørsel
+        - sidste-laes-frigivelse
+        - vejesedler
+        - forundersøgelse
+        - dagsoverblik
+        - transport
+        - materiel
+        - disponering
+        - produktionsplan
+        - login
+    validations:
+      required: true
+
+  - type: dropdown
+    id: fase
+    attributes:
+      label: Fase
+      description: Fase 1 = MVP/prototype. Fase 2 = udskudt. Fase 3 = fremtidig.
+      options:
+        - "fase:1"
+        - "fase:2"
+        - "fase:3"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: prioritet
+    attributes:
+      label: Prioritet
+      options:
+        - "prioritet:høj"
+        - "prioritet:medium"
+        - "prioritet:lav"
+    validations:
+      required: true
+
+  - type: textarea
+    id: user-story
+    attributes:
+      label: User story
+      description: Som [rolle] vil jeg [mål] så [værdi]
+      placeholder: "Som formand vil jeg kunne angive første-læs-tid pr. produkt, så jeg kan styre produkt-overgange med buffer til reparation."
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptkriterier
+    attributes:
+      label: Acceptkriterier
+      description: Liste af konkrete kriterier — hver skal kunne testes
+      value: |
+        - [ ] [Kriterie 1]
+        - [ ] [Kriterie 2]
+        - [ ] [Kriterie 3]
+    validations:
+      required: true
+
+  - type: textarea
+    id: cross-app
+    attributes:
+      label: Cross-app påvirkning
+      description: Påvirker dette andre apps? Hvilke filer/sektioner?
+      placeholder: "Vognmand Disponering skal vise per-produkt-segmenter. Fabrik produktionsplan opdateres med produkt-skift."
+
+  - type: textarea
+    id: reference
+    attributes:
+      label: Reference
+      description: Links til FUNCTIONAL_FLOWS, SPEC, CONTRACT, prototype, screenshots
+      value: |
+        - FUNCTIONAL_FLOWS.md: `.claude/docs/FUNCTIONAL_FLOWS.md` §
+        - SPEC: `Docs/[App]/[sektion]/SPEC_[Komponent].md`
+        - Prototype: `apps/[app]/src/prototypes/[fil].tsx`
