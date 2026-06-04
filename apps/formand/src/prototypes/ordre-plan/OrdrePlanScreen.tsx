@@ -891,10 +891,35 @@ export function OrdrePlanScreen() {
     }))
   }
 
+  // TODO: Erstat med Supabase når klar — starttider gemmes på ordrens dag-post
+  // Demo: d2-1 har realistiske tider for de 2 første positioner
+  const [startTider, setStartTider] = useState<Record<string, [string | null, string | null, string | null]>>({
+    'd2-1': ['06:39', '06:54', null],
+  })
+
+  function updateStartTid(dayId: string, position: 0 | 1 | 2, value: string | null) {
+    setStartTider(prev => ({
+      ...prev,
+      [dayId]: (() => {
+        const current = prev[dayId] ?? [null, null, null] as [string | null, string | null, string | null]
+        const next = [...current] as [string | null, string | null, string | null]
+        next[position] = value
+        return next
+      })()
+    }))
+    // Bil 1's starttid spejles til "Første læs" — holder downstream (gantt-summary m.m.) i sync
+    if (position === 0) {
+      setKørselParams(prev => ({
+        ...prev,
+        [dayId]: { ...(prev[dayId] ?? DEFAULT_KØRSEL_PARAMS), firstLoadTime: value ?? undefined },
+      }))
+    }
+  }
+
   const [kørselParams, setKørselParams] = useState<Record<string, KørselDayParams>>({})
   // TODO: Erstat med Supabase når klar — km-værdi gemmes på ordren, default fra Google API
   const GOOGLE_KM = 36 // Google-beregnet køreafstand — bruges som hint hvis formand redigerer
-  const [factoryKm, setFactoryKm] = useState(GOOGLE_KM)
+  const factoryKm = GOOGLE_KM // display-only — km fra Google-integration (drivetid = km × 1 min)
   const [kørselKommentar, setKørselKommentar] = useState<Record<string, string>>({})
   const [materielKommentar, setMaterielKommentar] = useState<Record<string, string>>({})
   const [vognmandBekraeftelser] = useState<Record<string, VognmandBekraeftelse>>(INITIAL_VOGNMAND_BEKRAEFTELSER)
@@ -1821,72 +1846,116 @@ export function OrdrePlanScreen() {
                                 Tilføj biltype
                               </button>
 
-                              {/* Start-rækkefølge — anbefaling til vognmand */}
+                              {/* Start-rækkefølge + Kapacitet side-om-side */}
                               {orders.length > 0 && (
-                                <div className="mt-md pt-sm border-t border-hairline">
-                                  <h4 className="font-poppins text-sm font-medium text-text-primary mb-xxs">
-                                    Start-rækkefølge (anbefaling til vognmand)
-                                  </h4>
-                                  <p className="font-inter text-xs text-text-muted mb-xs">
-                                    Vælg de 3 første biler i rækkefølge. Anbefalingen er ikke bindende — vognmand kan afvige.
-                                  </p>
-                                  <div className="flex flex-col gap-xs">
-                                    {([0, 1, 2] as const).map(pos => {
-                                      const currentValue = (startRaekkefoelge[day.id] ?? [null, null, null])[pos]
-                                      const availableTypes = Array.from(new Set(orders.filter(o => o.antal > 0).map(o => o.type)))
-                                      return (
-                                        <div key={pos} className="flex items-center gap-sm">
-                                          <span className="font-inter text-sm font-medium text-text-primary w-[60px]">
-                                            Nr. {pos + 1}:
-                                          </span>
-                                          <select
-                                            value={currentValue ?? ''}
-                                            onChange={e => updateStartRaekkefoelge(day.id, pos, e.target.value || null)}
-                                            className="font-inter text-sm border border-hairline rounded-md px-xs py-xxs bg-surface flex-1"
-                                          >
-                                            <option value="">Ingen anbefaling</option>
-                                            {availableTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                                          </select>
+                                <div className="mt-md pt-sm border-t border-hairline flex flex-col md:flex-row gap-md">
+                                  {/* Venstre: Start-rækkefølge — anbefaling til vognmand (60%) */}
+                                  <div className="min-w-0 w-full md:basis-3/5">
+                                    <h4 className="font-poppins text-sm font-medium text-text-primary mb-xxs">
+                                      Start-rækkefølge (anbefaling til vognmand)
+                                    </h4>
+                                    <p className="font-inter text-xs text-text-muted mb-xs">
+                                      Vælg de 3 første biler i rækkefølge. Anbefalingen er ikke bindende — vognmand kan afvige.
+                                    </p>
+                                    {/* Kolonneheader — "Angiv startid" justeret over tid-input-kolonnen */}
+                                    <div className="flex items-center gap-sm mb-xxxs">
+                                      <span className="w-[60px] shrink-0" />
+                                      <span className="flex-1" />
+                                      <span className="font-inter text-xxs font-medium uppercase tracking-wide text-text-muted w-[100px] text-center">Angiv startid</span>
+                                    </div>
+                                    <div className="flex flex-col gap-xs">
+                                      {([0, 1, 2] as const).map(pos => {
+                                        const currentValue = (startRaekkefoelge[day.id] ?? [null, null, null])[pos]
+                                        const currentTid = (startTider[day.id] ?? [null, null, null])[pos]
+                                        const availableTypes = Array.from(new Set(orders.filter(o => o.antal > 0).map(o => o.type)))
+                                        return (
+                                          <div key={pos} className="flex items-center gap-sm">
+                                            <span className="font-inter text-sm font-medium text-text-primary w-[60px]">
+                                              Nr. {pos + 1}:
+                                            </span>
+                                            <select
+                                              value={currentValue ?? ''}
+                                              onChange={e => updateStartRaekkefoelge(day.id, pos, e.target.value || null)}
+                                              className="font-inter text-sm border border-hairline rounded-md px-xs py-xxs bg-surface flex-1"
+                                            >
+                                              <option value="">Ingen anbefaling</option>
+                                              {availableTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                            <input
+                                              type="time"
+                                              value={currentTid ?? ''}
+                                              onChange={e => updateStartTid(day.id, pos, e.target.value || null)}
+                                              className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal w-[100px]"
+                                            />
+                                          </div>
+                                        )
+                                      })}
+                                      {/* Herefter interval — enheden er nu udenfor boksen */}
+                                      <div className="flex items-center gap-sm mt-xxs">
+                                        <span className="font-inter text-sm font-medium text-text-primary w-[60px] shrink-0">
+                                          Herefter:
+                                        </span>
+                                        <div className="flex items-center gap-xs">
+                                          <div className="flex items-center bg-white border border-hairline rounded-lg px-xs py-xs focus-within:border-dark-teal">
+                                            <input
+                                              type="number"
+                                              value={params.intervalMinutes ?? ''}
+                                              onChange={e => updateParam('intervalMinutes', e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value) || 1))}
+                                              className="w-[48px] font-inter text-xs text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                            />
+                                          </div>
+                                          <span className="font-inter text-xxs text-text-muted">Interval (min)</span>
                                         </div>
-                                      )
-                                    })}
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
-                              )}
-                            </div>
-                            {orders.length > 0 && (
-                              <div className="flex flex-col gap-xs mt-md">
-                                <div className={`flex items-center gap-xs px-xs py-xxxs rounded-lg border ${capacityOk ? 'bg-[#E7F4EE] border-[#1F8A5B]/20' : 'bg-[#FBECEA] border-[#C8372D]/20'}`}>
-                                  <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 ${capacityOk ? 'bg-[#1F8A5B]' : 'bg-[#C8372D]'}`} />
-                                  <span className={`font-inter text-xs font-medium tabular-nums ${capacityOk ? 'text-text-primary' : 'text-[#C8372D]'}`}>
-                                    {capacityOk ? 'Kapacitet dækket' : `${day.tonsPlanned - totalCapacity} tons á forventet ${day.tonsPlanned} tons mangler disponering`}
-                                  </span>
-                                </div>
-                                {roundsPerTruck > 0 && (
-                                  <div className="flex items-center gap-xs px-xs py-xxxs rounded-lg bg-[#F0F4FF] border border-[#4A6FBF]/15">
-                                    <span className="font-inter text-xs text-text-primary tabular-nums">
-                                      Rundtid <span className="font-semibold">{roundTime} min</span>
-                                    </span>
-                                    <span className="text-text-muted">·</span>
-                                    <span className="font-inter text-xs text-text-primary tabular-nums">
-                                      <span className="font-semibold">{roundsPerTruck}</span> runder/bil
-                                    </span>
-                                    <span className="text-text-muted">·</span>
-                                    {(() => {
+
+                                  {/* Højre: Bilbehov — kapacitet + rundtid + fabriksafstand (40%), vertikal adskillelse fra venstre */}
+                                  <div className="flex flex-col gap-xs w-full md:basis-2/5 min-w-0 md:border-l md:border-hairline md:pl-md">
+                                    <h4 className="font-poppins text-sm font-medium text-text-primary mb-xxs">
+                                      Bilbehov
+                                    </h4>
+                                    <div className={`self-start inline-flex items-center gap-xs px-xs py-xxxs rounded-lg border ${capacityOk ? 'bg-good-bg border-good/20' : 'bg-bad-bg border-bad/20'}`}>
+                                      <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 ${capacityOk ? 'bg-good' : 'bg-bad'}`} />
+                                      <span className={`font-inter text-xs font-medium tabular-nums ${capacityOk ? 'text-text-primary' : 'text-bad'}`}>
+                                        {capacityOk ? 'Kapacitet dækket' : `${day.tonsPlanned - totalCapacity} tons mangler`}
+                                      </span>
+                                    </div>
+                                    {roundsPerTruck > 0 && (() => {
                                       const avgTons = (totalTrucks > 0 && singleLoadCapacity > 0)
                                         ? Math.round(singleLoadCapacity / totalTrucks)
                                         : 30
                                       const recommended = Math.ceil(day.tonsPlanned / (avgTons * roundsPerTruck))
                                       return (
-                                        <span className="font-inter text-xs text-text-primary tabular-nums">
-                                          Anbefalet: <span className="font-semibold">{recommended}</span> biler (á gns {avgTons} tons)
-                                        </span>
+                                        <>
+                                          <div className="self-start inline-flex items-center gap-xs px-xs py-xxxs rounded-lg bg-surface-2 border border-hairline">
+                                            <span className="font-inter text-xs text-text-primary tabular-nums">
+                                              Rundtid <span className="font-semibold">{roundTime} min</span>
+                                            </span>
+                                          </div>
+                                          <div className="self-start inline-flex items-center gap-xs px-xs py-xxxs rounded-lg bg-surface-2 border border-hairline">
+                                            <span className="font-inter text-xs text-text-primary tabular-nums">
+                                              <span className="font-semibold">{roundsPerTruck}</span> runder/bil
+                                            </span>
+                                          </div>
+                                          <div className="self-start inline-flex items-center gap-xs px-xs py-xxxs rounded-lg bg-surface-2 border border-hairline">
+                                            <span className="font-inter text-xs text-text-primary tabular-nums">
+                                              Anbefalet: <span className="font-semibold">{recommended}</span> biler (á gns {avgTons} tons)
+                                            </span>
+                                          </div>
+                                        </>
                                       )
                                     })()}
+                                    {/* Afstand til fabrik — display-pille (km fra Google-integration, drivetid = km × 1 min) */}
+                                    <div className="self-start inline-flex items-center gap-xs px-xs py-xxxs rounded-lg bg-surface-2 border border-hairline">
+                                      <span className="font-inter text-xs text-text-primary tabular-nums">
+                                        Afstand til fabrik <span className="font-semibold">{factoryKm} km</span> · <span className="font-semibold">{factoryKm} min</span>
+                                      </span>
+                                    </div>
                                   </div>
-                                )}
-                              </div>
-                            )}
+                                </div>
+                              )}
+                            </div>
                           </div>
 
                           <hr className="border-hairline" />
@@ -1904,66 +1973,81 @@ export function OrdrePlanScreen() {
 
                             return (
                               <div>
-                                <p className="font-inter text-xs font-semibold text-text-primary mb-xs">
-                                  Kørsel: {activeProduct.factory.name} – Søvej 6D, 4900 Nakskov
-                                </p>
-
-                                {/* Single-produkt: bevar nuværende layout */}
-                                {!erMultiProdukt && (
-                                  <div className="grid grid-cols-2 gap-xs">
-                                    <div className="flex flex-col gap-xxxs">
-                                      <label className="font-inter text-xxs text-text-muted">Første læs</label>
-                                      <input
-                                        type="time"
-                                        value={params.firstLoadTime ?? ''}
-                                        onChange={e => updateParam('firstLoadTime', e.target.value || undefined)}
-                                        className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                                      />
-                                    </div>
-                                    <div className="flex flex-col gap-xxxs">
-                                      <label className="font-inter text-xxs text-text-muted">Interval</label>
-                                      <div className="flex items-center gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs focus-within:border-dark-teal">
-                                        <input
-                                          type="number"
-                                          value={params.intervalMinutes ?? ''}
-                                          onChange={e => updateParam('intervalMinutes', e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value) || 1))}
-                                          className="w-full font-inter text-xs text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                                        />
-                                        <span className="font-inter text-xxs text-text-muted">min</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Multi-produkt: ét felt-sæt per produkt stablet vertikalt */}
-                                {erMultiProdukt && (() => {
-                                  /** Inline helper — undgår duplikering mellem produkt-1 og produkt-2+-NEJ-case */
-                                  const FelterBlok = ({ productId, dayId, pp }: { productId: string; dayId: string; pp: ProduktKørselParams }) => (
-                                    <div className="grid grid-cols-2 gap-xs">
-                                      <div className="flex flex-col gap-xxxs">
-                                        <label className="font-inter text-xxs text-text-muted">Første læs på plads</label>
-                                        <input
-                                          type="time"
-                                          value={pp.foersteLaesPaaPlads ?? ''}
-                                          onChange={e => updateProduktKørsel(productId, dayId, 'foersteLaesPaaPlads', e.target.value || null)}
-                                          className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                                        />
-                                      </div>
-                                      <div className="flex flex-col gap-xxxs">
-                                        <label className="font-inter text-xxs text-text-muted">Interval (min)</label>
-                                        <div className="flex items-center gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs focus-within:border-dark-teal">
+                                {/* Single-produkt: Første læs + Interval — read-only spejling af Start-rækkefølge (bil 1 + Herefter interval) */}
+                                {!erMultiProdukt && (() => {
+                                  const nr1Tid = startTider[day.id]?.[0] ?? null
+                                  const herefterInterval = params.intervalMinutes ?? null
+                                  const mangler = [nr1Tid === null && 'første læs', herefterInterval === null && 'interval'].filter(Boolean)
+                                  return (
+                                    <div className="flex flex-col gap-xs">
+                                      {mangler.length > 0 && (
+                                        <div className="flex items-center gap-xs px-xs py-xxs rounded-lg bg-warn-bg border border-warning">
+                                          <span className="font-inter text-xs text-text-primary">Du skal udfylde {mangler.join(' og ')} (bil 1 + Herefter interval i Start-rækkefølge ovenfor).</span>
+                                        </div>
+                                      )}
+                                      <div className="flex items-end gap-xs">
+                                        <div className="flex flex-col gap-xxxs">
+                                          <label className="font-inter text-xxs text-text-muted">Første læs</label>
+                                          <input
+                                            type="time"
+                                            value={nr1Tid ?? ''}
+                                            readOnly
+                                            className="font-inter text-xs text-text-muted bg-surface-2 border border-hairline rounded-lg px-xs py-xs w-fit cursor-default"
+                                          />
+                                        </div>
+                                        <div className="flex flex-col gap-xxxs">
+                                          <label className="font-inter text-xxs text-text-muted">Interval (min)</label>
                                           <input
                                             type="number"
-                                            min={1}
-                                            value={pp.intervalMin ?? ''}
-                                            onChange={e => updateProduktKørsel(productId, dayId, 'intervalMin', e.target.value === '' ? null : Math.max(1, parseInt(e.target.value) || 1))}
-                                            className="w-full font-inter text-xs text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                            value={herefterInterval ?? ''}
+                                            readOnly
+                                            className="font-inter text-xs text-text-muted bg-surface-2 border border-hairline rounded-lg px-xs py-xs w-[80px] cursor-default tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
                                           />
-                                          <span className="font-inter text-xxs text-text-muted">min</span>
                                         </div>
                                       </div>
                                     </div>
                                   )
+                                })()}
+
+                                {/* Multi-produkt: ét felt-sæt per produkt stablet vertikalt */}
+                                {erMultiProdukt && (() => {
+                                  /** Inline helper — undgår duplikering mellem produkt-1 og produkt-2+-NEJ-case */
+                                  /** mirror = produkt 1: felterne er read-only spejling af bil 1's starttid + Herefter interval (Start-rækkefølge).
+                                   *  Produkt 2+ (mirror=false): egne redigerbare per-produkt-felter (den låste per-produkt-model). */
+                                  const FelterBlok = ({ productId, dayId, pp, mirror }: { productId: string; dayId: string; pp: ProduktKørselParams; mirror?: boolean }) => {
+                                    const nr1Tid = startTider[day.id]?.[0] ?? null
+                                    const herefterInterval = params.intervalMinutes ?? null
+                                    return (
+                                      <div className="grid grid-cols-2 gap-xs">
+                                        <div className="flex flex-col gap-xxxs">
+                                          <label className="font-inter text-xxs text-text-muted">Første læs på plads</label>
+                                          <input
+                                            type="time"
+                                            value={mirror ? (nr1Tid ?? '') : (pp.foersteLaesPaaPlads ?? '')}
+                                            readOnly={mirror}
+                                            onChange={mirror ? undefined : (e => updateProduktKørsel(productId, dayId, 'foersteLaesPaaPlads', e.target.value || null))}
+                                            className={mirror
+                                              ? 'font-inter text-xs text-text-muted bg-surface-2 border border-hairline rounded-lg px-xs py-xs cursor-default'
+                                              : 'font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal'}
+                                          />
+                                        </div>
+                                        <div className="flex flex-col gap-xxxs">
+                                          <label className="font-inter text-xxs text-text-muted">Interval (min)</label>
+                                          <div className={`flex items-center gap-xxxs border border-hairline rounded-lg px-xs py-xs ${mirror ? 'bg-surface-2' : 'bg-white focus-within:border-dark-teal'}`}>
+                                            <input
+                                              type="number"
+                                              min={1}
+                                              value={mirror ? (herefterInterval ?? '') : (pp.intervalMin ?? '')}
+                                              readOnly={mirror}
+                                              onChange={mirror ? undefined : (e => updateProduktKørsel(productId, dayId, 'intervalMin', e.target.value === '' ? null : Math.max(1, parseInt(e.target.value) || 1)))}
+                                              className={`w-full font-inter text-xs bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none ${mirror ? 'text-text-muted cursor-default' : 'text-text-primary'}`}
+                                            />
+                                            <span className="font-inter text-xxs text-text-muted">min</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )
+                                  }
 
                                   return (
                                     <div className="flex flex-col gap-xs">
@@ -1988,17 +2072,31 @@ export function OrdrePlanScreen() {
 
                                         return (
                                           <div key={p.id} className="border-l-2 border-dark-teal/30 pl-sm pb-xs">
-                                            <h5 className="font-poppins text-xs font-semibold text-text-primary mb-xxs">
+                                            <h5 className="font-poppins text-sm font-medium text-text-primary mb-xxs">
                                               Produkt {i + 1}: {p.recipeName} ({dayEntry.tonsPlanned} t)
                                             </h5>
 
                                             {i === 0 ? (
-                                              /* Produkt 1: første produkt — felter vises altid */
-                                              <FelterBlok productId={p.id} dayId={dayEntry.id} pp={ppParams} />
+                                              /* Produkt 1: felter spejler bil 1 + Herefter interval (read-only) */
+                                              (() => {
+                                                const nr1Tid = startTider[day.id]?.[0] ?? null
+                                                const herefterInterval = params.intervalMinutes ?? null
+                                                const mangler = [nr1Tid === null && 'første læs', herefterInterval === null && 'interval'].filter(Boolean)
+                                                return (
+                                                  <>
+                                                    {mangler.length > 0 && (
+                                                      <div className="flex items-center gap-xs px-xs py-xxs mb-xs rounded-lg bg-warn-bg border border-warning">
+                                                        <span className="font-inter text-xs text-text-primary">Du skal udfylde {mangler.join(' og ')} (bil 1 + Herefter interval i Start-rækkefølge ovenfor).</span>
+                                                      </div>
+                                                    )}
+                                                    <FelterBlok productId={p.id} dayId={dayEntry.id} pp={ppParams} mirror />
+                                                  </>
+                                                )
+                                              })()
                                             ) : (
-                                              /* Produkt 2+: toggle først, felter kun ved NEJ */
+                                              /* Produkt 2+: toggle først (kolonne-layout — tekst øverst, toggle venstrestillet nedenunder), felter kun ved NEJ */
                                               <>
-                                                <div className="flex items-center justify-between gap-xs mb-xs">
+                                                <div className="flex flex-col items-start gap-xxs mb-xs">
                                                   <span className="font-inter text-xs text-text-secondary">
                                                     Køres direkte efter forrige produkt?
                                                   </span>
@@ -2044,37 +2142,6 @@ export function OrdrePlanScreen() {
                               </div>
                             )
                           })()}
-
-                          {/* Info-linje */}
-                          <div className="grid grid-cols-2 gap-xs">
-                            <div className="flex flex-col gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs">
-                              <span className="font-inter text-xxs text-text-muted">Afstand til fabrik</span>
-                              <div className="flex items-center gap-xxxs">
-                                <input
-                                  type="number"
-                                  value={factoryKm}
-                                  onChange={e => setFactoryKm(Math.max(1, parseInt(e.target.value) || 1))}
-                                  className="w-[48px] font-poppins text-base font-semibold text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                                />
-                                <span className="font-inter text-xxs text-text-muted">km → {factoryKm} min</span>
-                              </div>
-                              {factoryKm !== GOOGLE_KM && (
-                                <span className="font-inter text-xxs text-text-muted">Google-beregnet: {GOOGLE_KM} km</span>
-                              )}
-                            </div>
-                            <div className="flex flex-col gap-xxxs bg-white border border-hairline rounded-lg px-xs py-xs">
-                              <span className="font-inter text-xxs text-text-muted">Forventet sidste bil</span>
-                              <span className="font-inter text-xs font-semibold text-text-primary tabular-nums">
-                                {(() => {
-                                  if (!totalTrucks || !params.firstLoadTime || roundsPerTruck === 0 || params.intervalMinutes == null) return '–'
-                                  const [h, m] = params.firstLoadTime.split(':').map(Number)
-                                  const lastDeparture = h * 60 + m + (totalTrucks - 1) * params.intervalMinutes + (roundsPerTruck - 1) * roundTime
-                                  const lastArrival = lastDeparture + factoryKm
-                                  return `${String(Math.floor(lastArrival / 60)).padStart(2, '0')}:${String(lastArrival % 60).padStart(2, '0')}`
-                                })()}
-                              </span>
-                            </div>
-                          </div>
 
                           {/* Kommentar til chauffør — sendes med ordren til chauffør-appen (se FUNCTIONAL_FLOWS Flow 1 Trin 8) */}
                           <div className="flex flex-col gap-xxxs">
