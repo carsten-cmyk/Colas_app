@@ -155,7 +155,14 @@ Currently no production-components (kun prototype-skærme i `src/prototypes/`).
 
 ### Components (`shared/components/`)
 
-🔴 **EKSISTERER IKKE ENDNU** — første kandidater til cross-app deling (jf. 🌍-mærkede ovenfor):
+#### 🌍 Cross-app (web)
+
+| # | Komponent | Status | Beskrivelse | Brugt i |
+|---|---|---|---|---|
+| 1 | `PeriodeNavigator` | 🌍 PLANLAGT (SPEC: `Docs/shared/SPEC_PeriodeNavigator.md`) | Kanonisk periode-navigator: pile + "I dag" + valgfri mode-toggle (uge/14-dage/måned) + valgfri inline dato-label. Erstatter 3 divergerende implementeringer. | fabrik/Produktionsplan, vognmand/Gantt, vognmand/Liste |
+
+#### Kandidater (native — deferred)
+
 - `OrderMetrics` (brugt i chauffeur + gps_test)
 - `StatCard` (brugt i chauffeur + gps_test)
 

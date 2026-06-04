@@ -6,15 +6,31 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronRight, List, LayoutGrid, Clock, Repeat, Factory, Scale, CloudRain } from 'lucide-react'
+import { PeriodeNavigator } from '@shared/components/PeriodeNavigator'
 import { MOCK_ORDRER } from '@/mocks/ordrer'
 import { erGodkendt } from '@/mocks/disponeringState'
 import { formatDatoLang, formatDatoMedUgedag } from '@/utils/dato'
 import type { Ordre, DagDisponering } from '@/types/vognmand'
 
 type Tab = 'alle' | 'aabne' | 'disponeret'
+// DATO-NOTE: Periode-labelen (fmtShort) bruger kortformat ("13. mar") da det er en komprimeret range-overskrift.
+// Kalender-celler vises ikke som fulde datoer — jf. DATOFORMAT.md.
+type ViewMode = 'uge' | '14-dage' | 'maaned'
 
-// Forankret prototype-dato
+// Forankret prototype-dato — SAMME konstant som VognmandGanttScreen.tsx
 const TODAY = new Date('2026-03-16T00:00:00')
+
+function addDays(base: Date, n: number): Date {
+  const d = new Date(base)
+  d.setDate(d.getDate() + n)
+  return d
+}
+
+function getViewDays(mode: ViewMode): number {
+  if (mode === 'uge') return 7
+  if (mode === '14-dage') return 14
+  return 31
+}
 
 type OrdreStatus = 'roed' | 'orange' | 'groen' | 'gul'
 
@@ -296,6 +312,29 @@ export function VognmandListeScreen() {
   })
   const [søgning, setSøgning] = useState('')
 
+  // Kalender-navigation state — uafhængig af Gantt-view (ingen synkronisering)
+  const [viewMode, setViewMode] = useState<ViewMode>('14-dage')
+  const [offset, setOffset] = useState(0)
+
+  const viewDays = getViewDays(viewMode)
+
+  function getWindowStart(): Date {
+    if (viewMode === 'uge') {
+      const base = addDays(TODAY, offset)
+      const dow = base.getDay()
+      const mondayOffset = dow === 0 ? -6 : 1 - dow
+      return addDays(base, mondayOffset)
+    }
+    return addDays(TODAY, offset)
+  }
+
+  const windowStart = getWindowStart()
+  const days = Array.from({ length: viewDays }, (_, i) => addDays(windowStart, i))
+  const windowEnd = days[days.length - 1]
+
+  const fmtShort = (d: Date) =>
+    d.toLocaleDateString('da-DK', { day: 'numeric', month: 'short' })
+
   const alleOrdrer = MOCK_ORDRER.filter(o => o.dage.some(d => d.bestilteBiler > 0))
 
   const tabFilteredOrdrer = alleOrdrer.filter(o => {
@@ -304,7 +343,19 @@ export function VognmandListeScreen() {
     return true
   })
 
-  const sortedOrdrer = sortOrdrer(tabFilteredOrdrer)
+  // Periode-filter: kun ordrer med dage (med bestilte biler) inden for det valgte vindue
+  const windowStartIso = windowStart.toISOString().slice(0, 10)
+  const windowEndIso = windowEnd.toISOString().slice(0, 10)
+
+  const periodeFilteredOrdrer = tabFilteredOrdrer.filter(o =>
+    o.dage.some(d =>
+      d.bestilteBiler > 0 &&
+      d.dato >= windowStartIso &&
+      d.dato <= windowEndIso
+    )
+  )
+
+  const sortedOrdrer = sortOrdrer(periodeFilteredOrdrer)
 
   const filteredOrdrer = søgning.trim()
     ? sortedOrdrer.filter(o =>
@@ -328,7 +379,7 @@ export function VognmandListeScreen() {
               Aktive ordre
             </h1>
             <p className="font-inter text-xs text-text-muted mt-0.5">
-              {filteredOrdrer.length} {filteredOrdrer.length === 1 ? 'ordre' : 'ordrer'}
+              {filteredOrdrer.length} {filteredOrdrer.length === 1 ? 'ordre' : 'ordrer'} · {fmtShort(windowStart)} – {fmtShort(windowEnd)}
             </p>
           </div>
 
@@ -348,6 +399,18 @@ export function VognmandListeScreen() {
               Kalender view
             </button>
           </div>
+        </div>
+
+        {/* Periode-controls */}
+        <div className="mb-5">
+          <PeriodeNavigator
+            modes={['uge', '14-dage', 'maaned']}
+            activeMode={viewMode}
+            onModeChange={m => { setViewMode(m); setOffset(0) }}
+            onNavigate={dir => setOffset(o => o + dir * viewDays)}
+            onToday={() => setOffset(0)}
+            ariaLabel="Periode-navigation"
+          />
         </div>
 
         {/* Filter-tabs */}

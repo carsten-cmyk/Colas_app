@@ -7,7 +7,8 @@
  */
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, List, LayoutGrid } from 'lucide-react'
+import { List, LayoutGrid } from 'lucide-react'
+import { PeriodeNavigator } from '@shared/components/PeriodeNavigator'
 import { MOCK_ORDRER } from '@/mocks/ordrer'
 // DATO-NOTE: Gantt-headeren viser kun ugedag-initialer + dato-tal i komprimerede kalender-celler —
 // disse er ikke fulde datoer i tekst-form og konverteres ikke til lang-format (jf. DATOFORMAT.md).
@@ -179,49 +180,14 @@ export function VognmandGanttScreen() {
         </div>
 
         {/* Periode-controls */}
-        <div className="mb-5 flex items-center gap-3">
-          {/* Periode-view toggle */}
-          <div className="flex bg-white border border-hairline rounded-lg overflow-hidden">
-              {(['uge', '14-dage', 'maaned'] as ViewMode[]).map(v => (
-                <button
-                  key={v}
-                  onClick={() => { setViewMode(v); setOffset(0) }}
-                  className={[
-                    'px-3 py-2 font-inter text-xs font-medium transition-colors',
-                    viewMode === v
-                      ? 'bg-deep-teal text-white'
-                      : 'text-text-muted hover:bg-soft-aqua',
-                  ].join(' ')}
-                >
-                  {v === 'uge' ? 'Uge' : v === '14-dage' ? '14 dage' : 'Måned'}
-                </button>
-              ))}
-            </div>
-
-            {/* Periode-navigation */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => navigatePeriod(-1)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-box-outline text-text-muted hover:bg-soft-aqua hover:text-deep-teal transition-colors"
-                aria-label="Forrige periode"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                onClick={() => setOffset(0)}
-                className="px-3 py-2 font-inter text-xs font-medium bg-white border border-box-outline rounded-lg text-text-muted hover:bg-soft-aqua hover:text-deep-teal transition-colors"
-              >
-                I dag
-              </button>
-              <button
-                onClick={() => navigatePeriod(1)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-box-outline text-text-muted hover:bg-soft-aqua hover:text-deep-teal transition-colors"
-                aria-label="Næste periode"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-
+        <div className="mb-5">
+          <PeriodeNavigator
+            modes={['uge', '14-dage', 'maaned']}
+            activeMode={viewMode}
+            onModeChange={(mode) => { setViewMode(mode); setOffset(0) }}
+            onNavigate={(direction) => navigatePeriod(direction)}
+            onToday={() => setOffset(0)}
+          />
         </div>
 
         {/* Gantt-kort */}

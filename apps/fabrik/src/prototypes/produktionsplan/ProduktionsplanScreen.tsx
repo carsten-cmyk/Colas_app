@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Clock, Truck, Factory, CloudRain, Plus, Layers, Check, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Clock, Truck, Factory, CloudRain, Plus, Layers, Check } from 'lucide-react'
+import { PeriodeNavigator } from '@shared/components/PeriodeNavigator'
 
 // ============================================================================
 // Prototype: Fabrik · Produktionsplan
@@ -995,33 +996,12 @@ export function ProduktionsplanScreen() {
             <p className="font-inter text-xs text-text-muted">
               Nu kl. {NU_HHMM}
             </p>
+            <p className="font-inter text-xs text-text-muted">{formatDanskLangDato(selectedDate)}</p>
           </div>
-          {/* Dato-navigator — stil fra formand/GanttScreen linje 246-267 */}
-          <div className="flex items-center gap-xxxs">
-            <button
-              onClick={() => navigerDag(-1)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-hairline text-text-muted hover:bg-soft-aqua hover:text-deep-teal transition-colors"
-              aria-label="Forrige dag"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <div className="px-sm py-xs font-inter text-sm font-medium bg-white border border-hairline rounded-lg text-text-primary min-w-[180px] text-center">
-              {formatDanskLangDato(selectedDate)}
-            </div>
-            <button
-              onClick={goToday}
-              className="px-sm py-xs font-inter text-xs font-medium bg-white border border-hairline rounded-lg text-text-muted hover:bg-soft-aqua hover:text-deep-teal transition-colors"
-            >
-              I dag
-            </button>
-            <button
-              onClick={() => navigerDag(1)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-hairline text-text-muted hover:bg-soft-aqua hover:text-deep-teal transition-colors"
-              aria-label="Næste dag"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
+          <PeriodeNavigator
+            onNavigate={(direction) => navigerDag(direction)}
+            onToday={goToday}
+          />
         </div>
       </header>
 

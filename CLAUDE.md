@@ -93,6 +93,16 @@ Se `.claude/agents/` for fulde agent-definitioner.
 - Builder kopierer fra prototype hvor muligt — rewrite kun ved bevidst afvigelse (dokumenteres i handoff)
 - Container/Presenter-pattern: kun container importerer hooks. Presentere får props ind, sender callbacks ud.
 
+**Komponent-genbrug — OBLIGATORISK FØR build:**
+1. **Architect SKAL** først tjekke `.claude/docs/COMPONENT_REGISTRY.md` for kanoniske komponenter
+2. **Architect SKAL** dernæst grep'e på tværs af alle apps efter samme UI-mønster:
+   ```bash
+   grep -rln "[pattern-keyword]" apps/*/src/ shared/components/
+   ```
+3. Hvis 2+ apps har samme mønster → flyt til `shared/components/` FØR ny brug tilføjes
+4. Builder må IKKE bygge en ny komponent hvis en kanonisk version findes — wrap eller udvid eksisterende i stedet
+5. Når ny shared komponent bygges, opdatér ALTID `COMPONENT_REGISTRY.md` i samme PR
+
 ---
 
 ## Ufravigelige regler — ALLE apps
