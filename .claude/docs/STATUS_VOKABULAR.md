@@ -201,6 +201,32 @@ type ChauffoerStatus = 'koerer' | 'paa_fabrik' | 'paa_plads' | 'afsluttet'
 
 ---
 
+### 12. `OrderStatus` — Ordre-status i Dagsoversigt + Gantt (LÅST 2026-06-05)
+
+```ts
+type OrderStatus = 'afventer' | 'planlagt' | 'aktiv'
+```
+
+| Værdi | Label | Farve | Betyder |
+|---|---|---|---|
+| `afventer` | "Afventer planlægning" | Gul (`bg-yellow` / `bg-warn-bg`) | Opgave oprettet, mangler planlægning |
+| `planlagt` | "Planlagt" | Lysegrøn (`bg-good-bg` med `text-good`) | Opgave er planlagt og klar |
+| `aktiv` | "I gang" | Mørkegrøn (`bg-good` med `text-white`) | Opgave er i gang nu |
+
+**Visuelt hierarki:**
+- Gul = handling påkrævet (afventer)
+- Lysegrøn = klar (planlagt)
+- Mørkegrøn = aktiv (i gang)
+
+**Gælder:** Dagsoversigt-prototypen + Gantt-prototypen + alle fremtidige dashboards der viser ordre-status.
+
+**Tidligere afvigelser konsolideret 2026-06-05:**
+- Dagsoversigt brugte "Aktiv" → ændret til "I gang"
+- Gantt brugte mørkeblå `bg-dark-teal` for planlagt → ændret til lysegrøn `bg-good-bg`
+- Gantt brugte hardkodet `bg-[#2E9E65]` → ændret til token `bg-good`
+
+---
+
 ## Hvor håndhæves dette?
 
 - **Supabase:** Postgres `CHECK`-constraints eller `enum`-types per tabel

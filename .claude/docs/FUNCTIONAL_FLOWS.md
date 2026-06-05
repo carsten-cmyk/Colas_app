@@ -371,6 +371,8 @@ Det hyppigste tilfælde er sekventiel kørsel uden tids-buffer mellem produkter.
 
 #### Produkt-skift-sikring under eksekvering (LÅST 2026-06-03)
 
+> **🟡 ÅBENT PUNKT (2026-06-05) — kombineret last ved overgang.** Logikken nedenfor antager et **rent sekventielt skift**: `aktivt_produkt` er ét produkt ad gangen, og A→B-skiftet sker først når A's sidste vejeseddel er udvejet. Det dækker IKKE scenariet hvor én bil tager **rest af A + noget af B i samme tur** (to vejninger / to vejesedler på ét fabriksbesøg, med fabrik-besked om begge produkter). Afklaring + signoff tracket i **#36 (`DOCS-AK-001`)**. Indtil den er låst, gælder kun ét-produkt-pr-last-modellen her.
+
 Risiko: Når aktivt produkt skifter fra A til B, må en chauffør IKKE ende med at hente forkert produkt på fabrik. Dette løses med tre lag der hver fungerer som safety net:
 
 **Lag 1 — Server som sandhed (udvidet 2026-06-03)**
@@ -661,9 +663,13 @@ Eksplicit bekræftelse fjerner badge — ingen "har set"-tracking. Hver app er a
 | App | Trigger der fjerner badge |
 |---|---|
 | **Vognmand** | Vognmand re-disponerer biler på den nye booking OG trykker "Bekræft ordre" (samme handling der allerede lukker `ændretAfFormand`-flag i normal-flow Trin 5). Ingen automatisk dismiss — vognmand skal aktivt acceptere ændringen. |
-| **Fabrik** | Eksplicit **"OK, set"-knap** på den ændrede ordre i produktionsplanen. Klik → badge + advarsels-baggrund fjernes. Fabriksmesteren har ingen anden formel bekræftelses-handling (silo-tildeling er ikke garanteret), så knappen er nødvendig. |
+| **Fabrik** | ~~Eksplicit "OK, set"-knap~~ — **fjernet 2026-06-05**: Aflyst-vejr-badge er permanent visuel indikator. Ingen brugerhandling kræves fra fabriksmester. Badge + advarsels-baggrund forbliver synlig hele dagen (jf. UI-tweak i ProduktionsplanScreen.tsx). |
 
 Begge apps har **uafhængig lifecycle** — vognmand kan have bekræftet uden at fabrik har, og omvendt. Hver app rydder sit eget signal.
+
+**2026-06-05: Fabrik produktionsplan layout-justeringer:**
+- Minus-regn-ikon flyttet fra øverst-i-info-kolonnen til inline med recept-nummer (forhindrer at ikonet skubber tekstrækker ned)
+- "OK, set"-knap på aflyst-vejr-ordrer fjernet — aflysning er permanent visuel indikator, ingen brugerhandling kræves
 
 Hvis dagen udløber (overgang til historik) uden bekræftelse → badge forsvinder automatisk fra aktive lister, men markeringen forbliver i historik som "håndteret uden bekræftelse".
 
@@ -1069,6 +1075,22 @@ Afregningstypen flyder ind på ordren via `confirmed_vehicles[].afregning_type`.
 - Hvis samme chauffør kører flere materiel-enheder på samme reg.nr → ÉN samlet afregning per chauffør (gruppering ved render-tid)
 - `time_registreringer` for materiel skrives som én række per chauffør-key (regnr+dayId), IKKE per materiel-enhed
 
+### Afregning — Timeafregning-sektion (2026-06-05)
+- Ny sektion under Materielafregning på Afregning-modus
+- Box med tekst "Timeafregning for hold. Bemærk at knap åbner PLAN."
+- Centreret gul knap "PLAN" → åbner PLAN-system (deep-link/ny fane i produktion)
+- Placeholder-sektion — selve time-registreringen håndteres i PLAN, ikke i formand-app
+- PLAN-knap åbner mock-modal med forenklet visning af PLAN's TIMEREGISTRERING-skærm (placeholder, ikke funktionel)
+
+### Afregning — Udlægning per produkt (2026-06-05)
+- Udlægning-sektionen splittes nu per produkt på Afregning-modus
+- Produkt-tabs øverst (samme styling som samleordre-tabs på Ordredetaljer)
+- Tabs vises kun hvis ordren har 2+ produkter (1 produkt → ingen tabs, ingen indre boks)
+- I samleordre-mode: child-tabs ovenpå (Ordredetaljer) + produkt-tabs på Udlægning — nested
+- FremdriftCards (tons-ankommet, forventet-udlagt, faktisk-udlagt) filtreres på valgt produkt
+- Også gældende for puljelæs (samme-bil-flere-produkter): hver produkt har sin egen udlægnings-visning
+- Datakilde: `perProduktUdlaegning`-mock i `AfregningContent` — TODO: Erstat med Supabase per-produkt udlægnings-data
+
 ---
 
 ## Flow 5: Entreprisekontrol & Temperaturmåling → Skema-krav
@@ -1087,10 +1109,24 @@ Afregningstypen flyder ind på ordren via `confirmed_vehicles[].afregning_type`.
 **Forretningsregel:** De to felter fusioneres til ét visningsfelt. Strengeste krav vinder: `2` (A3+A4+MKS) > `1` (kun MKS) > undefined.
 
 ### Trin 2 — Formand udfylder skemaer i Udførelse-menu
-**Status:** Ikke bygget endnu
+**Status:** Bygget (prototype, 2026-06-05) i `UdfoerselContent` — expandable sektion "KS-rapportering" placeret umiddelbart efter Forundersøgelse-sektionen.
 **App:** formand
-**Komponent:** Udførelse-menupunkt → A3-skema, A4-skema, MKS-skema (planlagt)
-**Note:** A3/A4 udfyldes kun når mindst ét af felterne har værdi `2`. MKS udfyldes ved enhver værdi `1` eller `2`.
+**Komponent:** `UdfoerselContent` → "KS-rapportering" sektion med 3 tabs: A3 (ØVR. 3.a), A4 (ØVR. 4.a), MKS
+**Note:** A3/A4 vises kun når mindst ét produkt har `entreprisekontrol === 2` eller `temperaturmaaling === 2`. MKS vises ved enhver værdi `1` eller `2`. Hele sektionen skjules hvis ingen krav.
+
+### Udførsel — KS-rapportering (2026-06-05)
+- Ny expandable sektion under Forundersøgelse på `UdfoerselContent`
+- 3 KS-skemaer som tabs: A3 (ØVR. 3.a) · A4 (ØVR. 4.a) · MKS
+- A3 og A4 har identisk struktur via helper `OvrigeOplysningerSkema` — lag-form med produkt + stationering + areal (l×b + tillæg) + read-only beregnede felter (areal i alt, gennemsnitsforbrug) + bemærkninger
+- MKS har komplekst skema via helper `MksSkema`: vejr som dropdowns (vind/regn/vejoverflade), klæbning (intakt-radio + type-dropdown + mængde), udlægning-krav (samlinger/profil/jævnhed) + konstateret (rivninger/svedninger/driftsstop), færdiggørelse (rensning + ingen-krav-checkbox + aftalt-med)
+- **Conditional visibility:** Union på tværs af alle produkter — strengeste vinder:
+  - `entreprisekontrol/temperaturmaaling === 1` (og ingen `2`) → kun MKS-tab vises
+  - `entreprisekontrol/temperaturmaaling === 2` på mindst ét produkt → alle 3 tabs vises
+  - Begge felter `undefined` → hele sektionen skjules
+- Visuel mockup uden state-persist — inputs bruger `defaultValue`/placeholder
+- Default tab: `'mks'` (MKS er altid det første krav)
+- Collapsed-look matcher Forundersøgelse-pattern: hvid box-wrapper (`bg-surface border border-hairline rounded-2xl shadow-sm`) + "Mangler vurdering"-status-pille i højre side
+- Status-pille er pt. konstant "Mangler vurdering" (visuel mockup, ingen state-tracking endnu)
 
 ---
 
@@ -1295,15 +1331,16 @@ hvor `densitet_kg_per_m3` er heltal fra `recepter[receptkode].densitet` (fx 2400
 - Fallback: `—` (em-dash) hvis feltet er undefined
 - TODO: Erstat med Supabase `chauffør_tlf`-felt når klar
 
-### Vejeseddel-tabel — multi-produkt statusbars (2026-06-04)
-- Hvis `produktEstimater`-prop er angivet: vises én statusbar per produkt over tabellen
-- Gruppering: per `receptkode` (`Vejeseddel.receptkode`)
-- Overskrift på alle statusbars: produktnavn (fra `recepter`-map) — fallback til receptkode
-- Format: `[Produktnavn]\n{lagt_ud} t af {estimat} t · {%}\n[ProgressBar]`
-- `lagt_ud` = sum af `tons` for `status === 'udlagt'` per receptkode
-- `estimat` = `produktEstimater[receptkode]` — leveres af parent som prop
-- ProgressBar-variant: `good` (≥90%), `warn` (50–89%), `bad` (<50%)
-- Datakilde for estimat: TODO: Erstat med Supabase ordre-produktlinje (tonsTotal) når klar
+### Vejeseddel-tabel — produkt-statusbar i header-række (2026-06-04, OPDATERET 2026-06-05)
+- **Placering:** Kompakt pille i Vejesedler-sektionens header-række (højre for `<h2>Vejesedler</h2>`) — IKKE inde i VejesedlerTable
+- **Synlighed:** Kun når præcis 1 produkt er aktivt på den valgte dato (`days.some(d => d.date === selectedDate && !d.cancelled)`)
+- **Pulje-læs-guard:** 2+ produkter aktive samtidigt → pille skjules (datamodel kan ikke splitte tons mellem produkter endnu)
+- 0 aktive → ingen pille
+- **Format:** `Status · [Produktnavn] · {udlagt} t af {estimat} t · {%}` + horisontal progress-bar (inline, bg-good)
+- **Datakilde:** `MockProduct.days[selectedDate].tonsPlanned` som estimat, `Vejeseddel.tons` (filtreret på `receptkode === recipeCode + status='udlagt'`) som udlagt
+- `estimat` = `dagsplan.tonsPlanned` — fallback til `produkt.tonsTotal`
+- Produktnavn: fra `INITIAL_RECEPTER[recipeCode].navn` — fallback til recipeCode
+- TODO: Erstat med Supabase ordre-estimat pr. dag når klar
 
 ---
 
@@ -2196,3 +2233,52 @@ Funktionalitet der er IDENTIFICERET og delvist DESIGNET, men ikke skal i Fase 1.
 ### F2-2: (placeholder for fremtidige udvidelser)
 
 Tilføj nye Fase 2-items her efterhånden som de identificeres og udskydes.
+
+---
+
+## UI-konventioner
+
+### Dato-pille-konvention (2026-06-05)
+
+Anvendes på **Asfaltbestilling-piller** og **"Udføres i perioden"-piller** — visuelt ens på tværs af begge sektioner.
+
+- 2026-06-05: "Udføres i perioden" flyttet UD af Ordredetaljer-sektionen til at være FØRSTE sektion på Udførsel-mode (ovenover Ordredetaljer). Giver hurtigere adgang til dag-navigation.
+
+| Tilstand | Styling |
+|---|---|
+| Aktuel dag (selected) | `bg-deep-teal text-white shadow-sm` |
+| Passeret dag | `bg-white border border-hairline text-text-muted line-through hover:border-dark-teal` |
+| Fremtidig dag | `bg-white border border-hairline text-text-muted hover:border-dark-teal hover:text-deep-teal` |
+| Alle dage afsendt (kun Asfaltbestilling) | `bg-good text-white shadow-sm` + `CheckCircle2`-ikon |
+
+`isPast` beregnes som `ds < dateToString(TODAY)`. Aria-label for passerede datoer: `"[dato] (overstået)"`. `isAllSent` har prioritet over `isPast` i Asfaltbestilling.
+
+### OrderStatus-pille-konvention (2026-06-05)
+- "Afventer planlægning" → gul (`bg-yellow`/`bg-warn-bg`)
+- "Planlagt" → lysegrøn (`bg-good-bg`/`bg-good/20` + `text-good`)
+- "I gang" → mørkegrøn (`bg-good` + `text-white`)
+- Konsistent på tværs af Dagsoversigt + Gantt + alle fremtidige status-piller for ordrer
+- Kanonisk: `.claude/docs/STATUS_VOKABULAR.md` § `OrderStatus`
+
+### Enheds-konvention — fulde ord (LÅST 2026-06-05)
+
+På tværs af ALLE Colas-apps skal UI bruge fulde enhedsnavne, IKKE forkortelser.
+
+| Korrekt | Forkert |
+|---|---|
+| `25 Tons` | `25 t`, `25t`, `25 ton` |
+| `147 Tons af 250 Tons` | `147 t af 250 t` |
+| `2,5 Timer` | `2,5 h`, `2,5 t` |
+| `15 Minutter` | `15 min`, `15 m` |
+
+**Undtagelser:**
+- Klokkeslæt `HH:MM` bevares
+- CSS-enheder (`px`, `rem`, `%`) er ikke berørt
+- Tekniske felter (fx min-temperatur) vurderes case-by-case
+
+**Konsekvens:**
+- Storybook-labels skal følge reglen
+- JSDoc-eksempler skal følge reglen
+- Reviewer flagger forkortelser som issue selv i prototype-kode
+
+Cleanup af eksisterende "t"/"h"/"min" forkortelser er sporet via separat GitHub-issue.
