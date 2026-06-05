@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Clock, Truck, Factory, CloudRain, Plus, Layers, Check } from 'lucide-react'
+import { Clock, Truck, Factory, CloudRain, Plus, Layers } from 'lucide-react'
 import { PeriodeNavigator } from '@shared/components/PeriodeNavigator'
 
 // ============================================================================
@@ -459,7 +459,7 @@ function Timeline({
 function OrdreLaneInfo({
   ordre,
   erBekraeftet,
-  onBekraeft,
+  onBekraeft: _onBekraeft, // 2026-06-05: prop behold i interface — "OK, set"-knap fjernet men parent sender stadig callback
 }: {
   ordre: Ordre
   erBekraeftet: boolean
@@ -474,34 +474,34 @@ function OrdreLaneInfo({
     >
       {/* Info-kolonne */}
       <div className="w-[240px] shrink-0 px-md py-xs border-r border-hairline flex flex-col justify-center">
-        {/* Minus-regn-ikon — flag på selve ordren/produktet, forbliver i info-kolonnen */}
-        {ordre.minusRegn && (
-          <div className="flex items-center gap-xxs mb-xxxs">
-            <span
-              title="Minus regn — kun ved tørvejr"
-              className="inline-flex items-center justify-center w-5 h-5 rounded-sm bg-deep-teal text-white shrink-0"
-            >
-              <CloudRain className="w-3 h-3" aria-hidden="true" />
-            </span>
-          </div>
-        )}
-        {/* Linje 1: recept-nummer + tons (recept prominent — fabriksmestrens primære reference) */}
-        <div className="flex items-center justify-between gap-xxs">
-          <span className="font-poppins font-semibold text-sm text-text-primary">
-            {ordre.receptNummer}
-          </span>
-          <div className="flex flex-col items-end shrink-0">
+        {/* Linje 1: recept-nummer + minus-regn-ikon + tons (alle på samme linje) */}
+        <div className="flex items-baseline justify-between gap-xxs">
+          <div className="flex items-center gap-xxs min-w-0">
             <span className="font-poppins font-semibold text-sm text-text-primary">
-              {ordre.forventetMaengde}t
+              {ordre.receptNummer}
+            </span>
+            {ordre.minusRegn && (
+              <span
+                title="Minus regn — kun ved tørvejr"
+                className="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-deep-teal text-white shrink-0"
+                aria-label="Minus regn"
+              >
+                <CloudRain className="w-3 h-3" aria-hidden="true" />
+              </span>
+            )}
+          </div>
+          <div className="flex items-baseline gap-xxxs shrink-0">
+            <span className="font-poppins font-semibold text-sm text-text-primary">
+              {ordre.forventetMaengde} Tons
             </span>
             {ordre.morgenTons > 0 && (
-              <span className="font-inter text-xxs text-text-muted">
-                {ordre.morgenTons} t morgen
+              <span className="font-inter text-xxs text-text-muted whitespace-nowrap">
+                ({ordre.morgenTons} Tons morgen)
               </span>
             )}
           </div>
         </div>
-        {/* Linje 2: asfalttype (minus-regn-ikon er flyttet til badge-rækken øverst) */}
+        {/* Linje 2: asfalttype */}
         <div className="font-poppins font-semibold text-sm text-text-primary mt-xxxs">
           {ordre.asfalttype}
         </div>
@@ -528,9 +528,9 @@ function OrdreLaneInfo({
 
       {/* Næste bil-kolonne */}
       <div className="w-[160px] shrink-0 px-md py-xs flex flex-col justify-center">
-        {/* Aflyst-vejr badge-stack — vises øverst når ordre er annulleret og ikke bekræftet */}
+        {/* 2026-06-05: "OK, set"-knap fjernet — aflysning er permanent indikator */}
         {ordre.annulleretAarsag === 'vejr' && !erBekraeftet && (
-          <div className="flex flex-col items-start gap-xxxs mb-xs pt-xxs">
+          <div className="flex flex-col items-start mb-xs pt-xxs">
             <span
               title="Ordre annulleret pga. vejr"
               className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-md bg-yellow text-deep-teal font-poppins font-semibold text-xxs uppercase tracking-wide"
@@ -538,13 +538,6 @@ function OrdreLaneInfo({
               <CloudRain className="w-3 h-3 shrink-0" aria-hidden="true" />
               Aflyst — vejr
             </span>
-            <button
-              onClick={onBekraeft}
-              className="inline-flex items-center justify-center gap-xxxs px-xs py-xxxs rounded-md bg-deep-teal text-white font-inter text-xxs font-semibold hover:opacity-90"
-            >
-              <Check className="w-3 h-3" aria-hidden="true" />
-              OK, set
-            </button>
           </div>
         )}
         <div className="font-inter text-xxs text-text-muted uppercase tracking-wide">Næste bil</div>
@@ -669,7 +662,7 @@ function ReceptAggregat({
               Total i dag
             </span>
             <span className="font-poppins font-semibold text-md text-deep-teal">
-              {totalDagTons.toLocaleString('da-DK')} t
+              {totalDagTons.toLocaleString('da-DK')} Tons
             </span>
           </div>
         </li>
@@ -677,7 +670,7 @@ function ReceptAggregat({
           <li key={type} className="px-md py-xs">
             <div className="flex items-center justify-between">
               <span className="font-poppins font-semibold text-sm text-text-primary">{type}</span>
-              <span className="font-inter text-sm font-medium text-text-primary">{total}t</span>
+              <span className="font-inter text-sm font-medium text-text-primary">{total} Tons</span>
             </div>
             <div className="mt-xxxs font-inter text-xxs text-text-muted">
               {antal} {antal === 1 ? 'ordre' : 'ordrer'}
@@ -778,7 +771,7 @@ function SiloRaekke({
                 </span>
                 {silo.totalTons > 0 && (
                   <span className="font-inter text-sm font-medium text-text-primary">
-                    {silo.totalTons}t
+                    {silo.totalTons} Tons
                   </span>
                 )}
               </div>
@@ -821,7 +814,7 @@ function SiloRaekke({
                       >
                         <div className="font-medium text-text-primary">{o.asfalttype}</div>
                         <div className="text-text-muted">
-                          {o.id} · {o.forventetMaengde}t
+                          {o.id} · {o.forventetMaengde} Tons
                         </div>
                       </button>
                     ))}
@@ -834,7 +827,7 @@ function SiloRaekke({
                 <ul className="mt-xs space-y-xxxs">
                   {ordrerISilo.map(o => (
                     <li key={o.id} className="font-inter text-xs text-text-secondary">
-                      {o.id} · {o.forventetMaengde}t · {o.udforselssted}
+                      {o.id} · {o.forventetMaengde} Tons · {o.udforselssted}
                     </li>
                   ))}
                 </ul>
@@ -845,7 +838,7 @@ function SiloRaekke({
                 {/* Header */}
                 <div className="font-poppins font-semibold text-xs text-text-primary">
                   {silo.naeste
-                    ? `Næste produkt — ${silo.naeste.asfalttype} · ${silo.naeste.totalTons}t`
+                    ? `Næste produkt — ${silo.naeste.asfalttype} · ${silo.naeste.totalTons} Tons`
                     : 'Næste produkt'}
                 </div>
 
@@ -854,7 +847,7 @@ function SiloRaekke({
                   <ul className="mt-xxxs space-y-xxxs">
                     {naesteOrdrer.map(o => (
                       <li key={o.id} className="font-inter text-xs text-text-secondary">
-                        {o.id} · {o.forventetMaengde}t · {o.udforselssted}
+                        {o.id} · {o.forventetMaengde} Tons · {o.udforselssted}
                       </li>
                     ))}
                   </ul>
@@ -891,7 +884,7 @@ function SiloRaekke({
                         >
                           <div className="font-medium text-text-primary">{o.asfalttype}</div>
                           <div className="text-text-muted">
-                            {o.id} · {o.forventetMaengde}t
+                            {o.id} · {o.forventetMaengde} Tons
                           </div>
                         </button>
                       ))}
