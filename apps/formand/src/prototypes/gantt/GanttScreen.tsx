@@ -140,8 +140,8 @@ function getBarColorClass(order: GanttOrder, day: Date): string {
   // Weekend-ordrer og ordrer uden tidsvindue: brug state-farve
   if (order.state === 'completed') return 'bg-light-aqua'
   if (day < TODAY && !sameDay(day, TODAY)) return 'bg-light-aqua'
-  if (sameDay(day, TODAY) && order.state === 'active') return 'bg-[#2E9E65]'
-  return 'bg-dark-teal'
+  if (sameDay(day, TODAY) && order.state === 'active') return 'bg-good'
+  return 'bg-good-bg border border-good/30'
 }
 
 const STATE_LABEL: Record<GanttOrder['state'], string> = {
@@ -150,9 +150,10 @@ const STATE_LABEL: Record<GanttOrder['state'], string> = {
   completed: 'Afsluttet',
 }
 
+// LÅST 2026-06-05: active=mørkegrøn (bg-good), planned=lysegrøn (bg-good-bg), completed=uændret
 const STATE_BADGE: Record<GanttOrder['state'], string> = {
-  active: 'bg-[#2E9E65] text-white',
-  planned: 'bg-dark-teal text-white',
+  active: 'bg-good text-white',
+  planned: 'bg-good-bg text-good',
   completed: 'bg-light-aqua text-deep-teal',
 }
 
@@ -425,8 +426,8 @@ export function GanttScreen() {
           {/* Legend */}
           <div className="flex items-center flex-wrap gap-sm mt-sm pl-sm">
             {[
-              { cls: 'bg-[#2E9E65]', label: 'I gang' },
-              { cls: 'bg-dark-teal', label: 'Planlagt / fremtid' },
+              { cls: 'bg-good', label: 'I gang' },
+              { cls: 'bg-good-bg border border-good/30', label: 'Planlagt' },
               { cls: 'bg-light-aqua', label: 'Afsluttet' },
             ].map(({ cls, label }) => (
               <div key={label} className="flex items-center gap-xxxs">

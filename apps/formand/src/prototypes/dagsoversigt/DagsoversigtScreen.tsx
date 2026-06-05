@@ -383,7 +383,7 @@ function getWindowStart(mode: ViewMode, offset: number): Date {
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   planlagt: 'Planlagt',
-  aktiv: 'Aktiv',
+  aktiv: 'I gang',
   afventer: 'Afventer planlægning',
 }
 
@@ -470,10 +470,10 @@ function OrderCardBodyV1({ order }: { order: MockOrder }) {
 }
 
 // Status-classes til mørk (deep-teal) baggrund
-// planlagt: grøn ghost, aktiv: hvid solid (høj kontrast), afventer: gul ghost
+// planlagt: lysegrøn ghost, aktiv: mørkegrøn solid (LÅST 2026-06-05), afventer: gul ghost
 const STATUS_CLASS_DARK: Record<OrderStatus, string> = {
   planlagt: 'bg-good/20 text-good',
-  aktiv: 'bg-white text-deep-teal',
+  aktiv: 'bg-good text-white',
   afventer: 'bg-yellow/30 text-yellow',
 }
 
@@ -571,9 +571,10 @@ function OrderCardBodyV2({ order, samleNr }: { order: MockOrder; samleNr?: strin
 }
 
 // Status-classes — V3: rounded-full pill, lys baggrund (toggle-æstetik fra OrdrePlanScreen linje 1236-1256)
+// LÅST 2026-06-05: aktiv=mørkegrøn (bg-good/text-white), planlagt=lysegrøn (bg-good-bg/text-good), afventer=gul (bg-warn-bg/text-deep-teal)
 const STATUS_CLASS_V3: Record<OrderStatus, string> = {
   planlagt: 'bg-good-bg text-good',
-  aktiv: 'bg-deep-teal text-white',
+  aktiv: 'bg-good text-white',
   afventer: 'bg-warn-bg text-deep-teal',
 }
 
