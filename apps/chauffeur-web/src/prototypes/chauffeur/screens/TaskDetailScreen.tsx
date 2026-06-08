@@ -33,6 +33,10 @@ export interface TaskDetailScreenProps {
   onStart: () => void
   onPause: () => void
   onComplete: () => void
+  /** Anden opgave der allerede er active eller paused — bruges til single-task-constraint */
+  otherActiveTask?: { id: string; orderNumber: string; produkt: string } | null
+  /** Navigér til den anden aktive opgave */
+  onGoToOtherTask?: (taskId: string) => void
 }
 
 export function TaskDetailScreen({
@@ -42,8 +46,13 @@ export function TaskDetailScreen({
   onStart,
   onPause,
   onComplete,
+  otherActiveTask,
+  onGoToOtherTask,
 }: TaskDetailScreenProps) {
   const [pauseConfirmOpen, setPauseConfirmOpen] = useState(false)
+  const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false)
+  const [startConfirmOpen, setStartConfirmOpen] = useState(false)
+  const [alreadyActiveOpen, setAlreadyActiveOpen] = useState(false)
   const [pickup, delivery] = task.locations
   const infoAlerts = task.alerts.filter(a => a.type !== 'traffic')
   const dangerAlerts = task.alerts.filter(a => a.type === 'traffic')
@@ -561,7 +570,10 @@ export function TaskDetailScreen({
         >
           {taskState === 'idle' && (
             <button
-              onClick={onStart}
+              onClick={() => {
+                if (otherActiveTask) setAlreadyActiveOpen(true)
+                else setStartConfirmOpen(true)
+              }}
               style={{
                 height: 52,
                 backgroundColor: C.green,
@@ -597,7 +609,7 @@ export function TaskDetailScreen({
                 Pause
               </button>
               <button
-                onClick={onComplete}
+                onClick={() => setCompleteConfirmOpen(true)}
                 style={{
                   flex: 1,
                   height: 52,
@@ -703,6 +715,225 @@ export function TaskDetailScreen({
                 }}
               >
                 Pause
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Afslut-bekræftelses-modal — spejlet fra pause-modal-mønster */}
+      {completeConfirmOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 24px',
+          }}
+          onClick={() => setCompleteConfirmOpen(false)}
+        >
+          <div
+            style={{
+              backgroundColor: C.white,
+              borderRadius: 24,
+              padding: 20,
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 12,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, textAlign: 'center' }}>
+              Afslut opgave?
+            </span>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.textMuted, textAlign: 'center' }}>
+              Er du sikker på du vil afslutte opgaven?
+            </span>
+            <div style={{ display: 'flex', gap: 10, marginTop: 4, width: '100%' }}>
+              <button
+                onClick={() => setCompleteConfirmOpen(false)}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  border: `1px solid ${C.deepTeal}`,
+                  borderRadius: 50,
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  color: C.deepTeal,
+                }}
+              >
+                Annuller
+              </button>
+              <button
+                onClick={() => { onComplete(); setCompleteConfirmOpen(false) }}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  backgroundColor: C.green,
+                  border: 'none',
+                  borderRadius: 50,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  color: C.white,
+                }}
+              >
+                Afslut opgave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Start-bekræftelses-modal — spejlet fra pause-modal-mønster */}
+      {startConfirmOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 24px',
+          }}
+          onClick={() => setStartConfirmOpen(false)}
+        >
+          <div
+            style={{
+              backgroundColor: C.white,
+              borderRadius: 24,
+              padding: 20,
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 12,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, textAlign: 'center' }}>
+              Start opgaven?
+            </span>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.textMuted, textAlign: 'center' }}>
+              Når du starter, begynder vi at logge tid og GPS for denne opgave.
+            </span>
+            <div style={{ display: 'flex', gap: 10, marginTop: 4, width: '100%' }}>
+              <button
+                onClick={() => setStartConfirmOpen(false)}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  border: `1px solid ${C.deepTeal}`,
+                  borderRadius: 50,
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  color: C.deepTeal,
+                }}
+              >
+                Annuller
+              </button>
+              <button
+                onClick={() => { onStart(); setStartConfirmOpen(false) }}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  backgroundColor: C.green,
+                  border: 'none',
+                  borderRadius: 50,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  color: C.white,
+                }}
+              >
+                Start opgave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Already-active-modal — single-task-constraint */}
+      {alreadyActiveOpen && otherActiveTask && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 24px',
+          }}
+          onClick={() => setAlreadyActiveOpen(false)}
+        >
+          <div
+            style={{
+              backgroundColor: C.white,
+              borderRadius: 24,
+              padding: 20,
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 12,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, textAlign: 'center' }}>
+              Du har allerede en aktiv opgave
+            </span>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.textMuted, textAlign: 'center' }}>
+              Du arbejder på opgave {otherActiveTask.orderNumber} · {otherActiveTask.produkt}. Afslut den først før du starter en ny.
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4, width: '100%' }}>
+              <button
+                onClick={() => { if (onGoToOtherTask) onGoToOtherTask(otherActiveTask.id); setAlreadyActiveOpen(false) }}
+                style={{
+                  width: '100%',
+                  height: 44,
+                  backgroundColor: C.green,
+                  border: 'none',
+                  borderRadius: 50,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  color: C.white,
+                }}
+              >
+                Gå til aktiv opgave
+              </button>
+              <button
+                onClick={() => setAlreadyActiveOpen(false)}
+                style={{
+                  width: '100%',
+                  height: 44,
+                  border: `1px solid ${C.deepTeal}`,
+                  borderRadius: 50,
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  color: C.deepTeal,
+                }}
+              >
+                Bliv her
               </button>
             </div>
           </div>

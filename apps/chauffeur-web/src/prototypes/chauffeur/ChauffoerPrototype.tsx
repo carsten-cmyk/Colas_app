@@ -17,11 +17,12 @@ import { AnkommetFabrikScreen } from './screens/AnkommetFabrikScreen'
 import { AnkommetUdfoerselsstedScreen } from './screens/AnkommetUdfoerselsstedScreen'
 import { TimeRegistrationScreen } from './screens/TimeRegistrationScreen'
 import { TaskListScreen } from './screens/TaskListScreen'
+import { PauseReminderSimulatorScreen } from './screens/PauseReminderSimulatorScreen'
 import { BottomTabBar } from './components/BottomTabBar'
 import type { TabName } from './components/BottomTabBar'
 
 type AppScreen = 'splash' | 'app'
-type PrototypeSubScreen = 'ankomst' | 'ankomst-plads' | 'timereg' | 'opgaveliste' | null
+type PrototypeSubScreen = 'ankomst' | 'ankomst-plads' | 'timereg' | 'opgaveliste' | 'pause-reminder' | null
 
 const MESSAGE_COUNT = mockConversations.filter(
   c => !c.lastMessage.isRead && c.lastMessage.senderId !== 'me'
@@ -39,6 +40,13 @@ export function ChauffoerPrototype() {
   const currentTaskState: TaskState = selectedTask
     ? (taskStates[selectedTask.id] ?? selectedTask.state)
     : 'idle'
+
+  const otherActiveTaskId = selectedTaskId
+    ? Object.entries(taskStates).find(([id, s]) => id !== selectedTaskId && (s === 'active' || s === 'paused'))?.[0]
+    : undefined
+  const otherActiveTask = otherActiveTaskId
+    ? mockTasks.find(t => t.id === otherActiveTaskId) ?? null
+    : null
 
   function handleTabPress(tab: TabName) {
     setActiveTab(tab)
@@ -172,6 +180,7 @@ export function ChauffoerPrototype() {
               { title: 'Ankomst til udførselssted', desc: 'Geofencing ved plads + aflæsning', screen: 'ankomst-plads' as PrototypeSubScreen },
               { title: 'Timeregistrering', desc: 'Oversigt over dagsforbrug', screen: 'timereg' as PrototypeSubScreen },
               { title: 'Opgaveliste', desc: 'Dagsoversigt over opgaver', screen: 'opgaveliste' as PrototypeSubScreen },
+              { title: 'Pause-reminder (30 min)', desc: 'Simulér modal der popper op efter længere pause', screen: 'pause-reminder' as PrototypeSubScreen },
             ].map((item) => (
               <button
                 key={item.title}
@@ -240,6 +249,12 @@ export function ChauffoerPrototype() {
       {isPrototyperTab && prototypeSubScreen === 'opgaveliste' && (
         <TaskListScreen onClose={() => setPrototypeSubScreen(null)} messageCount={MESSAGE_COUNT} />
       )}
+      {isPrototyperTab && prototypeSubScreen === 'pause-reminder' && (
+        <>
+          <PauseReminderSimulatorScreen onClose={() => setPrototypeSubScreen(null)} />
+          <BottomTabBar activeTab={activeTab} onTabPress={handleTabPress} messageCount={MESSAGE_COUNT} />
+        </>
+      )}
 
       {/* Task detail overlay (slides over dashboard) */}
       {selectedTask && (
@@ -250,6 +265,8 @@ export function ChauffoerPrototype() {
           onStart={handleTaskStart}
           onPause={handleTaskPause}
           onComplete={handleTaskComplete}
+          otherActiveTask={otherActiveTask ? { id: otherActiveTask.id, orderNumber: otherActiveTask.orderNumber, produkt: otherActiveTask.produkt } : null}
+          onGoToOtherTask={(id) => setSelectedTaskId(id)}
         />
       )}
 

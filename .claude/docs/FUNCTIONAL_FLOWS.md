@@ -460,6 +460,88 @@ Hvis en chauffør er på produkt A og produkt B venter, kører han videre på pr
 
 ---
 
+### Variant: Pause-reminder ved længere pause (LÅST 2026-06-08)
+
+**Forretningsregel:** Når en chauffør sætter sin aktive opgave på pause, kører en intern 30-minutters timer. Når timeren udløber, vises en blokerende modal i chauffør-appen der spørger om han stadig er på pause. Formålet er at fange tilfælde hvor chaufføren har glemt at trykke "Genoptag opgave" efter en reel pause er slut — så ventetiden ikke fortsætter med at tælle.
+
+**Trigger:** `TaskState` skifter fra `active` → `paused` på en opgave. Pause-timer starter (30 minutter).
+
+**Modal-indhold:**
+- Titel: "Er du stadig på pause?"
+- Beskrivelse: "Du har været på pause i 30 minutter. Bekræft venligst om du stadig er på pause, eller genoptag opgaven."
+- Knap 1 (sekundær): "Ja, stadig på pause" → modal lukkes, timer nulstilles og kører igen i 30 min
+- Knap 2 (primær): "Genoptag opgave" → `TaskState` skifter til `active`, modal lukkes, timer stoppes
+
+**Forretningsregler:**
+
+| Scenario | Adfærd |
+|---|---|
+| Chauffør trykker "Ja, stadig på pause" | Timer nulstilles → ny 30-min cyklus. Pause-tid fortsætter med at tælle som pause i timereg. |
+| Chauffør trykker "Genoptag opgave" | `TaskState` = `active`. Pause-perioden lukkes (pause-tid bevares i timereg). |
+| Chauffør genoptager opgaven manuelt INDEN 30 min er gået | Timer cancelles. Ingen modal vises. |
+| Chauffør afslutter opgaven mens på pause | Timer cancelles ved opgave-afslutning. Eksisterende afslut-flow gælder. |
+| App er lukket / telefon er låst når timer udløber | Push-notifikation sendes (Fase 2). I Fase 1 vises modalen blot næste gang chauffør åbner appen mens opgaven stadig er paused. |
+
+**Data-konsekvens:** Pause-perioder logges som tidligere. Pause-tid mellem to "Ja, stadig på pause"-bekræftelser tæller stadig som pause i timereg. Reglen ændrer IKKE afregningsmodellen — den er en UX-sikring mod at glemt-pause forurener tids-logikken.
+
+**🟡 Fase 2-udvidelser:**
+- Push-notifikation når app er i baggrunden
+- Auto-afslut-pause hvis chauffør ikke svarer på modal inden N minutter (konfigurerbart)
+- Formand kan se i Udførelse-mode hvilke biler der har været på pause længere end X minutter
+
+---
+
+### Variant: Aktiv opgave — single-task, start-bekræftelse, baggrund-kørsel (LÅST 2026-06-08)
+
+**Forretningsregel:** En chauffør kan kun have ÉN aktiv opgave ad gangen. Når en opgave er startet (`TaskState = active`) eller på pause (`TaskState = paused`) fortsætter den med at logge tid og GPS i baggrunden, uanset hvilken skærm chaufføren navigerer til i appen. Reglen forhindrer at chaufføren ved et tilfælde dobbelt-starter opgaver og derved får forurenede timer.
+
+**Start-bekræftelse:**
+- Når chauffør trykker "Start opgave" vises en blokerende modal:
+  - Titel: "Start opgaven?"
+  - Beskrivelse: "Når du starter, begynder vi at logge tid og GPS for denne opgave."
+  - Knap 1 (sekundær): "Annuller"
+  - Knap 2 (primær, grøn): "Start opgave"
+- Først ved bekræftelse skifter `TaskState` til `active` og time-/GPS-logging starter.
+
+**Single-task-constraint:**
+- Hvis chauffør har en aktiv eller paused opgave (kald den `A`) og åbner en anden opgave (`B`) og trykker "Start opgave", vises en blokerende modal i stedet for start-bekræftelsen:
+  - Titel: "Du har allerede en aktiv opgave"
+  - Beskrivelse: "Du arbejder på opgave [orderNumber] · [produkt]. Afslut den først før du starter en ny."
+  - Knap 1 (sekundær): "Bliv her" → lukker modalen, chauffør forbliver på opgave `B`'s detalje-skærm uden at have startet noget
+  - Knap 2 (primær): "Gå til aktiv opgave" → navigerer til opgave `A`'s detalje-skærm
+- Det er IKKE muligt at have to opgaver i `active` eller `paused`-state samtidig — `state[A]` skal være `completed` (eller `idle` via fortryd) før `B` kan starte.
+
+**Baggrund-kørsel:**
+- Når chauffør navigerer væk fra TaskDetailScreen (fx til Beskeder, Timereg, Start-tab) BLIVER opgaven i sin nuværende state (`active` eller `paused`). Den bliver ikke pauset eller stoppet.
+- GPS-tracking og time-logging fortsætter i baggrunden via:
+  - **In-app (mens app er åben):** state holdes i app-state; GPS-events skrives løbende til `task_logs`
+  - **App lukket / telefon låst (Fase 2):** Native baggrund-service registrerer GPS-events (iOS: Background Location, Android: Foreground Service). Logges til lokal kø, syncs til Supabase når app åbnes igen
+- En global "aktiv opgave"-indikator (banner eller badge) skal være synlig på tværs af alle skærme så længe `state = active | paused`, så chauffør ALTID kan navigere tilbage til den aktive opgave med ét tryk.
+
+**Forretningsregler:**
+
+| Scenario | Adfærd |
+|---|---|
+| Chauffør har aktiv opgave, åbner anden opgave-detalje, trykker Start | Single-task-modal vises. INGEN state-ændring. |
+| Chauffør har paused opgave, åbner anden opgave, trykker Start | Single-task-modal vises (paused tæller som aktiv). |
+| Chauffør har aktiv opgave, navigerer til Beskeder | Opgave fortsætter `active`. GPS + timer logger videre. |
+| Chauffør lukker appen mens opgave er aktiv | Opgave forbliver `active` i backend; GPS-events queued lokalt (Fase 2) |
+| Chauffør har aktiv opgave A, afslutter den, vil starte B | Start-bekræftelses-modal vises på B (normal flow — A er nu `completed`) |
+| Chauffør trykker Start opgave, fortryder i modal | INGEN state-ændring, ingen log skrevet |
+
+**Data-konsekvens:**
+- `task_logs.started_at` skrives først ved bekræftelse i start-modalen — IKKE ved knap-tryk
+- GPS-events skrives til `task_logs.gps_points[]` så længe `state ∈ {active, paused}`
+- Single-task-constraint enforces på client (UI-modal) OG server (DB-constraint: max én row per `chaufør_id` med `state ∈ {active, paused}` og `completed_at IS NULL`)
+
+**🟡 Fase 2-udvidelser:**
+- Native baggrund-service til GPS når telefonen er låst
+- Lokal kø + offline-sync af GPS-events og state-changes
+- Global "aktiv opgave"-banner med tap-to-return navigation
+- Pause-reminder push-notifikation (se [[pause-reminder]])
+
+---
+
 ### Variant: "Sidste læs"-frigivelse af overflødige chauffører (LÅST 2026-05-27)
 
 **Trigger:** Når formand allokerer sidste-læs (`er_sidste_laes: true` på en vejeseddel) ELLER systemet automatisk identificerer at `sum(allokerede_tons) >= bestilt_total - bil_kapacitet` for resten af dagen.
@@ -935,11 +1017,24 @@ Formål: vognmanden får tilstrækkelig kontekst til at disponere korrekt blokvo
 
 **Note:** Bokse-rækken er det første formanden ser i Udførelse — giver hurtigt overblik over hvad der mangler at blive bekræftet eller foretaget. Når en boks bliver grøn er den respektive sektion afsluttet.
 
-### Trin 1 — Chauffør registrerer kørsel og pauser
+### Trin 1 — Chauffør registrerer kørsel og pauser (LÅST 2026-06-08)
 **App:** chauffeur
-**Komponent:** TBD — formentlig ny `TidsregistreringScreen` eller automatisk via GPS + state-changes
-**Handling:** Chauffør markerer start/pause/slut på opgave; GPS supplerer med faktisk kørsel
-**Skriver til:** `task_logs.kørsel_minutter`, `task_logs.pause_minutter`, `task_logs.opgave_minutter`
+**Komponent:** Automatisk via `TaskState`-overgange i TaskDetailScreen + GPS-baggrund-tracking. Ingen separat TidsregistreringScreen i Fase 1 — timer aflæses fra `task_logs` og vises på TimeRegistrationScreen som read-only oversigt.
+
+**Handling:**
+- Chauffør markerer state-overgange via TaskDetailScreen-knapper: **Start opgave** (med bekræftelses-modal, se [[aktiv-opgave-single-task]]) → **Pause** (med pause-bekræftelses-modal) → **Genoptag** → **Afslut opgave** (med afslut-bekræftelses-modal)
+- GPS-events logges automatisk så længe `state ∈ {active, paused}`, uanset hvilken skærm chauffør er på (se [[aktiv-opgave-single-task]] — baggrund-kørsel)
+- Pause-tid akkumuleres mellem state `paused` og næste `active`/`completed`
+- Pause-reminder modal kører hvert 30 min mens paused (se [[pause-reminder]])
+
+**Felter beregnet automatisk:**
+- `kørsel_minutter` = sum af tid hvor `state = active` OG GPS viser bevægelse (>5 km/t)
+- `ventetid_minutter` = sum af tid hvor `state = active` OG GPS viser stilstand (≤5 km/t) — typisk på fabrik/plads
+- `pause_minutter` = sum af tid hvor `state = paused`
+- `opgave_minutter` = `started_at` til `completed_at` (samlet varighed)
+
+**Skriver til:** `task_logs.kørsel_minutter`, `task_logs.ventetid_minutter`, `task_logs.pause_minutter`, `task_logs.opgave_minutter`, `task_logs.gps_points[]`
+
 **Note:** Tons-data registreres IKKE af chaufføren — de kommer fra `plan_vejebilag`-tabellen, som fabrikken/vejebilags-systemet skriver til hver gang chauffør henter asfalt. Ved akkord-afregning **joiner** formand-hooket på `plan_vejebilag` for at summere `tons` per regnr per dato. Tons ligger IKKE i `time_registreringer`.
 
 ### Trin 2 — Chauffør afslutter dag + sender afregning
