@@ -87,6 +87,72 @@ Disse felter sendes retur til formand (Trin 7) og til chauffør (Trin 8) — hve
 
 **Hvorfor:** Fabrik skal kunne planlægge produktion + tilberedning så asfalten er klar når chauffør ankommer. Uden eksplicit afhentnings-tid kan fabrik ikke optimere timing eller advare om kapacitet.
 
+**Visning i fabrik-produktionsplan (LÅST 2026-06-08):**
+
+ProduktionsplanScreen har 5 venstre faste kolonner + horisontalt bil-spor (tidsskala) til højre per ordre.
+
+**Venstre faste kolonner per ordre:**
+
+| Kolonne | Bredde | Indhold | Datakilde |
+|---|---|---|---|
+| Info | 240px | Recept, asfalttype, udførselssted, hold/formand | `orders` |
+| Bestilte Tons | 140px | "Bestilte Tons" + tons · "Morgen tons" + tons | `orders.forventetMaengde`, `morgenTons` |
+| Første bil + Antal biler | 160px | "Første bil" + klokkeslæt · "Antal biler" + tal | Se nedenfor |
+| Næste bil | 160px | Vejr-aflyst badge · "Næste bil" + ETA · "Interval" + tid | Live state + `interval_minutter_mellem_laes` |
+
+**"Første bil"-tid** = `pickups[0].pickup_time_fabrik` = `foerste_laes_udlaegning_tid − driveTimeMinutes`.
+**"Antal biler"** = `orders.asfalt_koersel[].biler.length` (eller `confirmed_vehicles.length` når vognmand har bekræftet).
+
+**Data-flow:** Formand → bilbestilling (Trin 1) → `foerste_laes_udlaegning_tid` + `interval_minutter_mellem_laes` → Trin 5b-beregning → fabrik-system → fabrik-produktionsplan UI.
+
+**Hvorfor "Første bil" OG "Næste bil":** Fabrikken skal forberede sig på ordrer der ENDNU ikke er startet. "Første bil"-feltet er statisk plan-information; "Næste bil"-feltet skifter dynamisk når faktiske scans kommer ind.
+
+---
+
+**Horisontalt bil-spor — statisk og dynamisk overblik (LÅST 2026-06-08):**
+
+Til højre for venstre kolonner har vi en tidsskala (06:00, 07:00, …) med ét spor per ordre (`OrdreLaneCars`). På hver ordres spor plottes alle planlagte biler som Truck-ikoner på deres respektive mødetider — **dette er fabrikkens primære statiske overblik dagen før og om morgenen**.
+
+**Statisk overblik (dagen før / tidlig morgen) — bil-plotting:**
+
+Hver bil plottes på sin beregnede mødetid på fabrikken:
+```
+biler[n].moedetid_fabrik = foerste_laes_udlaegning_tid + (n−1) × interval_minutter − driveTimeMinutes
+```
+
+Eksempel — første læs 07:30, interval 15 min, drive-time 36 min, 3 biler:
+- Bil 1 (læs 1): mødetid 06:54 → plottes ved x-pos for 06:54
+- Bil 2 (læs 2): mødetid 07:09 → plottes ved x-pos for 07:09
+- Bil 3 (læs 3): mødetid 07:24 → plottes ved x-pos for 07:24
+
+**Antal biler udledes via sidste-læs-formel:**
+
+Hvis formand ikke eksplicit har sat antal:
+```
+antal_biler = ceil(bestilt_tons / bilkapacitet)
+```
+
+For 75 t bestilt, 34 t kapacitet → 3 biler (sidste bil kører 7 t = sidste-læs). Genbrug eksisterende vejeseddel-sidste-læs-logik fra Flow 1 + Flow 7.
+
+**Dynamisk overblik (dagen i gang) — live opdatering:**
+
+Når bil scanner vægten opdateres `bil.status`:
+- `planlagt` → `undervejs` (efter udvejning_lastet)
+- `undervejs` → `aflaesning` (efter ankomst_udfoerselssted)
+- `aflaesning` → `færdig` (efter aflaesning_slut)
+
+For `undervejs`-biler beregnes live ETA fra faktisk timestamps. `planlagt`-biler beholder statisk mødetid indtil de selv aktiveres.
+
+**Forskel statisk vs. dynamisk visning:**
+
+| Tid på dagen | Hvad fabrik ser |
+|---|---|
+| Dagen før / tidlig morgen | Statisk plot — alle biler ved beregnede mødetider |
+| Dagen i gang | Hybrid — aktive biler ved faktisk ETA, ikke-startede ved statisk mødetid |
+| Dagen er afsluttet | Historisk plot — alle biler ved faktiske gennemløbs-tider |
+
+**🟡 Implementerings-status:** Mock-data i prototype. Real-implementering kræver Trin 5b-formel der populerer `biler[]` automatisk fra formandens bestilling, live timestamp-listener, og sidste-læs-udledning. Tracking: GitHub issue **FABR-PROD-002**.
+
 **🟡 ÅBNE SPØRGSMÅL:**
 - Hvilket fabrik-system integreres der med (Danvægt? Anden ERP)? Eller skal det være en simpel webhook/API-call?
 - Skal beregningen kompenseres for læsse-tid på fabrik (fx +10 min buffer)?
@@ -493,15 +559,15 @@ Hvis en chauffør er på produkt A og produkt B venter, kører han videre på pr
 
 ### Variant: Aktiv opgave — single-task, start-bekræftelse, baggrund-kørsel (LÅST 2026-06-08)
 
-**Forretningsregel:** En chauffør kan kun have ÉN aktiv opgave ad gangen. Når en opgave er startet (`TaskState = active`) eller på pause (`TaskState = paused`) fortsætter den med at logge tid og GPS i baggrunden, uanset hvilken skærm chaufføren navigerer til i appen. Reglen forhindrer at chaufføren ved et tilfælde dobbelt-starter opgaver og derved får forurenede timer.
+**Forretningsregel:** En chauffør kan kun have ÉN aktiv opgave ad gangen. Når en opgave er startet (`TaskState = active`) eller på pause (`TaskState = paused`) fortsætter den med at logge tid (timestamps + state-overgange) i baggrunden, uanset hvilken skærm chaufføren navigerer til i appen. Reglen forhindrer at chaufføren ved et tilfælde dobbelt-starter opgaver og derved får forurenede timer. **GPS er IKKE en del af Fase 1** (se Flow 4 Trin 1 — beslutning 2026-06-08).
 
 **Start-bekræftelse:**
 - Når chauffør trykker "Start opgave" vises en blokerende modal:
   - Titel: "Start opgaven?"
-  - Beskrivelse: "Når du starter, begynder vi at logge tid og GPS for denne opgave."
+  - Beskrivelse: "Når du starter, begynder vi at logge tid for denne opgave."
   - Knap 1 (sekundær): "Annuller"
   - Knap 2 (primær, grøn): "Start opgave"
-- Først ved bekræftelse skifter `TaskState` til `active` og time-/GPS-logging starter.
+- Først ved bekræftelse skifter `TaskState` til `active` og time-logging starter.
 
 **Single-task-constraint:**
 - Hvis chauffør har en aktiv eller paused opgave (kald den `A`) og åbner en anden opgave (`B`) og trykker "Start opgave", vises en blokerende modal i stedet for start-bekræftelsen:
@@ -513,9 +579,8 @@ Hvis en chauffør er på produkt A og produkt B venter, kører han videre på pr
 
 **Baggrund-kørsel:**
 - Når chauffør navigerer væk fra TaskDetailScreen (fx til Beskeder, Timereg, Start-tab) BLIVER opgaven i sin nuværende state (`active` eller `paused`). Den bliver ikke pauset eller stoppet.
-- GPS-tracking og time-logging fortsætter i baggrunden via:
-  - **In-app (mens app er åben):** state holdes i app-state; GPS-events skrives løbende til `task_logs`
-  - **App lukket / telefon låst (Fase 2):** Native baggrund-service registrerer GPS-events (iOS: Background Location, Android: Foreground Service). Logges til lokal kø, syncs til Supabase når app åbnes igen
+- Tid logges som event-timestamps + state-overgange (se Flow 4 Trin 1) — uafhængigt af om appen er i forgrunden eller baggrunden
+- GPS er IKKE en del af Fase 1 (besluttet 2026-06-08 — se Flow 4 Trin 1)
 - En global "aktiv opgave"-indikator (banner eller badge) skal være synlig på tværs af alle skærme så længe `state = active | paused`, så chauffør ALTID kan navigere tilbage til den aktive opgave med ét tryk.
 
 **Forretningsregler:**
@@ -524,19 +589,18 @@ Hvis en chauffør er på produkt A og produkt B venter, kører han videre på pr
 |---|---|
 | Chauffør har aktiv opgave, åbner anden opgave-detalje, trykker Start | Single-task-modal vises. INGEN state-ændring. |
 | Chauffør har paused opgave, åbner anden opgave, trykker Start | Single-task-modal vises (paused tæller som aktiv). |
-| Chauffør har aktiv opgave, navigerer til Beskeder | Opgave fortsætter `active`. GPS + timer logger videre. |
-| Chauffør lukker appen mens opgave er aktiv | Opgave forbliver `active` i backend; GPS-events queued lokalt (Fase 2) |
+| Chauffør har aktiv opgave, navigerer til andre tabs | Opgave fortsætter `active`. Timestamps + state-overgange logger videre. |
+| Chauffør lukker appen mens opgave er aktiv | Opgave forbliver `active` i backend; næste knap-tryk/scan registreres som normal |
 | Chauffør har aktiv opgave A, afslutter den, vil starte B | Start-bekræftelses-modal vises på B (normal flow — A er nu `completed`) |
 | Chauffør trykker Start opgave, fortryder i modal | INGEN state-ændring, ingen log skrevet |
 
 **Data-konsekvens:**
 - `task_logs.started_at` skrives først ved bekræftelse i start-modalen — IKKE ved knap-tryk
-- GPS-events skrives til `task_logs.gps_points[]` så længe `state ∈ {active, paused}`
 - Single-task-constraint enforces på client (UI-modal) OG server (DB-constraint: max én row per `chaufør_id` med `state ∈ {active, paused}` og `completed_at IS NULL`)
 
 **🟡 Fase 2-udvidelser:**
-- Native baggrund-service til GPS når telefonen er låst
-- Lokal kø + offline-sync af GPS-events og state-changes
+- Native app med background-GPS for præcisions-validering
+- Lokal kø + offline-sync af state-changes
 - Global "aktiv opgave"-banner med tap-to-return navigation
 - Pause-reminder push-notifikation (se [[pause-reminder]])
 
@@ -898,15 +962,20 @@ Formål: vognmanden får tilstrækkelig kontekst til at disponere korrekt blokvo
 ## Flow 3: Ankomst til fabrik (chauffeur)
 
 **Status:** Prototype bygget i chauffeur-web (`AnkommetFabrikScreen.tsx`), ikke bygget i native app
-**Trigger:** Chauffør nærmer sig fabrik — GPS-position krydser geofence
+**Trigger:** Chauffør trykker manuelt "Ankommet til fabrik" på opgaven (eller Vejning-tab i bottom menubar)
 
-### Trin 1 — Geofence aktiverer velkomst
-**App:** chauffeur (React Native, native GPS)
+### Trin 1 — Manuel ankomst aktiverer velkomst (LÅST 2026-06-08 — geofence droppet)
+**App:** chauffeur (React Native + chauffeur-web prototype)
 **Komponent:** `AnkommetFabrikScreen` (sub-screen: `ankomst`)
-**Trigger:** GPS-position indenfor geofence-radius af fabrik (radius TBD — fx 200m)
-**Viser:** "Velkommen til {fabrik.navn}" + instruktioner (kør til vægt → kør til silo)
-**Skriver til:** `task_timestamps.ankomst_fabrik = now()`
-**Note:** Geofence-koordinater hentes fra `fabrik`-tabel; fungerer offline via cached koordinater.
+**Trigger:** Chauffør trykker manuel knap **"Ankommet til fabrik"** i adresse-boksen på TaskDetailScreen (eller Vejning-tab i bottom menubar som global fallback)
+**Viser:** "Velkommen til {fabrik.navn}" + instruktioner (kør til vægt → scan vægtens QR-kode)
+**Skriver til:** `task_timestamps.ankomst_fabrik = now()`, `task_logs.ankomst_kilde = 'manuel'`
+
+**Beslutning 2026-06-08 — geofence droppet som ankomst-trigger:**
+- Geofencing er teknisk upålidelig (GPS-drift, indendørs/silo-skygge, batteri-spar-mode, varierende geofence-API på iOS vs. Android) og kan efterlade chauffør strandet hvis event ikke firer
+- Manuel ankomst-knap er enkel, deterministisk, og kræver ikke GPS-tilladelse for grundflowet
+- Vejeflow er stadig låst til QR-scan på vejeterminal (LÅST 2026-05-29) — manuel ankomst åbner BLOT velkomst-/scan-UI'et, ikke selve vejningen
+- `task_logs.ankomst_kilde`-feltet beholdes (Fase 2): hvis vi senere tilføjer GPS-validation, kan vi differentiere `manuel` vs. `gps_valideret_manuel`
 
 ### Trin 2 — Indvejning tom
 **App:** chauffeur
@@ -984,6 +1053,62 @@ Formål: vognmanden får tilstrækkelig kontekst til at disponere korrekt blokvo
 
 ---
 
+### Variant: Manuel ankomst (PRIMÆR mekanisme, LÅST 2026-06-08 — opdateret fra fallback til primær samme dag)
+
+**Forretningsregel (opdateret 2026-06-08):** Manuel ankomst-knap er nu **eneste** trigger til at åbne velkomst-/scan-UI for både fabrik og udførselssted. Geofencing er droppet pga. upålidelighed (se Flow 3 Trin 1 — "Beslutning 2026-06-08").
+
+**To veje til at registrere ankomst:**
+
+| Kilde | Trigger | Placering |
+|---|---|---|
+| **Manuel knap i adresse-boks** (primær) | Chauffør trykker "Ankommet til fabrik" / "Ankommet til plads" i adresse-boksen på TaskDetailScreen | Kontekstuel — kobler ankomst til den specifikke opgave |
+| **Vejning-tab i menubaren** (genvej) | Chauffør trykker Vejning-tab nederst | Genvej til scan-flowet for den aktive opgave — uden at skulle navigere |
+
+**UI-placering:**
+- **Adresse-boks-knap:** Outline-stil (deep-teal border, transparent baggrund), label "Ankommet til fabrik" / "Ankommet til plads". Knappen forbliver synlig — chauffør kan vende tilbage og scanne QR senere hvis flowet afbrydes (state styres af QR-scan, ikke knap-tryk).
+- **Vejning-tab:** Tab nederst i menubar (erstatter Beskeder i Fase 1). Ikon: Scale fra lucide-react. **Vejning-tab linker ALTID til den aktive opgaves vejnings-flow** — chauffør skal ALDRIG navigere selv for at finde den. Detaljeret logik nedenfor.
+
+**Vejning-tab — adfærd per scenario (LÅST 2026-06-08):**
+
+| Chauffør-tilstand | Hvad Vejning-tab åbner |
+|---|---|
+| Har ÉN aktiv opgave (`state ∈ {active, paused}`) | `AnkommetFabrikScreen` for **den aktive opgave** — chauffør lander direkte i det relevante step af scan-flowet (afhænger af hvor langt han er nået: ankomst → scan-vaegt → bekraeft → scan-udvejning → udvejet-bekraeft). |
+| Har ÉN igangværende men ikke-aktiv opgave (`state = idle`) som er den eneste planlagte for i dag | `AnkommetFabrikScreen` for den opgave — som om chauffør lige har trykt "Ankommet til fabrik" |
+| Har flere planlagte opgaver i dag, ingen aktiv | Lille modal/list: "Hvilken ordre er du på vej til at veje?" — chauffør vælger, derefter åbnes scan-flowet for valgt ordre |
+| Ingen opgaver i dag | Vejning-tab er disabled (grå) eller viser tom-state "Du har ingen opgaver i dag" |
+
+**Rationale:** Chauffør står ved vægten og skal scanne. Han skal IKKE først navigere til dashboard, finde sin opgave, åbne den, scrolle, og trykke "Ankommet til fabrik". Vejning-tab er en SHORTCUT der altid lander ham præcis hvor han skal scanne — uanset hvilken state opgaven er i. Single-task-constraint sikrer at "den aktive opgave" altid er entydig hvis han har startet en.
+
+**Forretningsregler:**
+
+| Scenario | Adfærd |
+|---|---|
+| Chauffør trykker "Ankommet til fabrik" | velkomst-UI åbnes ovenpå TaskDetailScreen. `task_timestamps.ankomst_fabrik = now()`, `ankomst_kilde = 'manuel'`. |
+| Chauffør lukker velkomst-UI uden at scanne QR | Ingen vejning startet. Chauffør kan trykke knappen igen senere. `ankomst_fabrik` skrives KUN ved første tryk (idempotent). |
+| Chauffør trykker manuel-knap men er faktisk ikke fremme | UI accepterer. Selve vejningen kan først starte når QR-koden på vægten scannes — det er fysisk validering. |
+| Chauffør glemmer at trykke knappen | Han kommer til vægten uden velkomst-UI. Vejning kan stadig startes via Vejning-tab. |
+
+**Data-konsekvens:**
+- `task_timestamps.ankomst_fabrik` / `ankomst_udfoerselssted` — skrives ved knap-tryk (idempotent, kun første gang)
+- `task_logs.ankomst_kilde: 'manuel'` — i Fase 1 er der KUN denne værdi. Feltet beholdes for Fase 2-udvidelser (`gps_valideret_manuel` hvis GPS-validation tilføjes)
+- Formand ser INTET special-badge i Udførelse — manuel er normalen, ikke en undtagelse
+
+**Vejeflow — to QR-scans pr. ordre (LÅST 2026-06-08):**
+QR-scan på vejeterminal er stadig eneste måde at aktivere selve vejningen. I det nye flow scanner chauffør **to gange**:
+
+1. **Indvejning (tom bil)** — chauffør scanner vægtens QR-kode efter han har trykt "Ankommet til fabrik". Vægtsystem registrerer tom-vægt.
+2. **Udvejning (lastet bil)** — chauffør scanner vægtens QR-kode igen efter lastning. Vægtsystem beregner netto-vægt = udvejet - indvejet.
+
+Produkt-QR (på silo) scannes ÉN gang mellem de to vej-scans for at bekræfte rigtige produkt.
+
+**UI-constraint:** Alle elementer (banner + knapper) skal være inden for iPhone-rammens højde (852px) uden scroll-overflow.
+
+**🟡 Fase 2-udvidelser:**
+- GPS-validering: hvis GPS virker, tjek at chauffør er inden for fornuftig radius før accept (silent — kun logges, ikke blokerer)
+- Statistik på "manuel ankomst uden efterfølgende QR-scan" — kan indikere chauffør glemte at scanne
+
+---
+
 ## Flow 4: Timeregistrering og afregning (asfalt-biler + materiel)
 
 **Status:** Planlagt — UI under planlægning (denne iteration)
@@ -1017,32 +1142,114 @@ Formål: vognmanden får tilstrækkelig kontekst til at disponere korrekt blokvo
 
 **Note:** Bokse-rækken er det første formanden ser i Udførelse — giver hurtigt overblik over hvad der mangler at blive bekræftet eller foretaget. Når en boks bliver grøn er den respektive sektion afsluttet.
 
-### Trin 1 — Chauffør registrerer kørsel og pauser (LÅST 2026-06-08)
+### Trin 1 — Chauffør registrerer kørsel og pauser (LÅST 2026-06-08 — GPS droppet samme dag)
 **App:** chauffeur
-**Komponent:** Automatisk via `TaskState`-overgange i TaskDetailScreen + GPS-baggrund-tracking. Ingen separat TidsregistreringScreen i Fase 1 — timer aflæses fra `task_logs` og vises på TimeRegistrationScreen som read-only oversigt.
+**Komponent:** Automatisk via **event-timestamps** (knap-tryk + QR-scans) + `TaskState`-overgange i TaskDetailScreen. **GPS er IKKE en del af Fase 1.**
 
-**Handling:**
-- Chauffør markerer state-overgange via TaskDetailScreen-knapper: **Start opgave** (med bekræftelses-modal, se [[aktiv-opgave-single-task]]) → **Pause** (med pause-bekræftelses-modal) → **Genoptag** → **Afslut opgave** (med afslut-bekræftelses-modal)
-- GPS-events logges automatisk så længe `state ∈ {active, paused}`, uanset hvilken skærm chauffør er på (se [[aktiv-opgave-single-task]] — baggrund-kørsel)
-- Pause-tid akkumuleres mellem state `paused` og næste `active`/`completed`
-- Pause-reminder modal kører hvert 30 min mens paused (se [[pause-reminder]])
+**Beslutning 2026-06-08 — GPS droppet:**
+- **Teknisk:** Web Geolocation API virker IKKE når tabben er backgrounded eller telefonens skærm er slukket — iOS Safari suspenderer JS-eksekvering aggressivt. PWA hjælper kun marginalt. Real background-location er en native-app-funktion (Background Location iOS, Foreground Service Android).
+- **Forretningsmæssigt:** Vores Fase 1 mål er en web-prototype der kan virke som produktion. Native app er Fase 2.
+- **Konsekvens:** Vi udleder kørsel/ventetid fra event-timestamps i stedet for live-position. Det dækker 90% af time-registreringens behov.
 
-**Felter beregnet automatisk:**
-- `kørsel_minutter` = sum af tid hvor `state = active` OG GPS viser bevægelse (>5 km/t)
-- `ventetid_minutter` = sum af tid hvor `state = active` OG GPS viser stilstand (≤5 km/t) — typisk på fabrik/plads
-- `pause_minutter` = sum af tid hvor `state = paused`
-- `opgave_minutter` = `started_at` til `completed_at` (samlet varighed)
+**Event-timestamps der danner grundlag for time-beregning:**
 
-**Skriver til:** `task_logs.kørsel_minutter`, `task_logs.ventetid_minutter`, `task_logs.pause_minutter`, `task_logs.opgave_minutter`, `task_logs.gps_points[]`
+| Event | Kilde | Trigger |
+|---|---|---|
+| `ankomst_fabrik` | "Ankommet til fabrik"-knap (adresseboks) | Manuel knap-tryk |
+| `indvejning_tom` | "Scan vægtens QR kode" → "Simuler scan" | QR-scan på vejeterminal |
+| `udvejning_lastet` | "Scan QR kode for udvejning" → "Simuler scan" | QR-scan på vejeterminal |
+| `ankomst_udfoerselssted` | "Ankommet til plads"-knap (adresseboks) | Manuel knap-tryk |
+| `aflaesning_start` | "Start aflæsning"-knap på pladsen 🟡 *(KNAP MANGLER — se nedenfor)* | Manuel knap-tryk |
+| `aflaesning_slut` | "Aflæsning færdig"-knap 🟡 *(KNAP MANGLER)* | Manuel knap-tryk |
+| `pause_start` / `pause_slut` | Pause-knap / Genoptag-knap | State-overgang |
+| `opgave_afsluttet` | "Afslut opgave"-knap | Manuel knap-tryk |
+
+**Felter beregnet automatisk fra timestamps:**
+
+| Felt | Beregning | Bemærkning |
+|---|---|---|
+| `fabrikstid_minutter` | `udvejning_lastet - indvejning_tom` | Lastning + evt. kø |
+| `koeretid_til_plads_minutter` | `ankomst_udfoerselssted - udvejning_lastet` | Ren kørsel fra fabrik til plads |
+| `ventetid_paa_plads_minutter` | `aflaesning_start - ankomst_udfoerselssted` | Vent på sjak/aflæsning kan begynde |
+| `aflaesning_minutter` | `aflaesning_slut - aflaesning_start` | Selve aflæsningen |
+| `koeretid_retur_minutter` | `next_indvejning_tom - aflaesning_slut` (eller `opgave_afsluttet`) | Returkørsel |
+| `pause_minutter` | sum af `(pause_slut - pause_start)`-intervaller | Manuelle pauser |
+
+**Ventetid-udledning (regel for kø/forsinkelse):**
+
+- **På fabrik:** Hvis `fabrikstid_minutter > 15` minutter, så er de overskydende minutter ventetid (kø ved vejen, fabrik-forsinkelse). Normal lastetid ≈ 10-15 min.
+- **På plads:** Hvis `ventetid_paa_plads_minutter > 5` minutter, er det allerede ventetid pr. definition (sjakket var ikke klar). Tærskel kan justeres.
+- Formand ser disse som specificerede tids-poster i afregnings-expanderen og kan godkende eller justere.
+
+🟡 **Manglende knapper på udførselssted (LÅST 2026-06-08):**
+For at kunne udlede tid på pladsen skal vi tilføje to knapper i adresse-boksen på TaskDetailScreen (eller på en udførselsplads-sub-screen tilsvarende fabrik-scan-flowet):
+
+1. **"Start aflæsning"** — vises efter chauffør har trykt "Ankommet til plads". Erstatter sig selv med:
+2. **"Aflæsning færdig"** — vises efter Start aflæsning er trykt. Når trykt → opgaven kan afsluttes (eller chauffør kan starte næste returkørsel).
+
+Begge knapper opfører sig som "Ankommet til plads"-knappen: outline-stil, full-width i adresseboks, trykker tilbage til scroll-content (ikke ny screen). Spejler fabrik-flowet hvor scan-vægt + scan-udvejning markerer start/slut for lastning.
+
+**Skriver til:** `task_timestamps.{ankomst_fabrik, indvejning_tom, udvejning_lastet, ankomst_udfoerselssted, aflaesning_start, aflaesning_slut, opgave_afsluttet}`, `task_pause_log[]`
+
+**Read-only TimeRegistrationScreen:** Viser de beregnede felter (fabrikstid, køretid, ventetid på plads, aflæsning, pauser) som læsbar oversigt for chauffør. Chauffør kan IKKE redigere — kun se. Formand justerer ved behov i sit Udførelse-view.
+
+**Note om Fase 2 (GPS-tilføjelse):** Når vi senere bygger native app, KAN GPS tilføjes som ekstra præcisions-lag: validere at chauffør faktisk var ved fabrik/plads ved knap-tryk, auto-detektere ventetid uden manuelt knap-tryk, ETA-baseret routing. Men Fase 1 fungerer fuldt ud uden.
 
 **Note:** Tons-data registreres IKKE af chaufføren — de kommer fra `plan_vejebilag`-tabellen, som fabrikken/vejebilags-systemet skriver til hver gang chauffør henter asfalt. Ved akkord-afregning **joiner** formand-hooket på `plan_vejebilag` for at summere `tons` per regnr per dato. Tons ligger IKKE i `time_registreringer`.
 
 ### Trin 2 — Chauffør afslutter dag + sender afregning
 **App:** chauffeur
-**Komponent:** Afslut-dag-skærm (ikke bygget endnu)
+**Komponent:** TimeRegistrationScreen (afsluttes ved sidste "Afslut opgave"-tryk)
 **Handling:** Chauffør gennemgår dagens timer, tilføjer evt. kommentar, trykker "Send til formand"
-**Skriver til:** `time_registreringer` (én række per chauffør per dag) med `{ kørsel_minutter, ventetid_minutter, pause_minutter?, chauffør_kommentar, godkendt_af_formand = null }`
+**Skriver til:** `time_registreringer` (én række per chauffør per dag) med `{ kørsel_minutter, ventetid_minutter, pause_minutter?, chauffør_kommentar, godkendt_af_formand = null, status: 'afsendt' }`
 **Note:** `tons_koert` skrives IKKE her — tons-data ligger i `plan_vejebilag` og join'es ind når formand åbner afregningen. Pause-feltet udfyldes kun ved asfalt-bil (ikke materiel).
+
+### Trin 2b — Chauffør ser og retter afsluttet timeregistrering (LÅST 2026-06-08)
+**App:** chauffeur
+**Komponent:** TimeRegistrationScreen i `reviewMode`
+**Trigger:** Chauffør åbner Timereg-tab → tapper "Se timeregistrering"-knap på en AFSLUTTET opgave-række
+
+**Forretningsregel:** Når en chauffør har afsendt timeregistrering for en opgave, kan han stadig åbne den fra Timereg-tab for at se og rette indtil formand har godkendt den. Den er ikke "låst" før formand sætter `godkendt_af_formand = true`.
+
+**Flow:**
+
+```
+Timereg-tab → afsluttet opgave-række → "Se timeregistrering"-knap
+   ↓
+TimeRegistrationScreen (reviewMode)
+   - Read-only visning af afsendte tider
+   - Bund-knap: "Ret tidsregistrering"
+   ↓ chauffør trykker "Ret tidsregistrering"
+Edit-tilstand (inde i samme screen)
+   - Inputs bliver editable
+   - Bund-knapper: "Annuller" + "Gem og send til formand"
+   ↓ chauffør trykker "Gem og send til formand"
+   - `time_registreringer.status = 'afsendt'` (nulstillet)
+   - `time_registreringer.rettet_af_chauffoer_at = now()` 
+   - Formand ser opdateret række i sin Udførelse-visning med "Rettet"-badge
+```
+
+**Forretningsregler:**
+
+| Scenario | Adfærd |
+|---|---|
+| Chauffør åbner ikke-afsluttet opgave fra Opgaver-tab | Normal `TimeRegistrationScreen` (uden reviewMode) — viser live status, ingen "Ret"-knap |
+| Chauffør åbner afsluttet opgave fra Timereg-tab via "Se timeregistrering" | `reviewMode = true` — read-only + "Ret tidsregistrering"-knap |
+| Chauffør retter og sender igen | Formand ser "Rettet 2026-06-08"-badge ved siden af opgaven i sin Udførelse-visning |
+| Formand har allerede godkendt timeregistrering | "Ret tidsregistrering"-knap er disabled (eller skjult). Tooltip/badge: "Godkendt — kan ikke rettes" |
+| Chauffør forsøger at rette efter godkendt | UI accepterer ikke — disabled-knap. Hvis fejl skal rettes, ringer chauffør til formand som genåbner afregningen i formand-app (se Flow 4 Trin 5b) |
+
+**Data-konsekvens:**
+- `time_registreringer.rettet_af_chauffoer_at: timestamp | null` — nyt felt
+- Hvis `rettet_af_chauffoer_at IS NOT NULL`: vises som "Rettet"-badge i formand-Udførelse
+- Godkendt-status (`godkendt_af_formand = true`) blokerer chauffør-redigering
+
+**🟡 Fase 2-udvidelser:**
+- Audit-log af alle rettelser med før/efter-værdier
+- Push-notifikation til formand når chauffør retter efter første afsendelse
+- Tærskelværdier for hvor stor afvigelse der må rettes uden formand-bekræftelse
+
+---
 
 ### Trin 3 — Formand ser afventende afregninger i Udførelse
 **App:** formand
@@ -1701,22 +1908,47 @@ vejesedler
 **App:** chauffeur
 **Viser:** Task med ÉN eller flere destinationer + "Samles på en bil"-markering der signalerer multi-produkt-loading-flow ved fabrik.
 
-**Detaljeret fabrik-flow ved geofence-ankomst (LÅST 2026-05-22):**
-Når chauffør krydser geofence ved fabrik for en "Samles på en bil"-task, kører chauffør-appen et struktureret loading-flow med vejning mellem hvert produkt:
+**Detaljeret fabrik-flow ved manuel ankomst (OPDATERET 2026-06-08 — chauffør-valg):**
+Når chauffør trykker "Ankommet til fabrik" på en "Samles på en bil"-task, kører chauffør-appen et struktureret loading-flow med vejning mellem hvert produkt. **Chauffør vælger selv rækkefølgen** — appen tvinger ikke en bestemt sekvens (silo-tilgængelighed eller fabriks-praktiske forhold kan kræve omorganisering).
 
-1. **Velkomst** — "Velkommen Jens. Du har 3 produkter at hente på samme bil."
-2. **Vej tom** — "Kør på vægten og vej bilen tom."
-3. **Last produkt 1** — "Last [produktnavn 1] — [tons]t."
-4. **Vej efter produkt 1** — "Kør på vægten og vej."
-5. **Last produkt 2** — "Last [produktnavn 2] — [tons]t."
-6. **Vej efter produkt 2** — "Kør på vægten og vej."
-7. **Last produkt 3** (hvis relevant) — "Last [produktnavn 3] — [tons]t."
-8. **Vej efter produkt 3** — "Kør på vægten og vej."
-9. **Afgang** — "Kør til udførselssted: [adresse]."
+**Flow-struktur:**
 
-Hver vejning genererer én vejeseddel pr. produkt (via fabrik-system). Chaufføren behøver ikke holde regnskab med tons selv — appen guider gennem trinene.
+```
+1. Velkomst — "Velkommen Jens. Du har 3 produkter at hente på samme bil."
+2. Scan vægtens QR (tom) — én vejning før lastning starter
+3. Produktvælger — liste over IKKE-lastede produkter på ordren (kun denne dag)
+   ↓ chauffør vælger ét produkt
+4. Bekræftelse — "Kør til Silo og last [valgt produkt]" + tabel (Silo, Forventet last, Produkt + recept-nr)
+5. Scan QR for udvejning — vejning efter valgt produkt er lastet
+6. [LOOP] Hvis flere produkter er ikke-lastede → tilbage til Produktvælger (kun viser resterende)
+7. Afslut-bekræftelse — "Alle produkter lastet. Kør til udførselssted: [adresse]."
+```
+
+Hver vejning (én efter hvert produkt) genererer én vejeseddel pr. produkt. Chauffør behøver ikke holde regnskab med tons selv — produktvælgeren viser forventet tons per produkt, og kun produkter med `bestilt - hentet > 0` er valgbare.
+
+**Forretningsregel — chauffør-valg:**
+- Chauffør VÆLGER rækkefølge per silo-tilgængelighed
+- Appen forhindrer ikke valg — alle ikke-lastede produkter er tilgængelige
+- Hvert valg fjerner produktet fra listen efter scan-udvejning er gennemført
+- Hvis chauffør forsøger at gå tilbage efter scan-udvejning (= vejeseddel er udstedt), er valget endeligt — appen viser bekræftelses-modal "Vejning er udstedt, du kan ikke fortryde"
 
 **Læser:** `assigned_tasks` med `samles_paa_en_bil_products[]` (array af produkter med tons) eller fortsat `puljelaes_products[]` som data-felt.
+
+**Sidste-læs-hybrid (LÅST 2026-06-08, special case af Flow 12):**
+
+Når en chauffør på en almindelig single-produkt-ordre når sidste-læs (rest < bilkapacitet, fx 12 t af 34 t kapacitet), kan resten af bil-kapaciteten udnyttes til et ANDET produkt fra samme ordre (eller samme samleordre) som også skal køres samme dag.
+
+**Trigger:** Ved scan af vægtens QR (tom-vejning) på en sidste-læs-ordre tjekker appen om der findes ANDRE produkter på samme ordre/samleordre/dato med `bestilt - hentet > 0`.
+
+**Hvis ja:** Efter scan-vægt vises en modal:
+- Titel: "Tag flere produkter med?"
+- Beskrivelse: "Du har plads til X t mere på bilen. Vil du tage andre produkter med på samme tur?"
+- Knap 1 (sekundær): "Nej, kun [primært produkt]" → fortsætter som single-produkt-flow
+- Knap 2 (primær gul): "Ja, vælg flere produkter" → går ind i Samles på en bil-flowet med multi-produkt-loop
+
+**Hvis nej:** Single-produkt-flow fortsætter uændret.
+
+**Anhænger-scenarie:** Hvis chauffør har bil med hænger (kapacitet bil + hænger), kan han laste fx 12 t produkt A på bilen + 22 t produkt B i hængeren. Det ER multi-produkt-flow (Flow 12) — vognmand har bare disponeret en bil med ekstra kapacitet (hænger). Ingen særlig håndtering i chauffør-appen.
 
 ### Trin 5 — Vejning pr. produkt
 **App:** (fabrik-system)
@@ -2077,6 +2309,50 @@ ekstra_bestillinger                                // Drip-bestillinger
 - **Recept-kompatibilitet**: Kan NEW fabrik altid producere samme produkt? Hvis ikke — hvem fanger det? Sandsynligvis PLAN, men UI-advarsel ville være rart
 - **Bil allerede ved OLD fabrik**: Skal chauffør se en advarsel om at NÆSTE læs er ny fabrik, eller bare modtage push når sin nuværende læs er udvejet?
 - **Log-visning**: Skal `factory_change_log` være synlig i formand-UI (historik over hvilke fabrikker der har leveret)? Sandsynligvis ja — relevant for ordre-historik
+
+---
+
+## Flow 14: Chauffør kontaktliste — daglig aggregering (LÅST 2026-06-08)
+
+**Status:** Prototype bygges i chauffeur-web (Kontakt-tab i bottom menubar)
+**Trigger:** Chauffør åbner Kontakt-tab i bottom menubar
+**App:** chauffeur (Fase 2: native), chauffeur-web (Fase 1: prototype)
+
+**Forretningsregel:** Kontakt-tab viser **alle relevante kontaktpersoner og fabrikker** for de opgaver chaufføren skal køre på den aktuelle dag. Listen aggregeres automatisk fra dagens tasks — chauffør behøver IKKE selv at finde kontakter på tværs af opgavekort.
+
+**Kontakt-typer der vises:**
+
+| Rolle | Kilde | Note |
+|---|---|---|
+| **Formand** | `task.contacts[]` hvor `role = 'Formand'` | Den der har planlagt og styrer ordren. Primær kontakt ved problemer på pladsen. |
+| **Sjakbejs** | `task.contacts[]` hvor `role = 'Sjakbejs'` | Holdets leder på pladsen (i sjakket). Chauffør ringer ofte til sjakbejs for praktiske spørgsmål om aflæsning. |
+| **Projektleder** | `task.contacts[]` hvor `role = 'Projektleder'` | Vises også (relevant ved større tekniske/scope-spørgsmål). |
+| **Fabrik** | `task.locations[0]` (pickup) eller `task.fabrik` | Telefonnummer til fabrikkens vejekontor. Bruges ved problemer ved indvejning/udvejning. |
+
+**Aggregerings-regler:**
+
+1. **Scope:** Listen viser kun kontakter fra opgaver med dato = i dag (uanset state — idle, active, paused, completed). Gårsdagens kontakter forsvinder automatisk.
+2. **Deduplikering:** Hvis samme person (samme telefonnummer) optræder på flere opgaver → vises ÉN GANG. Hvis personen har forskellige roller på forskellige opgaver (sjælden, men muligt) → vises med BEGGE roller stacked.
+3. **Gruppering:** Rolle-baseret. Rækkefølge: Formand → Sjakbejs → Projektleder → Fabrik. Inden for hver gruppe sorteres alfabetisk på navn.
+4. **Synlighed:** Hvis chauffør ikke har opgaver i dag → vis tom-state ("Ingen kontakter i dag — du har ingen opgaver planlagt").
+
+**UI-elementer per kontakt:**
+- Navn (Poppins 600, 15px, C.textPrimary)
+- Rolle (Inter 12px, C.textMuted) — hvis person har flere roller: "Formand · Sjakbejs"
+- Telefonnummer som klikbart `<a href="tel:...">`-link (Inter 14px, C.deepTeal)
+- Valgfri thumbnail (40x40 rund, fra `contact.imageUrl` hvis sat)
+
+**Datakilde:**
+- I Fase 1 (prototype): aggregeres fra `mockTasks` i chauffeur-web
+- I Fase 2 (Supabase): hook'er `useTodaysContacts()` der joiner `tasks` → `task_contacts` → `contacts` filtreret på `task.dato = today` og `task.assigned_chauffoer_id = current_user`
+- Fabrik-kontakter join'es separat fra `fabriker`-tabel via `task.pickup.fabrik_id`
+
+**Cross-app effekt:** Ingen — kontaktlisten er læse-kun visning i chauffør-appen. Skriver intet tilbage.
+
+**🟡 Fase 2-udvidelser:**
+- Søgning/filter på lange lister (relevant hvis chauffør har 5+ opgaver)
+- Tryk-og-hold for hurtig SMS i stedet for opkald
+- Markér seneste kontakt øverst ("Senest ringet")
 
 ---
 

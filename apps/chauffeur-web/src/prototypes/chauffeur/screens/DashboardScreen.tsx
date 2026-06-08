@@ -214,6 +214,11 @@ export function DashboardScreen({
         >
           {tasks.map((task) => {
             const delivery = task.locations[1]
+            const pickup = task.locations[0]
+            const receptNr = task.recept_nr ?? task.produkt
+            const produktnavn = task.produktnavn
+            const isActive = task.state === 'active'
+            const isCompleted = task.state === 'completed'
             return (
               <button
                 key={task.id}
@@ -225,162 +230,148 @@ export function DashboardScreen({
                   height: 'auto',
                   flexShrink: 0,
                   scrollSnapAlign: 'start',
-                  backgroundColor: '#F0F7FA',
+                  // Standard hvid baggrund og border — ingen farvet outline
+                  backgroundColor: '#FFFFFF',
                   borderRadius: 12,
-                  paddingTop: 24,
-                  paddingLeft: 24,
-                  paddingRight: 24,
+                  paddingTop: 20,
+                  paddingLeft: 20,
+                  paddingRight: 20,
                   paddingBottom: 4,
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'flex-start',
                   gap: 10,
-                  border: 'none',
+                  border: '1px solid #EDEDED',
                   cursor: 'pointer',
                   textAlign: 'left',
+                  position: 'relative',
+                  // Completed-kort: let dæmpet
+                  opacity: isCompleted ? 0.65 : 1,
                 }}
               >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span
+                {/* State-badge top-højre */}
+                {isActive && (
+                  <div
                     style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontWeight: 600,
-                      fontSize: 10,
-                      color: '#717182',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                      margin: 0,
+                      position: 'absolute',
+                      top: 12,
+                      right: 12,
+                      backgroundColor: '#FEEE32',
+                      borderRadius: 12,
+                      padding: '4px 10px',
                     }}
                   >
-                    Udførselssted
-                  </span>
-                  <p
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: '#0E4764' }}>
+                      I gang
+                    </span>
+                  </div>
+                )}
+                {isCompleted && (
+                  <div
                     style={{
-                      fontFamily: 'Poppins, sans-serif',
-                      fontWeight: 500,
-                      fontSize: 18,
-                      color: '#1D1D1D',
-                      margin: 0,
-                      lineHeight: 1.25,
-                      display: '-webkit-box',
-                      WebkitLineClamp: 1,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
+                      position: 'absolute',
+                      top: 12,
+                      right: 12,
+                      // Neutral grå badge — ingen rød
+                      backgroundColor: '#EDEDED',
+                      borderRadius: 12,
+                      padding: '4px 10px',
                     }}
                   >
-                    {delivery?.name ?? '—'}
-                  </p>
-                  {delivery?.address && (
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: '#717182' }}>
+                      Afsluttet
+                    </span>
+                  </div>
+                )}
+
+                {/* Ordrenummer */}
+                <span
+                  style={{
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: 12,
+                    color: '#717182',
+                    margin: 0,
+                    marginBottom: 4,
+                  }}
+                >
+                  Ordrenummer {task.orderNumber}
+                </span>
+
+                {/* Recept-nr + tons på samme linje, produktnavn under */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: -6, width: '100%' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <p
+                      style={{
+                        fontFamily: 'Poppins, sans-serif',
+                        fontWeight: 600,
+                        fontSize: 16,
+                        color: '#0E4764',
+                        margin: 0,
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {receptNr}
+                    </p>
+                    <p
+                      style={{
+                        fontFamily: 'Poppins, sans-serif',
+                        fontWeight: 600,
+                        fontSize: 16,
+                        color: '#0E4764',
+                        margin: 0,
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {task.bestilt_total != null ? Math.max(task.bestilt_total - (task.hentet ?? 0), 0) : task.ton} Tons
+                    </p>
+                  </div>
+                  {produktnavn && (
                     <p
                       style={{
                         fontFamily: 'Inter, sans-serif',
                         fontSize: 12,
                         color: '#717182',
                         margin: 0,
-                        overflow: 'hidden',
-                        whiteSpace: 'nowrap',
-                        textOverflow: 'ellipsis',
+                        marginTop: 1,
                       }}
                     >
-                      {delivery.address}
+                      {produktnavn}
                     </p>
                   )}
                 </div>
-                {(() => {
-                  const formandContact = task.contacts.find((c) =>
-                    c.role.toLowerCase().includes('formand')
-                  ) ?? task.contacts[0]
-                  return (
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: formandContact ? '1fr 1fr 2fr' : '1fr 1fr',
-                        width: '100%',
-                        gap: 0,
-                      }}
-                    >
-                      {[
-                        { label: 'Ton', value: String(task.ton) },
-                        { label: 'Produkt', value: task.produkt ?? 'Asfalt' },
-                      ].map((metric) => (
-                        <div
-                          key={metric.label}
-                          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}
-                        >
-                          <p
-                            style={{
-                              fontFamily: 'Inter, sans-serif',
-                              fontSize: 10,
-                              color: '#717182',
-                              margin: '0 0 2px 0',
-                              fontWeight: 500,
-                            }}
-                          >
-                            {metric.label}
-                          </p>
-                          <p
-                            style={{
-                              fontFamily: 'Inter, sans-serif',
-                              fontSize: 14,
-                              fontWeight: 700,
-                              color: '#1D1D1D',
-                              margin: 0,
-                            }}
-                          >
-                            {metric.value}
-                          </p>
-                        </div>
-                      ))}
-                      {formandContact && (
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            textAlign: 'center',
-                          }}
-                        >
-                          <p
-                            style={{
-                              fontFamily: 'Inter, sans-serif',
-                              fontSize: 10,
-                              color: '#717182',
-                              margin: '0 0 2px 0',
-                              fontWeight: 500,
-                            }}
-                          >
-                            Formand
-                          </p>
-                          <p
-                            style={{
-                              fontFamily: 'Inter, sans-serif',
-                              fontSize: 14,
-                              fontWeight: 700,
-                              color: '#1D1D1D',
-                              margin: 0,
-                            }}
-                          >
-                            {formandContact.name}
-                          </p>
-                          <a
-                            href={`tel:${formandContact.phone}`}
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                              fontFamily: 'Inter, sans-serif',
-                              fontSize: 11,
-                              fontWeight: 500,
-                              color: '#0E4764',
-                              margin: 0,
-                              textDecoration: 'none',
-                            }}
-                          >
-                            {formandContact.phone}
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })()}
+
+                {/* Rute */}
+                {pickup?.name && delivery?.name && (
+                  <p
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: 13,
+                      color: '#717182',
+                      margin: 0,
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                      textOverflow: 'ellipsis',
+                      width: '100%',
+                    }}
+                  >
+                    {pickup.name} → {delivery.name}
+                  </p>
+                )}
+
+                {/* Mødetid hvis pickup har meetingTime */}
+                {pickup?.meetingTime && (
+                  <p
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: 12,
+                      color: '#717182',
+                      margin: 0,
+                    }}
+                  >
+                    Mødetid kl. {pickup.meetingTime}
+                  </p>
+                )}
+
                 {task.formandNote && (
                   <>
                     <div style={{ width: '100%', height: 1, backgroundColor: 'rgba(0,0,0,0.08)' }} />

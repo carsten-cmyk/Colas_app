@@ -37,6 +37,8 @@ export interface TaskDetailScreenProps {
   otherActiveTask?: { id: string; orderNumber: string; produkt: string } | null
   /** Navigér til den anden aktive opgave */
   onGoToOtherTask?: (taskId: string) => void
+  /** Åbn ankomst-bekræftelses-skærm for fabrik eller plads */
+  onArrivalConfirm?: (destination: 'fabrik' | 'plads') => void
 }
 
 export function TaskDetailScreen({
@@ -48,6 +50,7 @@ export function TaskDetailScreen({
   onComplete,
   otherActiveTask,
   onGoToOtherTask,
+  onArrivalConfirm,
 }: TaskDetailScreenProps) {
   const [pauseConfirmOpen, setPauseConfirmOpen] = useState(false)
   const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false)
@@ -139,7 +142,8 @@ export function TaskDetailScreen({
         </button>
       </div>
 
-      {/* Scrollable body */}
+      {/* Scrollable body — paddingBottom = action-bar height (69px: 1px border + 8px top + 52px btn + 8px bottom) + 16px clear air = 85px.
+          Reduceres til 16 når action-bar er skjult (completed state). */}
       <div
         className="scrollbar-hide"
         style={{
@@ -149,10 +153,10 @@ export function TaskDetailScreen({
           paddingLeft: 20,
           paddingRight: 20,
           paddingTop: 8,
-          paddingBottom: 16,
+          paddingBottom: taskState === 'completed' ? 16 : 88,
           display: 'flex',
           flexDirection: 'column',
-          gap: 16,
+          gap: 12,
         }}
       >
         {/* Order metrics — 2 rækker: Ton+Produkt øverst, Formand fuld bredde nederst */}
@@ -199,7 +203,9 @@ export function TaskDetailScreen({
                   textAlign: 'center',
                 }}
               >
-                {String(task.ton)}
+                {task.bestilt_total != null
+                  ? String(Math.max(task.bestilt_total - (task.hentet ?? 0), 0))
+                  : String(task.ton)}
               </p>
             </div>
 
@@ -235,68 +241,101 @@ export function TaskDetailScreen({
                   textAlign: 'center',
                 }}
               >
-                {task.produkt}
+                {task.recept_nr ?? task.produkt}
               </p>
+              {task.produktnavn && (
+                <p
+                  style={{
+                    fontFamily: 'Inter, sans-serif',
+                    fontWeight: 400,
+                    fontSize: 11,
+                    color: C.textMuted,
+                    margin: '2px 0 0 0',
+                    textAlign: 'center',
+                  }}
+                >
+                  {task.produktnavn}
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Række 2: Formand — fuld bredde med horisontal divider over */}
-          {/* Typografi 1:1 fra TimeRegistrationScreen linje ~213-253 */}
           {formandContact && (
             <div
               style={{
                 borderTop: `1px solid ${C.border}`,
-                padding: '14px 12px',
+                padding: '12px 16px',
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 2,
+                gap: 0,
               }}
             >
-              {/* Label — TimeRegistrationScreen: Inter 11, textMuted */}
-              <span
-                style={{
-                  fontFamily: 'Inter, sans-serif',
-                  fontSize: 11,
-                  color: C.textMuted,
-                }}
-              >
-                Formand
-              </span>
-              {/* Navn — TimeRegistrationScreen: Poppins 600, 16, textPrimary */}
-              <span
-                style={{
-                  fontFamily: 'Poppins, sans-serif',
-                  fontWeight: 600,
-                  fontSize: 16,
-                  color: C.textPrimary,
-                  textAlign: 'center',
-                }}
-              >
-                {formandContact.name}
-              </span>
-              {/* Tlf — TimeRegistrationScreen: Inter 13, deepTeal, klikbar tel: */}
-              <a
-                href={`tel:${formandContact.phone.replace(/\s/g, '')}`}
-                aria-label={`Ring til ${formandContact.name}`}
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  fontFamily: 'Inter, sans-serif',
-                  fontSize: 13,
-                  color: C.deepTeal,
-                  textDecoration: 'none',
-                  textAlign: 'center',
-                }}
-              >
-                {formandContact.phone}
-              </a>
+              {/* Række 1 — labels */}
+              <div style={{ display: 'flex' }}>
+                <span
+                  style={{
+                    flex: 1,
+                    textAlign: 'center',
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: 11,
+                    lineHeight: 1,
+                    color: C.textMuted,
+                  }}
+                >
+                  Formand
+                </span>
+                <span
+                  style={{
+                    flex: 1,
+                    textAlign: 'center',
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: 11,
+                    lineHeight: 1,
+                    color: C.textMuted,
+                  }}
+                >
+                  Tlf
+                </span>
+              </div>
+              {/* Række 2 — værdier */}
+              <div style={{ display: 'flex', alignItems: 'baseline' }}>
+                <span
+                  style={{
+                    flex: 1,
+                    textAlign: 'center',
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 600,
+                    fontSize: 16,
+                    lineHeight: 1.1,
+                    color: C.textPrimary,
+                  }}
+                >
+                  {formandContact.name}
+                </span>
+                <a
+                  href={`tel:${formandContact.phone.replace(/\s/g, '')}`}
+                  aria-label={`Ring til ${formandContact.name}`}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    flex: 1,
+                    textAlign: 'center',
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: 14,
+                    lineHeight: 1.1,
+                    color: C.deepTeal,
+                    textDecoration: 'none',
+                    padding: '8px 0',
+                  }}
+                >
+                  {formandContact.phone}
+                </a>
+              </div>
             </div>
           )}
         </div>
 
         {/* Locations */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {/* Pickup */}
           {pickup && (
             <div
@@ -304,87 +343,109 @@ export function TaskDetailScreen({
                 backgroundColor: C.white,
                 borderRadius: 12,
                 border: `1px solid ${C.border}`,
-                padding: '14px',
+                padding: '12px',
                 display: 'flex',
-                alignItems: 'flex-start',
-                gap: 12,
+                flexDirection: 'column',
               }}
             >
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  backgroundColor: C.pickupBg,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <MapPin size={16} color={C.deepTeal} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <p
+              {/* Location-række: ikon + tekst + mødetid */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <div
                   style={{
-                    fontFamily: 'Inter, sans-serif',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase' as const,
-                    color: C.textMuted,
-                    margin: '0 0 2px 0',
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    backgroundColor: C.pickupBg,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
                   }}
                 >
-                  Afhenting
-                </p>
-                <p
-                  style={{
-                    fontFamily: 'Inter, sans-serif',
-                    fontWeight: 600,
-                    fontSize: 15,
-                    color: C.textPrimary,
-                    margin: '0 0 2px 0',
-                  }}
-                >
-                  {pickup.name}
-                </p>
-                <p
-                  style={{
-                    fontFamily: 'Inter, sans-serif',
-                    fontSize: 13,
-                    color: C.textMuted,
-                    margin: 0,
-                  }}
-                >
-                  {pickup.address}
-                </p>
-              </div>
-              {pickup.meetingTime && (
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <MapPin size={16} color={C.deepTeal} />
+                </div>
+                <div style={{ flex: 1 }}>
                   <p
                     style={{
                       fontFamily: 'Inter, sans-serif',
                       fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase' as const,
                       color: C.textMuted,
                       margin: '0 0 2px 0',
                     }}
                   >
-                    Mødetid
+                    Afhenting
                   </p>
                   <p
                     style={{
-                      fontFamily: 'Poppins, sans-serif',
+                      fontFamily: 'Inter, sans-serif',
                       fontWeight: 600,
-                      fontSize: 20,
+                      fontSize: 15,
                       color: C.textPrimary,
+                      margin: '0 0 2px 0',
+                    }}
+                  >
+                    {pickup.name}
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: 13,
+                      color: C.textMuted,
                       margin: 0,
                     }}
                   >
-                    {pickup.meetingTime}
+                    {pickup.address}
                   </p>
                 </div>
-              )}
+                {pickup.meetingTime && (
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <p
+                      style={{
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: 11,
+                        color: C.textMuted,
+                        margin: '0 0 2px 0',
+                      }}
+                    >
+                      Mødetid
+                    </p>
+                    <p
+                      style={{
+                        fontFamily: 'Poppins, sans-serif',
+                        fontWeight: 600,
+                        fontSize: 20,
+                        color: C.textPrimary,
+                        margin: 0,
+                      }}
+                    >
+                      {pickup.meetingTime}
+                    </p>
+                  </div>
+                )}
+              </div>
+              {/* Ankomst-knap — fuld boks-bredde, ny række under location-rækken */}
+              <button
+                onClick={() => onArrivalConfirm?.('fabrik')}
+                style={{
+                  marginTop: 10,
+                  width: '100%',
+                  height: 32,
+                  minHeight: 36,
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${C.deepTeal}`,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 12,
+                  color: C.deepTeal,
+                }}
+              >
+                Ankommet til fabrik
+              </button>
             </div>
           )}
 
@@ -415,62 +476,84 @@ export function TaskDetailScreen({
                 backgroundColor: C.white,
                 borderRadius: 12,
                 border: `1px solid ${C.border}`,
-                padding: '14px',
+                padding: '12px',
                 display: 'flex',
-                alignItems: 'flex-start',
-                gap: 12,
+                flexDirection: 'column',
               }}
             >
-              <div
+              {/* Location-række: ikon + tekst */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    backgroundColor: C.deliveryBg,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <MapPin size={16} color={C.deliveryIconColor} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase' as const,
+                      color: C.textMuted,
+                      margin: '0 0 2px 0',
+                    }}
+                  >
+                    Udførselssted
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontWeight: 600,
+                      fontSize: 15,
+                      color: C.textPrimary,
+                      margin: '0 0 2px 0',
+                    }}
+                  >
+                    {delivery.name}
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: 13,
+                      color: C.textMuted,
+                      margin: 0,
+                    }}
+                  >
+                    {delivery.address}
+                  </p>
+                </div>
+              </div>
+              {/* Ankomst-knap — fuld boks-bredde, ny række under location-rækken */}
+              <button
+                onClick={() => onArrivalConfirm?.('plads')}
                 style={{
-                  width: 32,
+                  marginTop: 10,
+                  width: '100%',
                   height: 32,
-                  borderRadius: '50%',
-                  backgroundColor: C.deliveryBg,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
+                  minHeight: 36,
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${C.deepTeal}`,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 12,
+                  color: C.deepTeal,
                 }}
               >
-                <MapPin size={16} color={C.deliveryIconColor} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <p
-                  style={{
-                    fontFamily: 'Inter, sans-serif',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase' as const,
-                    color: C.textMuted,
-                    margin: '0 0 2px 0',
-                  }}
-                >
-                  Udførselssted
-                </p>
-                <p
-                  style={{
-                    fontFamily: 'Inter, sans-serif',
-                    fontWeight: 600,
-                    fontSize: 15,
-                    color: C.textPrimary,
-                    margin: '0 0 2px 0',
-                  }}
-                >
-                  {delivery.name}
-                </p>
-                <p
-                  style={{
-                    fontFamily: 'Inter, sans-serif',
-                    fontSize: 13,
-                    color: C.textMuted,
-                    margin: 0,
-                  }}
-                >
-                  {delivery.address}
-                </p>
-              </div>
+                Ankommet til plads
+              </button>
             </div>
           )}
         </div>
@@ -557,27 +640,59 @@ export function TaskDetailScreen({
         )}
 
         {/* Formand-boks fjernet — kontaktinfo nu i metrics-cardet ovenfor */}
+      </div>
 
-        {/* Action-knapper (i bunden af scroll-body — samme mønster som TimeRegistrationScreen) */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-            marginTop: 4,
-            paddingBottom: 8,
-          }}
-        >
-          {taskState === 'idle' && (
+      {/* ─── Fixed action-bar — skjules ved completed state ─────────────────────
+          Altid synlig over BottomTabBar (58px) uanset scroll-position og task-state.
+          position: absolute er relativ til root-div (position: absolute, inset: 0). */}
+      {taskState !== 'completed' && (
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 58,
+          backgroundColor: C.white,
+          borderTop: `1px solid ${C.border}`,
+          paddingTop: 8,
+          paddingBottom: 8,
+          paddingLeft: 20,
+          paddingRight: 20,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        {taskState === 'idle' && (
+          <button
+            onClick={() => {
+              if (otherActiveTask) setAlreadyActiveOpen(true)
+              else setStartConfirmOpen(true)
+            }}
+            style={{
+              height: 52,
+              backgroundColor: C.green,
+              color: C.white,
+              borderRadius: 12,
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'Poppins, sans-serif',
+              fontWeight: 600,
+              fontSize: 15,
+            }}
+          >
+            Start opgave
+          </button>
+        )}
+        {taskState === 'active' && (
+          <div style={{ display: 'flex', gap: 8 }}>
             <button
-              onClick={() => {
-                if (otherActiveTask) setAlreadyActiveOpen(true)
-                else setStartConfirmOpen(true)
-              }}
+              onClick={() => setPauseConfirmOpen(true)}
               style={{
+                flex: 1,
                 height: 52,
-                backgroundColor: C.green,
-                color: C.white,
+                backgroundColor: C.border,
+                color: C.textPrimary,
                 borderRadius: 12,
                 border: 'none',
                 cursor: 'pointer',
@@ -586,51 +701,12 @@ export function TaskDetailScreen({
                 fontSize: 15,
               }}
             >
-              Start opgave
+              Pause
             </button>
-          )}
-          {taskState === 'active' && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => setPauseConfirmOpen(true)}
-                style={{
-                  flex: 1,
-                  height: 52,
-                  backgroundColor: C.border,
-                  color: C.textPrimary,
-                  borderRadius: 12,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontFamily: 'Poppins, sans-serif',
-                  fontWeight: 600,
-                  fontSize: 15,
-                }}
-              >
-                Pause
-              </button>
-              <button
-                onClick={() => setCompleteConfirmOpen(true)}
-                style={{
-                  flex: 1,
-                  height: 52,
-                  backgroundColor: C.green,
-                  color: C.white,
-                  borderRadius: 12,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontFamily: 'Poppins, sans-serif',
-                  fontWeight: 600,
-                  fontSize: 15,
-                }}
-              >
-                Afslut opgave
-              </button>
-            </div>
-          )}
-          {taskState === 'paused' && (
             <button
-              onClick={onStart}
+              onClick={() => setCompleteConfirmOpen(true)}
               style={{
+                flex: 1,
                 height: 52,
                 backgroundColor: C.yellow,
                 color: C.deepTeal,
@@ -642,11 +718,30 @@ export function TaskDetailScreen({
                 fontSize: 15,
               }}
             >
-              Genoptag opgave
+              Afslut opgave
             </button>
-          )}
-        </div>
+          </div>
+        )}
+        {taskState === 'paused' && (
+          <button
+            onClick={onStart}
+            style={{
+              height: 52,
+              backgroundColor: C.yellow,
+              color: C.deepTeal,
+              borderRadius: 12,
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'Poppins, sans-serif',
+              fontWeight: 600,
+              fontSize: 15,
+            }}
+          >
+            Genoptag opgave
+          </button>
+        )}
       </div>
+      )}
 
       {/* Pause-bekræftelses-modal — unified pattern fra TimeRegistrationScreen linje 682-752 */}
       {pauseConfirmOpen && (

@@ -11,18 +11,19 @@ import { mockConversations } from '@/mocks/messages'
 import { SplashScreen } from './screens/SplashScreen'
 import { DashboardScreen } from './screens/DashboardScreen'
 import { TaskDetailScreen } from './screens/TaskDetailScreen'
-import { MessagesListScreen } from './screens/MessagesListScreen'
 import { ConversationScreen } from './screens/ConversationScreen'
 import { AnkommetFabrikScreen } from './screens/AnkommetFabrikScreen'
+import { SamlesPaaEnBilScreen } from './screens/SamlesPaaEnBilScreen'
 import { AnkommetUdfoerselsstedScreen } from './screens/AnkommetUdfoerselsstedScreen'
 import { TimeRegistrationScreen } from './screens/TimeRegistrationScreen'
 import { TaskListScreen } from './screens/TaskListScreen'
+import { KontakterScreen } from './screens/KontakterScreen'
 import { PauseReminderSimulatorScreen } from './screens/PauseReminderSimulatorScreen'
 import { BottomTabBar } from './components/BottomTabBar'
 import type { TabName } from './components/BottomTabBar'
 
 type AppScreen = 'splash' | 'app'
-type PrototypeSubScreen = 'ankomst' | 'ankomst-plads' | 'timereg' | 'opgaveliste' | 'pause-reminder' | null
+type PrototypeSubScreen = 'ankomst' | 'ankomst-plads' | 'timereg' | 'opgaveliste' | 'pause-reminder' | 'samles-paa-en-bil' | null
 
 const MESSAGE_COUNT = mockConversations.filter(
   c => !c.lastMessage.isRead && c.lastMessage.senderId !== 'me'
@@ -35,6 +36,8 @@ export function ChauffoerPrototype() {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [taskStates, setTaskStates] = useState<Record<string, TaskState>>({})
   const [prototypeSubScreen, setPrototypeSubScreen] = useState<PrototypeSubScreen>(null)
+  const [arrivalScreen, setArrivalScreen] = useState<'fabrik' | 'plads' | null>(null)
+  const [viewingTimeregFor, setViewingTimeregFor] = useState<string | null>(null)
 
   const selectedTask = selectedTaskId ? (mockTasks.find(t => t.id === selectedTaskId) ?? null) : null
   const currentTaskState: TaskState = selectedTask
@@ -76,31 +79,50 @@ export function ChauffoerPrototype() {
     return <SplashScreen onStart={() => setScreen('app')} />
   }
 
-  const isPlaceholderTab = activeTab === 'timereg' || activeTab === 'kontakt'
+  const isPlaceholderTab = false // timereg er nu wired — ingen placeholder-tabs tilbage
   const isPrototyperTab = activeTab === 'prototyper'
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
 
-      {/* Start / Opgaver tab */}
-      {(activeTab === 'start' || activeTab === 'opgaver') && (
+      {/* Start tab */}
+      {activeTab === 'start' && (
         <DashboardScreen
           tasks={mockTasks}
           messageCount={MESSAGE_COUNT}
           activeTab={activeTab}
           onTabPress={handleTabPress}
           onTaskPress={id => setSelectedTaskId(id)}
-          onMessagesPress={() => handleTabPress('beskeder')}
+          // Bibeholdes — peger nu på vejning-tab, beskeder er fjernet i Fase 1
+          onMessagesPress={() => handleTabPress('vejning')}
         />
       )}
 
-      {/* Beskeder tab */}
-      {activeTab === 'beskeder' && !selectedConversation && (
-        <MessagesListScreen
-          conversations={mockConversations}
-          activeTab={activeTab}
-          onTabPress={handleTabPress}
-          onOpenConversation={c => setSelectedConversation(c)}
+      {/* Opgaver tab */}
+      {activeTab === 'opgaver' && (
+        <TaskListScreen
+          onClose={() => setActiveTab('start')}
+          messageCount={MESSAGE_COUNT}
+          onTaskPress={(id) => setSelectedTaskId(id)}
+        />
+      )}
+
+      {/* Vejning tab — åbner welcome/scan-UI som manuel fallback */}
+      {activeTab === 'vejning' && (
+        <>
+          <AnkommetFabrikScreen onClose={() => setActiveTab('start')} messageCount={MESSAGE_COUNT} />
+          <BottomTabBar activeTab={activeTab} onTabPress={handleTabPress} messageCount={MESSAGE_COUNT} />
+        </>
+      )}
+
+      {/* Timereg tab — åbner TaskListScreen i timeregMode */}
+      {activeTab === 'timereg' && (
+        <TaskListScreen
+          onClose={() => setActiveTab('start')}
+          messageCount={MESSAGE_COUNT}
+          timeregMode
+          onTaskPress={(id) => setSelectedTaskId(id)}
+          onViewTimereg={(taskId) => setViewingTimeregFor(taskId)}
         />
       )}
 
@@ -127,7 +149,7 @@ export function ChauffoerPrototype() {
               margin: 0,
             }}
           >
-            {activeTab === 'timereg' ? 'Tidsregistrering' : 'Kontakter'}
+            Tidsregistrering
           </p>
           <p
             style={{
@@ -141,6 +163,17 @@ export function ChauffoerPrototype() {
           </p>
           <BottomTabBar activeTab={activeTab} onTabPress={handleTabPress} messageCount={MESSAGE_COUNT} />
         </div>
+      )}
+
+      {/* Kontakter tab */}
+      {activeTab === 'kontakt' && (
+        <KontakterScreen
+          tasks={mockTasks}
+          onClose={() => setActiveTab('start')}
+          activeTab={activeTab}
+          onTabPress={handleTabPress}
+          messageCount={MESSAGE_COUNT}
+        />
       )}
 
       {/* Prototyper tab — hub */}
@@ -181,6 +214,7 @@ export function ChauffoerPrototype() {
               { title: 'Timeregistrering', desc: 'Oversigt over dagsforbrug', screen: 'timereg' as PrototypeSubScreen },
               { title: 'Opgaveliste', desc: 'Dagsoversigt over opgaver', screen: 'opgaveliste' as PrototypeSubScreen },
               { title: 'Pause-reminder (30 min)', desc: 'Simulér modal der popper op efter længere pause', screen: 'pause-reminder' as PrototypeSubScreen },
+              { title: 'Samles på en bil (multi-produkt)', desc: 'Flow 12 — flere produkter på samme bil med vejning mellem hvert', screen: 'samles-paa-en-bil' as PrototypeSubScreen },
             ].map((item) => (
               <button
                 key={item.title}
@@ -255,6 +289,9 @@ export function ChauffoerPrototype() {
           <BottomTabBar activeTab={activeTab} onTabPress={handleTabPress} messageCount={MESSAGE_COUNT} />
         </>
       )}
+      {isPrototyperTab && prototypeSubScreen === 'samles-paa-en-bil' && (
+        <SamlesPaaEnBilScreen onClose={() => setPrototypeSubScreen(null)} messageCount={MESSAGE_COUNT} />
+      )}
 
       {/* Task detail overlay (slides over dashboard) */}
       {selectedTask && (
@@ -267,6 +304,25 @@ export function ChauffoerPrototype() {
           onComplete={handleTaskComplete}
           otherActiveTask={otherActiveTask ? { id: otherActiveTask.id, orderNumber: otherActiveTask.orderNumber, produkt: otherActiveTask.produkt } : null}
           onGoToOtherTask={(id) => setSelectedTaskId(id)}
+          onArrivalConfirm={(dest) => setArrivalScreen(dest)}
+        />
+      )}
+
+      {/* Ankomst-screens — overlejrer TaskDetailScreen. selectedTaskId nulstilles IKKE,
+          så brugeren returnerer til opgaven når ankomst-screen lukkes. */}
+      {arrivalScreen === 'fabrik' && (
+        <AnkommetFabrikScreen onClose={() => setArrivalScreen(null)} messageCount={MESSAGE_COUNT} />
+      )}
+      {arrivalScreen === 'plads' && (
+        <AnkommetUdfoerselsstedScreen onClose={() => setArrivalScreen(null)} messageCount={MESSAGE_COUNT} />
+      )}
+
+      {/* Se timeregistrering overlay — åbnes fra timereg-tab på afsluttede opgaver */}
+      {viewingTimeregFor && (
+        <TimeRegistrationScreen
+          onClose={() => setViewingTimeregFor(null)}
+          messageCount={MESSAGE_COUNT}
+          reviewMode
         />
       )}
 

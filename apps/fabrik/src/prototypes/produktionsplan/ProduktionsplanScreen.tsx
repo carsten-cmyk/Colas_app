@@ -34,6 +34,8 @@ type Ordre = {
   forventetMaengde: number
   biltype: string
   intervalMin: number
+  forventetFoersteBilTid?: string // HH:mm — beregnes i prod fra formandens bilbestilling - driveTimeMinutes
+  antalBiler?: number  // antal biler formanden har bestilt
   minusRegn: boolean
   annulleretAarsag?: 'vejr'  // Ordren ER aflyst pga. regn — adskilt fra minusRegn (kun advisory)
   kommentar?: string
@@ -79,6 +81,8 @@ const MOCK_ORDRER: Ordre[] = [
     receptNummer: 'R-2847',
     asfalttype: 'SMA 11S',
     morgenTons: 60,
+    forventetFoersteBilTid: '06:54',
+    antalBiler: 3,
     forventetMaengde: 180,
     biltype: '7 Aks',
     intervalMin: 20,
@@ -96,6 +100,8 @@ const MOCK_ORDRER: Ordre[] = [
     receptNummer: 'R-2849',
     asfalttype: 'SMA 11S',
     morgenTons: 40,
+    forventetFoersteBilTid: '07:12',
+    antalBiler: 2,
     forventetMaengde: 160,
     biltype: '7 Aks',
     intervalMin: 25,
@@ -113,6 +119,8 @@ const MOCK_ORDRER: Ordre[] = [
     receptNummer: 'R-2851',
     asfalttype: 'SMA 11S',
     morgenTons: 30,
+    forventetFoersteBilTid: '07:30',
+    antalBiler: 4,
     forventetMaengde: 90,
     biltype: '5 Aks',
     intervalMin: 30,
@@ -130,6 +138,8 @@ const MOCK_ORDRER: Ordre[] = [
     receptNummer: 'R-3104',
     asfalttype: 'GAB 0/16',
     morgenTons: 0,
+    forventetFoersteBilTid: '08:15',
+    antalBiler: 5,
     forventetMaengde: 120,
     biltype: '7 Aks',
     intervalMin: 20,
@@ -147,6 +157,8 @@ const MOCK_ORDRER: Ordre[] = [
     receptNummer: 'R-4012',
     asfalttype: 'AB 8t',
     morgenTons: 20,
+    forventetFoersteBilTid: '06:30',
+    antalBiler: 2,
     forventetMaengde: 70,
     biltype: '5 Aks',
     intervalMin: 25,
@@ -164,6 +176,8 @@ const MOCK_ORDRER: Ordre[] = [
     receptNummer: 'R-4015',
     asfalttype: 'AB 8t',
     morgenTons: 25,
+    forventetFoersteBilTid: '09:00',
+    antalBiler: 3,
     forventetMaengde: 100,
     biltype: '7 Aks',
     intervalMin: 30,
@@ -180,6 +194,8 @@ const MOCK_ORDRER: Ordre[] = [
     receptNummer: 'R-2853',
     asfalttype: 'SMA 11A',
     morgenTons: 35,
+    forventetFoersteBilTid: '10:15',
+    antalBiler: 6,
     forventetMaengde: 110,
     biltype: '5 Aks',
     intervalMin: 20,
@@ -382,7 +398,7 @@ function Timeline({
       {/* Body — venstre kolonner (fast) + højre scrollende kalender */}
       <div className="flex">
         {/* Venstre: info-kolonner, ingen scroll */}
-        <div className="w-[520px] shrink-0 border-r border-hairline">
+        <div className="w-[700px] shrink-0 border-r border-hairline">
           {/* Tidsskala-placeholder for at synce højde med højre */}
           <div className="h-sm bg-soft-aqua border-b border-hairline" />
           <div className="divide-y divide-hairline">
@@ -474,32 +490,20 @@ function OrdreLaneInfo({
     >
       {/* Info-kolonne */}
       <div className="w-[240px] shrink-0 px-md py-xs border-r border-hairline flex flex-col justify-center">
-        {/* Linje 1: recept-nummer + minus-regn-ikon + tons (alle på samme linje) */}
-        <div className="flex items-baseline justify-between gap-xxs">
-          <div className="flex items-center gap-xxs min-w-0">
-            <span className="font-poppins font-semibold text-sm text-text-primary">
-              {ordre.receptNummer}
+        {/* Linje 1: recept-nummer (venstre) + minus-regn-ikon (højre) */}
+        <div className="flex items-center justify-between gap-xxs">
+          <span className="font-poppins font-semibold text-sm text-text-primary">
+            {ordre.receptNummer}
+          </span>
+          {ordre.minusRegn && (
+            <span
+              title="Minus regn — kun ved tørvejr"
+              className="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-deep-teal text-white shrink-0"
+              aria-label="Minus regn"
+            >
+              <CloudRain className="w-3 h-3" aria-hidden="true" />
             </span>
-            {ordre.minusRegn && (
-              <span
-                title="Minus regn — kun ved tørvejr"
-                className="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-deep-teal text-white shrink-0"
-                aria-label="Minus regn"
-              >
-                <CloudRain className="w-3 h-3" aria-hidden="true" />
-              </span>
-            )}
-          </div>
-          <div className="flex items-baseline gap-xxxs shrink-0">
-            <span className="font-poppins font-semibold text-sm text-text-primary">
-              {ordre.forventetMaengde} Tons
-            </span>
-            {ordre.morgenTons > 0 && (
-              <span className="font-inter text-xxs text-text-muted whitespace-nowrap">
-                ({ordre.morgenTons} Tons morgen)
-              </span>
-            )}
-          </div>
+          )}
         </div>
         {/* Linje 2: asfalttype */}
         <div className="font-poppins font-semibold text-sm text-text-primary mt-xxxs">
@@ -518,11 +522,27 @@ function OrdreLaneInfo({
         </div>
       </div>
 
-      {/* Interval-kolonne */}
-      <div className="w-[120px] shrink-0 px-md py-xs border-r border-hairline flex flex-col justify-center">
-        <div className="font-inter text-xxs text-text-muted uppercase tracking-wide">Interval</div>
+      {/* Interval-kolonne — indeholder nu Tons-data (interval er flyttet til Næste bil-kolonnen) */}
+      <div className="w-[140px] shrink-0 px-md py-xs border-r border-hairline flex flex-col justify-center">
+        <div className="font-inter text-xxs text-text-muted uppercase tracking-wide">Bestilte Tons</div>
+        <div className="font-poppins font-semibold text-sm text-text-primary">{ordre.forventetMaengde} Tons</div>
+        {ordre.morgenTons > 0 && (
+          <>
+            <div className="font-inter text-xxs text-text-muted uppercase tracking-wide mt-xxs">Morgen tons</div>
+            <div className="font-poppins font-semibold text-sm text-text-primary">{ordre.morgenTons} Tons</div>
+          </>
+        )}
+      </div>
+
+      {/* Forventet første bil + Antal biler-kolonne */}
+      <div className="w-[160px] shrink-0 px-md py-xs border-r border-hairline flex flex-col justify-center">
+        <div className="font-inter text-xxs text-text-muted uppercase tracking-wide">Første bil</div>
         <div className="font-poppins font-semibold text-sm text-text-primary">
-          Hver {ordre.intervalMin}. min
+          {ordre.forventetFoersteBilTid ?? '—'}
+        </div>
+        <div className="font-inter text-xxs text-text-muted uppercase tracking-wide mt-xs">Antal biler</div>
+        <div className="font-poppins font-semibold text-sm text-text-primary">
+          {ordre.antalBiler ?? '—'}
         </div>
       </div>
 
@@ -568,6 +588,9 @@ function OrdreLaneInfo({
         ) : (
           <span className="font-inter text-sm text-text-muted">—</span>
         )}
+        {/* Interval — flyttet fra Interval-kolonnen */}
+        <div className="font-inter text-xxs text-text-muted uppercase tracking-wide mt-sm">Interval</div>
+        <div className="font-poppins font-semibold text-sm text-text-primary">Hver {ordre.intervalMin}. min</div>
       </div>
     </div>
   )

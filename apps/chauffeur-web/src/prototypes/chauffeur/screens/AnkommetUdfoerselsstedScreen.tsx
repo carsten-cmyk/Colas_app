@@ -4,7 +4,7 @@
  * Spejler AnkommetFabrikScreen-strukturen. Må ikke importeres i produktionskode.
  */
 import { useState } from 'react'
-import { Check, MapPin, X } from 'lucide-react'
+import { Check, X } from 'lucide-react'
 import { BottomTabBar } from '../components/BottomTabBar'
 import type { TabName } from '../components/BottomTabBar'
 
@@ -16,6 +16,12 @@ const MOCK = {
   udlaegger: 'VÖGELE 1900-3I',
   // TODO: Erstat med Google Distance Matrix + 10% lastbil-buffer (se FUNCTIONAL_FLOWS Flow 3 Trin 6)
   etaTilFabrik: 32, // minutter
+  // TODO: Erstat med Supabase når klar
+  udfoerselsstedAdresse: 'Søndre Boulevard 44, 4900 Nakskov',
+  antalTons: 34,
+  recept_nr: '94101A',
+  produktnavn: 'SMA 11S 8mm',
+  udlaeggerModel: 'Vögele 1900-3I',
 } as const
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -24,7 +30,7 @@ export interface AnkommetUdfoerselsstedScreenProps {
   messageCount?: number
 }
 
-type SubScreen = 'ankomst' | 'udlaegger' | 'bekraeft'
+type SubScreen = 'udlaegger' | 'bekraeft'
 
 // ─── Farver (Colas tokens) ────────────────────────────────────────────────────
 const C = {
@@ -41,8 +47,9 @@ const C = {
 }
 
 export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: AnkommetUdfoerselsstedScreenProps) {
-  const [subScreen, setSubScreen] = useState<SubScreen>('ankomst')
+  const [subScreen, setSubScreen] = useState<SubScreen>('udlaegger')
   const [activeTab] = useState<TabName>('prototyper')
+  const [afslutOpgaveModalOpen, setAfslutOpgaveModalOpen] = useState(false)
 
   return (
     <div
@@ -104,170 +111,132 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
           justifyContent: 'center',
         }}
       >
-        {/* ── Sub-skærm 1: Geofencing ankomst ── */}
-        {subScreen === 'ankomst' && (
-          <>
-            {/* Velkomsttekst */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+        {/* ── Sub-skærm 1: Kør til udlægger og aflæs ── */}
+        {subScreen === 'udlaegger' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* Boks 1: Info om udførselssted og last */}
+            <div
+              style={{
+                backgroundColor: C.white,
+                borderRadius: 12,
+                border: `1px solid ${C.border}`,
+                padding: '28px 20px',
+              }}
+            >
+              {/* Overskrift */}
               <p
                 style={{
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 28,
+                  fontSize: 18,
                   color: C.deepTeal,
                   margin: 0,
                   textAlign: 'center',
-                  lineHeight: 1.3,
                 }}
               >
-                Hej {MOCK.driverName}
+                Udførselssted
               </p>
+              {/* Adresse */}
               <p
                 style={{
                   fontFamily: 'Inter, sans-serif',
-                  fontWeight: 400,
-                  fontSize: 15,
-                  color: C.textMuted,
+                  fontSize: 14,
+                  color: C.textPrimary,
                   margin: 0,
+                  marginTop: 4,
                   textAlign: 'center',
-                  lineHeight: 1.3,
                 }}
               >
-                Du er nu ankommet til udførselssted.
+                {MOCK.udfoerselsstedAdresse}
               </p>
-            </div>
 
-            {/* Lokationskort */}
-            <div
-              style={{
-                backgroundColor: C.white,
-                borderRadius: 12,
-                border: `1px solid ${C.border}`,
-                padding: '28px 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                minHeight: 110,
-              }}
-            >
-              <MapPin size={24} color={C.deepTeal} aria-hidden="true" />
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
-                Udførselssted
-              </p>
-              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0, textAlign: 'center', lineHeight: 1.4 }}>
-                {MOCK.adresse}
-              </p>
-            </div>
-
-            {/* Bekræft ankomst — gul pill */}
-            <button
-              onClick={() => setSubScreen('udlaegger')}
-              style={{
-                backgroundColor: C.yellow,
-                border: 'none',
-                borderRadius: 50,
-                height: 52,
-                cursor: 'pointer',
-                fontFamily: 'Poppins, sans-serif',
-                fontWeight: 600,
-                fontSize: 15,
-                color: C.deepTeal,
-              }}
-            >
-              Bekræft ankomst
-            </button>
-          </>
-        )}
-
-        {/* ── Sub-skærm 2: Kør til udlægger og aflæs ── */}
-        {subScreen === 'udlaegger' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {/* Heading */}
-            <p
-              style={{
-                fontFamily: 'Poppins, sans-serif',
-                fontWeight: 600,
-                fontSize: 20,
-                color: C.deepTeal,
-                margin: 0,
-                textAlign: 'center',
-                lineHeight: 1.3,
-              }}
-            >
-              Kør til udlægger og aflæs
-            </p>
-
-            {/* Instruktionskort */}
-            <div
-              style={{
-                backgroundColor: C.white,
-                borderRadius: 12,
-                border: `1px solid ${C.border}`,
-                padding: '28px 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                minHeight: 110,
-              }}
-            >
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
-                Find udlæggeren
-              </p>
-              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0, textAlign: 'center', lineHeight: 1.4 }}>
-                Find udlæggeren på pladsen og aflæs asfalten dér.
-              </p>
-            </div>
-
-            {/* Udlægger-info */}
-            <div
-              style={{
-                backgroundColor: C.white,
-                borderRadius: 12,
-                border: `1px solid ${C.border}`,
-                overflow: 'hidden',
-              }}
-            >
-              {[
-                { label: 'Ordre', value: MOCK.orderNumber },
-                { label: 'Udlægger', value: MOCK.udlaegger },
-              ].map((row, i, arr) => (
+              {/* Tabel-rækker */}
+              <div style={{ marginTop: 16 }}>
+                {/* Antal tons */}
                 <div
-                  key={row.label}
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    padding: '14px 16px',
-                    borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none',
+                    padding: '14px 0',
+                    borderBottom: `1px solid ${C.border}`,
                   }}
                 >
-                  <p
-                    style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
-                      color: C.textMuted,
-                      margin: 0,
-                    }}
-                  >
-                    {row.label}
+                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0 }}>
+                    Antal tons
                   </p>
-                  <p
-                    style={{
-                      fontFamily: 'Poppins, sans-serif',
-                      fontWeight: 600,
-                      fontSize: 15,
-                      color: C.deepTeal,
-                      margin: 0,
-                    }}
-                  >
-                    {row.value}
+                  <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 16, color: C.deepTeal, margin: 0 }}>
+                    {MOCK.antalTons} Tons
                   </p>
                 </div>
-              ))}
+
+                {/* Produkt — two-line cell */}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '14px 0',
+                    borderBottom: `1px solid ${C.border}`,
+                  }}
+                >
+                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0 }}>
+                    Produkt
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                    <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 16, color: C.deepTeal, margin: 0 }}>
+                      {MOCK.recept_nr}
+                    </p>
+                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: C.textMuted, margin: 0 }}>
+                      {MOCK.produktnavn}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Udlægger — sidste række uden border */}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '14px 0',
+                  }}
+                >
+                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0 }}>
+                    Udlægger
+                  </p>
+                  <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 16, color: C.deepTeal, margin: 0 }}>
+                    {MOCK.udlaeggerModel}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Boks 2: Instruktion */}
+            <div
+              style={{
+                backgroundColor: C.white,
+                borderRadius: 12,
+                border: `1px solid ${C.border}`,
+                padding: '28px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 80,
+              }}
+            >
+              <p
+                style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 18,
+                  color: C.deepTeal,
+                  margin: 0,
+                  textAlign: 'center',
+                }}
+              >
+                Kør til udlægger og aflæs
+              </p>
             </div>
 
             {/* Bekræft aflæsning — gul pill */}
@@ -294,41 +263,45 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
         {/* ── Sub-skærm 3: Bekræftelse ── */}
         {subScreen === 'bekraeft' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Success banner */}
+            {/* Success banner — 1:1 match med udvejet-bekraeft i AnkommetFabrikScreen */}
             <div
               style={{
                 backgroundColor: C.goodBg,
                 borderRadius: 12,
-                padding: '24px 20px',
+                border: `1px solid ${C.good}`,
+                padding: '28px 20px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: 12,
+                justifyContent: 'center',
+                gap: 8,
               }}
             >
-              {/* Check-mark ikon — spejler udvejet-bekraeft-mønster fra AnkommetFabrikScreen */}
+              {/* Check-ikon-cirkel — identisk med fabrik: 36×36, C.good bg, Check 20px hvid */}
               <div
                 style={{
-                  width: 52,
-                  height: 52,
+                  width: 36,
+                  height: 36,
                   borderRadius: '50%',
                   backgroundColor: C.good,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  alignSelf: 'center',
+                  marginBottom: 12,
+                  flexShrink: 0,
                 }}
               >
-                <Check size={28} color={C.white} aria-hidden="true" />
+                <Check size={20} color={C.white} />
               </div>
               <p
                 style={{
                   fontFamily: 'Poppins, sans-serif',
-                  fontWeight: 700,
-                  fontSize: 24,
+                  fontWeight: 600,
+                  fontSize: 18,
                   color: C.deepTeal,
                   margin: 0,
                   textAlign: 'center',
-                  lineHeight: 1.2,
                 }}
               >
                 Tak {MOCK.driverName}
@@ -352,7 +325,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
               </p>
             </div>
 
-            {/* Færdig — grøn pill */}
+            {/* Hent næste læs — primær grøn pill */}
             <button
               onClick={onClose}
               style={{
@@ -368,8 +341,115 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
                 width: '100%',
               }}
             >
-              Færdig
+              Hent næste læs
             </button>
+
+            {/* Afslut opgave — sekundær outline pill */}
+            <button
+              onClick={() => setAfslutOpgaveModalOpen(true)}
+              style={{
+                backgroundColor: 'transparent',
+                border: `1.5px solid ${C.deepTeal}`,
+                borderRadius: 50,
+                height: 52,
+                cursor: 'pointer',
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: 15,
+                color: C.deepTeal,
+                width: '100%',
+                marginTop: 8,
+              }}
+            >
+              Afslut opgave
+            </button>
+          </div>
+        )}
+
+        {/* ── Modal: Bekræft Afslut opgave ── */}
+        {afslutOpgaveModalOpen && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundColor: 'rgba(0,0,0,0.45)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '0 24px',
+              zIndex: 20,
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: C.white,
+                borderRadius: 24,
+                padding: 20,
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 18,
+                  color: C.deepTeal,
+                  textAlign: 'center',
+                }}
+              >
+                Afslut opgave?
+              </span>
+              <span
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: 14,
+                  color: C.textMuted,
+                  textAlign: 'center',
+                }}
+              >
+                Er du sikker på du vil afslutte opgaven?
+              </span>
+              <div style={{ display: 'flex', gap: 10, marginTop: 4, width: '100%' }}>
+                <button
+                  onClick={() => setAfslutOpgaveModalOpen(false)}
+                  style={{
+                    flex: 1,
+                    height: 44,
+                    border: `1px solid ${C.deepTeal}`,
+                    borderRadius: 50,
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 600,
+                    fontSize: 14,
+                    color: C.deepTeal,
+                  }}
+                >
+                  Annuller
+                </button>
+                <button
+                  onClick={() => { setAfslutOpgaveModalOpen(false); onClose() }}
+                  style={{
+                    flex: 1,
+                    height: 44,
+                    backgroundColor: C.green,
+                    border: 'none',
+                    borderRadius: 50,
+                    cursor: 'pointer',
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 600,
+                    fontSize: 14,
+                    color: C.white,
+                  }}
+                >
+                  Afslut opgave
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

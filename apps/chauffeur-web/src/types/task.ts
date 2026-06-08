@@ -7,6 +7,8 @@ export interface Location {
   address: string
   meetingTime?: string // Format: "HH.MM"
   type: 'pickup' | 'delivery'
+  /** Fabrikkens vejekontor-telefon (kun relevant ved type: 'pickup') */
+  phone?: string
 }
 
 export interface Contact {
@@ -37,4 +39,12 @@ export interface Task {
   state: TaskState
   /** Valgfri kommentar fra formanden — vises på opgavekortet */
   formandNote?: string
+  /** Recept-kode fra PLAN (fx "94202A") */
+  recept_nr?: string
+  /** Dansk produkt-navn (fx "SMA 11S 8mm") */
+  produktnavn?: string
+  /** Hele ordrens bestilte tons — samme værdi for alle læs */
+  bestilt_total?: number
+  /** Sum af tons hentet på vejesedler indtil nu */
+  hentet?: number
 }

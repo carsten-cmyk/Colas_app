@@ -3,7 +3,7 @@
  * Simulerer QR-scanning flow. Må ikke importeres i produktionskode.
  */
 import { useState } from 'react'
-import { Camera, X } from 'lucide-react'
+import { Camera, X, Check } from 'lucide-react'
 import { BottomTabBar } from '../components/BottomTabBar'
 import type { TabName } from '../components/BottomTabBar'
 
@@ -13,7 +13,13 @@ const MOCK = {
   silo: 'Silo 3',
   ton: 34,
   produkt: 'SMA 11S',
+  recept_nr: '94101A',         // TODO: Erstat med Supabase når klar
+  produktnavn: 'SMA 11S 8mm',  // TODO: Erstat med Supabase når klar
   pickup: { name: 'Køge Asfaltfabrik' },
+  bilKapacitet: 34,      // bilens lasteevne i tons
+  erSidsteLaes: false,   // sæt til true for at simulere sidste-læs flow
+  sidsteLaesStr: 10,     // sidste-læs-størrelse i tons (kun relevant hvis erSidsteLaes)
+  udfoerselsstedAdresse: 'Søvej 6 D, 4900 Nakskov',  // TODO: Erstat med Supabase når klar
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -22,7 +28,8 @@ export interface AnkommetFabrikScreenProps {
   messageCount?: number
 }
 
-type SubScreen = 'ankomst' | 'indvejet' | 'qr-scan' | 'bekraeft' | 'udvejet' | 'udvejet-bekraeft'
+// A) SubScreen-type — flow er nu scan-vaegt → bekraeft direkte (indvejet fjernet)
+type SubScreen = 'ankomst' | 'scan-vaegt' | 'bekraeft' | 'scan-udvejning' | 'udvejet-bekraeft'
 
 // ─── Farver (Colas tokens) ────────────────────────────────────────────────────
 const C = {
@@ -102,6 +109,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
           justifyContent: 'center',
         }}
       >
+        {/* B) ankomst-side — to trin-bokse med tal-cirkler */}
         {subScreen === 'ankomst' && (
           <>
             {/* Velkomsttekst */}
@@ -134,7 +142,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
               </p>
             </div>
 
-            {/* Instruktionskort 1 — Vægten */}
+            {/* Trin 1 — Kør til vægten */}
             <div
               style={{
                 backgroundColor: C.white,
@@ -149,59 +157,39 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 minHeight: 110,
               }}
             >
+              {/* Tal-cirkel 1 */}
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: '50%',
+                  backgroundColor: C.deepTeal,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  alignSelf: 'center',
+                  marginBottom: 12,
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 700,
+                    fontSize: 18,
+                    color: C.white,
+                    lineHeight: 1,
+                  }}
+                >
+                  1
+                </span>
+              </div>
               <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Kør til vægten
               </p>
-              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0, textAlign: 'center', lineHeight: 1.4 }}>
-                Din bil skal indvejes tom. Kør til vægten og scan displayet med din app
-              </p>
             </div>
 
-            {/* Simuler indvejning — gul pill */}
-            <button
-              onClick={() => setSubScreen('indvejet')}
-              style={{
-                backgroundColor: C.yellow,
-                border: 'none',
-                borderRadius: 50,
-                height: 52,
-                cursor: 'pointer',
-                fontFamily: 'Poppins, sans-serif',
-                fontWeight: 600,
-                fontSize: 15,
-                color: C.deepTeal,
-              }}
-            >
-              Simuler indvejning
-            </button>
-          </>
-        )}
-
-        {subScreen === 'indvejet' && (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-              justifyContent: 'center',
-            }}
-          >
-            {/* Heading */}
-            <p
-              style={{
-                fontFamily: 'Poppins, sans-serif',
-                fontWeight: 600,
-                fontSize: 20,
-                color: C.deepTeal,
-                margin: 0,
-                textAlign: 'center',
-                lineHeight: 1.3,
-              }}
-            >
-              Din bil er indvejet tom
-            </p>
-
-            {/* Instruktionskort — Silo */}
+            {/* Trin 2 — Scan vægtens QR-kode (knap flyttes INDE i boksen) */}
             <div
               style={{
                 backgroundColor: C.white,
@@ -216,71 +204,60 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 minHeight: 110,
               }}
             >
+              {/* Tal-cirkel 2 */}
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: '50%',
+                  backgroundColor: C.deepTeal,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  alignSelf: 'center',
+                  marginBottom: 12,
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 700,
+                    fontSize: 18,
+                    color: C.white,
+                    lineHeight: 1,
+                  }}
+                >
+                  2
+                </span>
+              </div>
               <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
-                Kør til Silo
-              </p>
-              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0, textAlign: 'center', lineHeight: 1.4 }}>
-                Inden lastning skal du bekræfte produkt ved at scanne QR-kode på Silo
-              </p>
-            </div>
-
-            {/* Kamera knap */}
-            <div
-              style={{
-                backgroundColor: C.white,
-                borderRadius: 12,
-                border: `1px solid ${C.border}`,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '28px 20px',
-                gap: 12,
-              }}
-            >
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
-                Bekræft produkt
+                Scan vægtens QR-kode
               </p>
               <button
-                onClick={() => setSubScreen('qr-scan')}
-                aria-label="Åbn QR-scanner"
+                onClick={() => setSubScreen('scan-vaegt')}
                 style={{
                   backgroundColor: C.yellow,
                   border: 'none',
                   borderRadius: 50,
-                  minHeight: 56,
+                  height: 52,
                   width: '100%',
+                  marginTop: 8,
                   cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 16,
+                  fontSize: 15,
                   color: C.deepTeal,
                 }}
               >
-                <Camera size={20} color={C.deepTeal} />
-                Scan QR-kode
+                Åbn scanner
               </button>
-              <p
-                style={{
-                  fontFamily: 'Inter, sans-serif',
-                  fontSize: 13,
-                  color: C.textMuted,
-                  margin: 0,
-                  textAlign: 'center',
-                  lineHeight: 1.4,
-                }}
-              >
-                Tryk på kamera-ikonet og scan QR-kode for at bekræfte produkt
-              </p>
             </div>
-          </div>
+          </>
         )}
 
-        {subScreen === 'qr-scan' && (
+        {/* C) NY sub-screen scan-vaegt — kopieret 1:1 fra qr-scan-blokken */}
+        {subScreen === 'scan-vaegt' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* QR ramme */}
             <div
@@ -297,7 +274,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
               }}
             >
               <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
-                Scan produkt QR-kode
+                Scan vægtens QR kode
               </p>
               <div
                 style={{
@@ -347,7 +324,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
             </button>
 
             <button
-              onClick={() => setSubScreen('indvejet')}
+              onClick={() => setSubScreen('ankomst')}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -363,242 +340,258 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
           </div>
         )}
 
+        {/* F) bekraeft-side — trin-cirkel-mønster identisk med ankomst-siden */}
         {subScreen === 'bekraeft' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Success banner */}
-            <div
-              style={{
-                backgroundColor: C.goodBg,
-                borderRadius: 12,
-                padding: '24px 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 12,
-              }}
-            >
-              <p
-                style={{
-                  fontFamily: 'Poppins, sans-serif',
-                  fontWeight: 700,
-                  fontSize: 24,
-                  color: C.deepTeal,
-                  margin: 0,
-                  textAlign: 'center',
-                  lineHeight: 1.2,
-                }}
-              >
-                Du kan nu starte lastningen
-              </p>
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-            {/* Bekræftelseskort */}
+            {/* F.1) Boks 1 — Kør til Silo og start lastningen */}
             <div
               style={{
                 backgroundColor: C.white,
                 borderRadius: 12,
                 border: `1px solid ${C.border}`,
-                overflow: 'hidden',
-              }}
-            >
-              {[
-                { label: 'Silo', value: MOCK.silo },
-                { label: 'Bilens kapacitet', value: `${MOCK.ton} t` },
-                { label: 'Produkt', value: MOCK.produkt },
-              ].map((row, i, arr) => (
-                <div
-                  key={row.label}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '14px 16px',
-                    borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none',
-                  }}
-                >
-                  <p
-                    style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
-                      color: C.textMuted,
-                      margin: 0,
-                    }}
-                  >
-                    {row.label}
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: 'Poppins, sans-serif',
-                      fontWeight: 600,
-                      fontSize: 15,
-                      color: C.deepTeal,
-                      margin: 0,
-                    }}
-                  >
-                    {row.value}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            {/* Lastning færdig */}
-            <button
-              onClick={() => setSubScreen('udvejet')}
-              style={{
-                backgroundColor: C.yellow,
-                border: 'none',
-                borderRadius: 50,
-                minHeight: 56,
-                cursor: 'pointer',
-                fontFamily: 'Poppins, sans-serif',
-                fontWeight: 600,
-                fontSize: 15,
-                color: C.deepTeal,
-                width: '100%',
-              }}
-            >
-              Lastning færdig
-            </button>
-          </div>
-        )}
-
-        {subScreen === 'udvejet' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <p
-              style={{
-                fontFamily: 'Inter, sans-serif',
-                fontSize: 13,
-                color: C.textMuted,
-                margin: 0,
-                textAlign: 'center',
-              }}
-            >
-              Ordrenummer {MOCK.orderNumber}
-            </p>
-
-            {/* Instruktionskort — Udvejet */}
-            <div
-              style={{
-                backgroundColor: C.white,
-                borderRadius: 12,
-                border: `1px solid ${C.border}`,
-                padding: '36px 20px',
+                padding: '28px 20px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 8,
-                minHeight: 140,
+                minHeight: 110,
               }}
             >
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
-                Kør til vægten og bliv udvejet
-              </p>
-            </div>
-
-            <button
-              onClick={() => setSubScreen('udvejet-bekraeft')}
-              style={{
-                backgroundColor: C.green,
-                border: 'none',
-                borderRadius: 50,
-                height: 52,
-                cursor: 'pointer',
-                fontFamily: 'Poppins, sans-serif',
-                fontWeight: 600,
-                fontSize: 15,
-                color: C.white,
-                width: '100%',
-              }}
-            >
-              Simuler udvejning
-            </button>
-          </div>
-        )}
-
-        {subScreen === 'udvejet-bekraeft' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Success banner */}
-            <div
-              style={{
-                backgroundColor: C.goodBg,
-                borderRadius: 12,
-                padding: '24px 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 12,
-              }}
-            >
-              <p
+              {/* Tal-cirkel 1 — identisk styling med ankomst-siden */}
+              <div
                 style={{
-                  fontFamily: 'Poppins, sans-serif',
-                  fontWeight: 700,
-                  fontSize: 24,
-                  color: C.deepTeal,
-                  margin: 0,
-                  textAlign: 'center',
-                  lineHeight: 1.2,
+                  width: 36,
+                  height: 36,
+                  borderRadius: '50%',
+                  backgroundColor: C.deepTeal,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  alignSelf: 'center',
+                  marginBottom: 12,
+                  flexShrink: 0,
                 }}
               >
-                Udvejning bekræftet
+                <span
+                  style={{
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 700,
+                    fontSize: 18,
+                    color: C.white,
+                    lineHeight: 1,
+                  }}
+                >
+                  1
+                </span>
+              </div>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+                Kør til Silo og start lastningen
               </p>
+
+              {/* Tabel-rækker smeltet ind i boks 1 — ingen ydre boks-styling */}
+              <div style={{ width: '100%', marginTop: 8 }}>
+                {(
+                  [
+                    { label: 'Silo', value: 'Se silo på vægten' },
+                    {
+                      label: 'Forventet last',
+                      value: MOCK.erSidsteLaes
+                        ? `${MOCK.sidsteLaesStr} Tons (sidste læs)`
+                        : `${MOCK.bilKapacitet} Tons`,
+                    },
+                    { label: 'Produkt', value: { primary: MOCK.recept_nr, secondary: MOCK.produktnavn } },
+                  ] as { label: string; value: string | { primary: string; secondary: string } }[]
+                ).map((row, i, arr) => (
+                  <div
+                    key={row.label}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '14px 0',
+                      borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none',
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: 13,
+                        color: C.textMuted,
+                        margin: 0,
+                      }}
+                    >
+                      {row.label}
+                    </p>
+                    {typeof row.value === 'string' ? (
+                      <p
+                        style={{
+                          fontFamily: 'Poppins, sans-serif',
+                          fontWeight: 600,
+                          fontSize: 15,
+                          color: C.deepTeal,
+                          margin: 0,
+                        }}
+                      >
+                        {row.value}
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                        <p
+                          style={{
+                            fontFamily: 'Poppins, sans-serif',
+                            fontWeight: 600,
+                            fontSize: 16,
+                            color: C.deepTeal,
+                            margin: 0,
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          {row.value.primary}
+                        </p>
+                        <p
+                          style={{
+                            fontFamily: 'Inter, sans-serif',
+                            fontSize: 11,
+                            color: C.textMuted,
+                            margin: 0,
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          {row.value.secondary}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* Bekræftelseskort */}
+            {/* F.2) Boks 2 — Kør til vægten og bliv udvejet */}
             <div
               style={{
                 backgroundColor: C.white,
                 borderRadius: 12,
                 border: `1px solid ${C.border}`,
-                overflow: 'hidden',
+                padding: '28px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                minHeight: 110,
               }}
             >
-              {[
-                { label: 'Silo', value: MOCK.silo },
-                { label: 'Antal tons', value: `${MOCK.ton}` },
-                { label: 'Produkt', value: MOCK.produkt },
-              ].map((row, i, arr) => (
-                <div
-                  key={row.label}
+              {/* Tal-cirkel 2 — identisk styling med ankomst-siden */}
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: '50%',
+                  backgroundColor: C.deepTeal,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  alignSelf: 'center',
+                  marginBottom: 12,
+                  flexShrink: 0,
+                }}
+              >
+                <span
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '14px 16px',
-                    borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none',
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 700,
+                    fontSize: 18,
+                    color: C.white,
+                    lineHeight: 1,
                   }}
                 >
-                  <p
-                    style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
-                      color: C.textMuted,
-                      margin: 0,
-                    }}
-                  >
-                    {row.label}
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: 'Poppins, sans-serif',
-                      fontWeight: 600,
-                      fontSize: 15,
-                      color: C.deepTeal,
-                      margin: 0,
-                    }}
-                  >
-                    {row.value}
-                  </p>
-                </div>
-              ))}
+                  2
+                </span>
+              </div>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+                Kør til vægten og bliv udvejet
+              </p>
+              <button
+                onClick={() => setSubScreen('scan-udvejning')}
+                style={{
+                  backgroundColor: C.yellow,
+                  border: 'none',
+                  borderRadius: 50,
+                  height: 52,
+                  width: '100%',
+                  marginTop: 8,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 15,
+                  color: C.deepTeal,
+                }}
+              >
+                Scan QR kode for udvejning
+              </button>
             </div>
 
-            {/* Afslut tur */}
-            <button
-              onClick={onClose}
+          </div>
+        )}
+
+        {/* G) udvejet-blok SLETTET — erstattet af scan-udvejning nedenfor */}
+
+        {/* H) NY sub-screen scan-udvejning — kopieret 1:1 fra qr-scan-blokken */}
+        {subScreen === 'scan-udvejning' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* QR ramme */}
+            <div
               style={{
-                backgroundColor: C.green,
+                backgroundColor: C.white,
+                borderRadius: 12,
+                border: `1px solid ${C.border}`,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '36px 20px',
+                gap: 16,
+              }}
+            >
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+                Scan QR kode for udvejning
+              </p>
+              <div
+                style={{
+                  width: 200,
+                  height: 200,
+                  border: `3px dashed ${C.deepTeal}`,
+                  borderRadius: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 12,
+                  backgroundColor: 'rgba(14,71,100,0.04)',
+                }}
+              >
+                <Camera size={48} color={C.deepTeal} />
+                <p
+                  style={{
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: 12,
+                    color: C.textMuted,
+                    margin: 0,
+                    textAlign: 'center',
+                  }}
+                >
+                  Hold QR-kode inden for rammen
+                </p>
+              </div>
+            </div>
+
+            {/* Simuler scan — gul pill */}
+            <button
+              onClick={() => setSubScreen('udvejet-bekraeft')}
+              style={{
+                backgroundColor: C.yellow,
                 border: 'none',
                 borderRadius: 50,
                 height: 52,
@@ -606,12 +599,176 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
                 fontSize: 15,
-                color: C.white,
-                width: '100%',
+                color: C.deepTeal,
               }}
             >
-              Afslut vejning
+              Simuler scan
             </button>
+
+            <button
+              onClick={() => setSubScreen('bekraeft')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'Inter, sans-serif',
+                fontSize: 13,
+                color: C.textMuted,
+                alignSelf: 'center',
+              }}
+            >
+              Tilbage
+            </button>
+          </div>
+        )}
+
+        {/* I) udvejet-bekraeft-side — ÉN grøn boks med check-ikon, tabel og knap */}
+        {subScreen === 'udvejet-bekraeft' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* Samlet bekræftelsesboks — identisk struktur med bekraeft-sidens bokse, men goodBg + check-ikon */}
+            <div
+              style={{
+                backgroundColor: C.goodBg,
+                borderRadius: 12,
+                border: `1px solid ${C.good}`,
+                padding: '28px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              {/* Check-ikon-cirkel — samme dimensioner og position som tal-cirkel i bekraeft-bokse */}
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: '50%',
+                  backgroundColor: C.good,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  alignSelf: 'center',
+                  marginBottom: 12,
+                  flexShrink: 0,
+                }}
+              >
+                <Check size={20} color={C.white} />
+              </div>
+
+              {/* Overskrift — identisk styling med bokstitler i bekraeft */}
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+                Udvejning bekræftet
+              </p>
+
+              {/* Tabel-rækker — identisk rendering med bekraeft-sidens tabel */}
+              <div style={{ width: '100%', marginTop: 8 }}>
+                {(
+                  [
+                    { label: 'Silo', value: MOCK.silo },
+                    { label: 'Antal tons', value: `${MOCK.bilKapacitet} Tons` },
+                    { label: 'Produkt', value: { primary: MOCK.recept_nr, secondary: MOCK.produktnavn } },
+                  ] as { label: string; value: string | { primary: string; secondary: string } }[]
+                ).map((row, i, arr) => (
+                  <div
+                    key={row.label}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '14px 0',
+                      borderBottom: i < arr.length - 1 ? `1px solid ${C.good}` : 'none',
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: 13,
+                        color: C.textMuted,
+                        margin: 0,
+                      }}
+                    >
+                      {row.label}
+                    </p>
+                    {typeof row.value === 'string' ? (
+                      <p
+                        style={{
+                          fontFamily: 'Poppins, sans-serif',
+                          fontWeight: 600,
+                          fontSize: 15,
+                          color: C.deepTeal,
+                          margin: 0,
+                        }}
+                      >
+                        {row.value}
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                        <p
+                          style={{
+                            fontFamily: 'Poppins, sans-serif',
+                            fontWeight: 600,
+                            fontSize: 16,
+                            color: C.deepTeal,
+                            margin: 0,
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          {row.value.primary}
+                        </p>
+                        <p
+                          style={{
+                            fontFamily: 'Inter, sans-serif',
+                            fontSize: 11,
+                            color: C.textMuted,
+                            margin: 0,
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          {row.value.secondary}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Destination */}
+              <p
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: 13,
+                  color: C.textMuted,
+                  margin: '8px 0 0',
+                  textAlign: 'center',
+                }}
+              >
+                Kør til udførselssted: {MOCK.udfoerselsstedAdresse}
+              </p>
+
+              {/* Afslut vejning — inde i boksen, under tabellen */}
+              <button
+                onClick={onClose}
+                style={{
+                  backgroundColor: C.green,
+                  border: 'none',
+                  borderRadius: 50,
+                  height: 52,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 15,
+                  color: C.white,
+                  width: '100%',
+                  marginTop: 16,
+                }}
+              >
+                Afslut vejning
+              </button>
+            </div>
+
           </div>
         )}
       </div>

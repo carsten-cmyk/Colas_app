@@ -34,7 +34,7 @@ type EditState = { entry: Entry; hours: string; minutes: string; reason: string;
 function formatTime(minutes: number): string {
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  return m === 0 ? `${h}t` : `${h}t ${m}m`
+  return m === 0 ? `${h} timer` : `${h} timer ${m} minutter`
 }
 
 // ─── Farver (Colas tokens) ────────────────────────────────────────────────────
@@ -56,9 +56,15 @@ const C = {
 export interface TimeRegistrationScreenProps {
   onClose: () => void
   messageCount?: number
+  /**
+   * Når sand: viser timeregistreringen i read-only tilstand med "Ret tidsregistrering"-CTA.
+   * Klik på CTA skifter til intern edit-tilstand med "Gem og send til formand"-knap.
+   * Normal "Afslut opgave og send timer"-flow er uændret når reviewMode er false/undefined.
+   */
+  reviewMode?: boolean
 }
 
-export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegistrationScreenProps) {
+export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode = false }: TimeRegistrationScreenProps) {
   const commentRef = useRef<HTMLTextAreaElement>(null)
   const [activeTab] = useState<TabName>('prototyper')
   const [entries, setEntries] = useState<Entry[]>(INITIAL_ENTRIES)
@@ -67,6 +73,8 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
   const [showReasonList, setShowReasonList] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [completed, setCompleted] = useState(false)
+  // reviewMode-intern tilstand: false = read-only, true = aktiv redigering
+  const [reviewEditing, setReviewEditing] = useState(false)
 
   const handleEdit = (entry: Entry) => {
     setEditing({
@@ -129,9 +137,25 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
           >
             Tidsregistrering
           </p>
-          <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 12, color: C.textMuted }}>
-            {MOCK.date}
-          </span>
+          {reviewMode && (
+            <span
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                fontWeight: 600,
+                fontSize: 11,
+                color: C.textMuted,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+              }}
+            >
+              Afsluttet opgave
+            </span>
+          )}
+          {!reviewMode && (
+            <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 12, color: C.textMuted }}>
+              {MOCK.date}
+            </span>
+          )}
         </div>
         {/* X-knap skjules i completed-state */}
         {!completed && (
@@ -405,20 +429,23 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
                   >
                     {formatTime(entry.minutes)}
                   </span>
-                  <button
-                    onClick={() => handleEdit(entry)}
-                    aria-label={`Rediger ${entry.category}`}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: 8,
-                      display: 'flex',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Pencil size={15} color={C.deepTeal} />
-                  </button>
+                  {/* Rediger-knap skjules i reviewMode read-only tilstand */}
+                  {(!reviewMode || reviewEditing) && (
+                    <button
+                      onClick={() => handleEdit(entry)}
+                      aria-label={`Rediger ${entry.category}`}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 8,
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Pencil size={15} color={C.deepTeal} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -488,22 +515,87 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
 
         {/* Knapper */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-          <button
-            onClick={() => setConfirmOpen(true)}
-            style={{
-              backgroundColor: C.green,
-              border: 'none',
-              borderRadius: 50,
-              height: 52,
-              cursor: 'pointer',
-              fontFamily: 'Poppins, sans-serif',
-              fontWeight: 600,
-              fontSize: 15,
-              color: C.white,
-            }}
-          >
-            Afslut opgave og send timer
-          </button>
+          {/* Normal mode: "Afslut opgave og send timer" — uændret */}
+          {!reviewMode && (
+            <button
+              onClick={() => setConfirmOpen(true)}
+              style={{
+                backgroundColor: C.green,
+                border: 'none',
+                borderRadius: 50,
+                height: 52,
+                cursor: 'pointer',
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: 15,
+                color: C.white,
+              }}
+            >
+              Afslut opgave og send timer
+            </button>
+          )}
+
+          {/* reviewMode + ikke i edit: "Ret tidsregistrering"-CTA */}
+          {reviewMode && !reviewEditing && (
+            <button
+              onClick={() => setReviewEditing(true)}
+              style={{
+                backgroundColor: C.yellow,
+                border: 'none',
+                borderRadius: 50,
+                height: 52,
+                cursor: 'pointer',
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: 15,
+                color: C.deepTeal,
+              }}
+            >
+              Ret tidsregistrering
+            </button>
+          )}
+
+          {/* reviewMode + aktiv redigering: "Gem og send til formand" + "Annuller" */}
+          {reviewMode && reviewEditing && (
+            <>
+              <button
+                onClick={() => {
+                  // TODO: Erstat med Supabase-kald når klar
+                  console.log('Gem og send til formand', { entries, comment })
+                  onClose()
+                }}
+                style={{
+                  backgroundColor: C.green,
+                  border: 'none',
+                  borderRadius: 50,
+                  height: 52,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 15,
+                  color: C.white,
+                }}
+              >
+                Gem og send til formand
+              </button>
+              <button
+                onClick={() => setReviewEditing(false)}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${C.deepTeal}`,
+                  borderRadius: 50,
+                  height: 52,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 15,
+                  color: C.deepTeal,
+                }}
+              >
+                Annuller
+              </button>
+            </>
+          )}
         </div>
         </>
         )}
@@ -526,6 +618,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'flex-end',
+            paddingBottom: 58,
           }}
           onClick={() => setEditing(null)}
         >
@@ -566,9 +659,10 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
                 gap: 12,
               }}
             >
-              {/* Time inputs */}
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {/* Time inputs + Årsag — samme vandret række */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                {/* Timer */}
+                <div style={{ flex: '0 0 90px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.textMuted }}>Timer</span>
                   <input
                     type="text"
@@ -578,9 +672,10 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
                     onChange={(e) => setEditing(prev => prev ? { ...prev, hours: e.target.value } : null)}
                     maxLength={2}
                     style={{
-                      width: 80,
-                      backgroundColor: C.softAqua,
-                      border: 'none',
+                      width: '100%',
+                      minHeight: 44,
+                      backgroundColor: C.white,
+                      border: `1px solid ${C.deepTeal}`,
                       borderRadius: 8,
                       padding: '10px 0',
                       textAlign: 'center',
@@ -592,8 +687,8 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
                     }}
                   />
                 </div>
-                <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, paddingBottom: 8 }}>:</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {/* Minutter */}
+                <div style={{ flex: '0 0 90px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.textMuted }}>Minutter</span>
                   <input
                     type="text"
@@ -603,9 +698,10 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
                     onChange={(e) => setEditing(prev => prev ? { ...prev, minutes: e.target.value } : null)}
                     maxLength={2}
                     style={{
-                      width: 80,
-                      backgroundColor: C.softAqua,
-                      border: 'none',
+                      width: '100%',
+                      minHeight: 44,
+                      backgroundColor: C.white,
+                      border: `1px solid ${C.deepTeal}`,
                       borderRadius: 8,
                       padding: '10px 0',
                       textAlign: 'center',
@@ -617,28 +713,35 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0 }: TimeRegist
                     }}
                   />
                 </div>
+                {/* Årsag */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.textMuted }}>Årsag</span>
+                  <button
+                    onClick={() => setShowReasonList(v => !v)}
+                    style={{
+                      backgroundColor: C.white,
+                      border: `1px solid ${C.deepTeal}`,
+                      borderRadius: 8,
+                      padding: '10px 12px',
+                      minHeight: 44,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      width: '100%',
+                      outline: 'none',
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: 14,
+                      color: C.textPrimary,
+                    }}
+                  >
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 14, color: editing.reason ? C.deepTeal : C.textMuted }}>
+                      {editing.reason || 'Vælg årsag...'}
+                    </span>
+                    {showReasonList ? <ChevronUp size={16} color={C.deepTeal} /> : <ChevronDown size={16} color={C.deepTeal} />}
+                  </button>
+                </div>
               </div>
-
-              {/* Årsag */}
-              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.textMuted }}>Årsag</span>
-              <button
-                onClick={() => setShowReasonList(v => !v)}
-                style={{
-                  backgroundColor: C.softAqua,
-                  border: 'none',
-                  borderRadius: 8,
-                  padding: '12px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  cursor: 'pointer',
-                }}
-              >
-                <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 14, color: editing.reason ? C.deepTeal : C.textMuted }}>
-                  {editing.reason || 'Vælg årsag...'}
-                </span>
-                {showReasonList ? <ChevronUp size={16} color={C.deepTeal} /> : <ChevronDown size={16} color={C.deepTeal} />}
-              </button>
 
               {showReasonList && (
                 <div style={{ backgroundColor: C.softAqua, borderRadius: 8, overflow: 'hidden', border: `1px solid ${C.boxOutline}` }}>

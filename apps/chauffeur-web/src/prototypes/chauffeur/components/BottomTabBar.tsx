@@ -1,11 +1,11 @@
 /**
  * PROTOTYPE — BottomTabBar
- * 5 tabs: Start, Opgaver, Beskeder, Timereg, Kontakt
+ * 5 tabs: Start, Opgaver, Vejning, Timereg, Kontakt
  * Matches original React Native BottomTabBar design.
  */
-import { Home, Truck, Mail, Clock, Phone, Wrench } from 'lucide-react'
+import { Home, Truck, Scale, Clock, Phone, Wrench } from 'lucide-react'
 
-export type TabName = 'start' | 'opgaver' | 'beskeder' | 'timereg' | 'kontakt' | 'prototyper'
+export type TabName = 'start' | 'opgaver' | 'vejning' | 'timereg' | 'kontakt' | 'prototyper'
 
 export interface BottomTabBarProps {
   activeTab: TabName
@@ -16,13 +16,13 @@ export interface BottomTabBarProps {
 const TABS: { name: TabName; label: string; Icon: React.ComponentType<{ size: number; color: string }> }[] = [
   { name: 'start', label: 'Start', Icon: Home },
   { name: 'opgaver', label: 'Opgaver', Icon: Truck },
-  { name: 'beskeder', label: 'Beskeder', Icon: Mail },
+  { name: 'vejning', label: 'Vejning', Icon: Scale },
   { name: 'timereg', label: 'Timereg', Icon: Clock },
   { name: 'kontakt', label: 'Kontakt', Icon: Phone },
   { name: 'prototyper', label: '...', Icon: Wrench },
 ]
 
-export function BottomTabBar({ activeTab, onTabPress, messageCount = 0 }: BottomTabBarProps) {
+export function BottomTabBar({ activeTab, onTabPress, messageCount: _messageCount = 0 }: BottomTabBarProps) {
   return (
     <div
       style={{
@@ -66,35 +66,6 @@ export function BottomTabBar({ activeTab, onTabPress, messageCount = 0 }: Bottom
           >
             <div style={{ position: 'relative' }}>
               <tab.Icon size={20} color="#FFFFFF" />
-              {tab.name === 'beskeder' && messageCount > 0 && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: -4,
-                    right: -6,
-                    minWidth: 14,
-                    height: 14,
-                    backgroundColor: '#FEEE32',
-                    borderRadius: 7,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '0 2px',
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 700,
-                      color: '#1D1D1D',
-                      fontFamily: 'Inter, sans-serif',
-                      lineHeight: 1,
-                    }}
-                  >
-                    {messageCount}
-                  </span>
-                </div>
-              )}
             </div>
             <span
               style={{
