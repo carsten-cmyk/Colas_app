@@ -18,10 +18,6 @@ const MOCK = {
   etaTilFabrik: 32, // minutter
   // TODO: Erstat med Supabase når klar
   udfoerselsstedAdresse: 'Søndre Boulevard 44, 4900 Nakskov',
-  antalTons: 34,
-  recept_nr: '94101A',
-  produktnavn: 'SMA 11S 8mm',
-  udlaeggerModel: 'Vögele 1900-3I',
 } as const
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -150,88 +146,14 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
                 {MOCK.udfoerselsstedAdresse}
               </p>
 
-              {/* Tabel-rækker */}
-              <div style={{ marginTop: 16 }}>
-                {/* Antal tons */}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '14px 0',
-                    borderBottom: `1px solid ${C.border}`,
-                  }}
-                >
-                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0 }}>
-                    Antal tons
-                  </p>
-                  <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 16, color: C.deepTeal, margin: 0 }}>
-                    {MOCK.antalTons} Tons
-                  </p>
-                </div>
-
-                {/* Produkt — two-line cell */}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '14px 0',
-                    borderBottom: `1px solid ${C.border}`,
-                  }}
-                >
-                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0 }}>
-                    Produkt
-                  </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                    <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 16, color: C.deepTeal, margin: 0 }}>
-                      {MOCK.recept_nr}
-                    </p>
-                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: C.textMuted, margin: 0 }}>
-                      {MOCK.produktnavn}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Udlægger — sidste række uden border */}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '14px 0',
-                  }}
-                >
-                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0 }}>
-                    Udlægger
-                  </p>
-                  <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 16, color: C.deepTeal, margin: 0 }}>
-                    {MOCK.udlaeggerModel}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Boks 2: Instruktion */}
-            <div
-              style={{
-                backgroundColor: C.white,
-                borderRadius: 12,
-                border: `1px solid ${C.border}`,
-                padding: '28px 20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: 80,
-              }}
-            >
+              {/* Instruktion */}
               <p
                 style={{
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
                   fontSize: 18,
                   color: C.deepTeal,
-                  margin: 0,
+                  margin: '16px auto 0',
                   textAlign: 'center',
                 }}
               >

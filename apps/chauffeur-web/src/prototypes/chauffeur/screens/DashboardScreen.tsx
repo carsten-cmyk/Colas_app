@@ -297,7 +297,7 @@ export function DashboardScreen({
                   Ordrenummer {task.orderNumber}
                 </span>
 
-                {/* Recept-nr + tons på samme linje, produktnavn under */}
+                {/* Produktnavn + tons på samme linje (primær), recept_nr under (sekundær) */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: -6, width: '100%' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                     <p
@@ -310,7 +310,7 @@ export function DashboardScreen({
                         lineHeight: 1.2,
                       }}
                     >
-                      {receptNr}
+                      {produktnavn ?? receptNr}
                     </p>
                     <p
                       style={{
@@ -325,19 +325,17 @@ export function DashboardScreen({
                       {task.bestilt_total != null ? Math.max(task.bestilt_total - (task.hentet ?? 0), 0) : task.ton} Tons
                     </p>
                   </div>
-                  {produktnavn && (
-                    <p
-                      style={{
-                        fontFamily: 'Inter, sans-serif',
-                        fontSize: 12,
-                        color: '#717182',
-                        margin: 0,
-                        marginTop: 1,
-                      }}
-                    >
-                      {produktnavn}
-                    </p>
-                  )}
+                  <p
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: 12,
+                      color: '#717182',
+                      margin: 0,
+                      marginTop: 1,
+                    }}
+                  >
+                    {receptNr}
+                  </p>
                 </div>
 
                 {/* Rute */}

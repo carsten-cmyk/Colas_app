@@ -401,7 +401,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                         ? `${MOCK.sidsteLaesStr} Tons (sidste læs)`
                         : `${MOCK.bilKapacitet} Tons`,
                     },
-                    { label: 'Produkt', value: { primary: MOCK.recept_nr, secondary: MOCK.produktnavn } },
+                    { label: 'Produkt', value: { primary: MOCK.produktnavn, secondary: MOCK.recept_nr } },
                   ] as { label: string; value: string | { primary: string; secondary: string } }[]
                 ).map((row, i, arr) => (
                   <div
@@ -669,7 +669,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                   [
                     { label: 'Silo', value: MOCK.silo },
                     { label: 'Antal tons', value: `${MOCK.bilKapacitet} Tons` },
-                    { label: 'Produkt', value: { primary: MOCK.recept_nr, secondary: MOCK.produktnavn } },
+                    { label: 'Produkt', value: { primary: MOCK.produktnavn, secondary: MOCK.recept_nr } },
                   ] as { label: string; value: string | { primary: string; secondary: string } }[]
                 ).map((row, i, arr) => (
                   <div

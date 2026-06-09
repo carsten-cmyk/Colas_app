@@ -387,7 +387,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                       margin: 0,
                     }}
                   >
-                    {p.recept_nr}
+                    {p.produktnavn}
                   </p>
                   <p
                     style={{
@@ -397,7 +397,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                       margin: 0,
                     }}
                   >
-                    {p.produktnavn}
+                    {p.recept_nr}
                   </p>
                   <p
                     style={{
@@ -439,8 +439,8 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                     label: 'Produkt',
                     valueNode: (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                        <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 15, color: C.deepTeal }}>{valgt.recept_nr}</span>
-                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: C.textMuted }}>{valgt.produktnavn}</span>
+                        <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 15, color: C.deepTeal }}>{valgt.produktnavn}</span>
+                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: C.textMuted }}>{valgt.recept_nr}</span>
                       </div>
                     ),
                   },
@@ -621,9 +621,14 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                       borderBottom: i < arr.length - 1 ? `1px solid ${C.good}` : 'none',
                     }}
                   >
-                    <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 14, color: C.deepTeal, margin: 0 }}>
-                      {p.recept_nr}
-                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 14, color: C.deepTeal, margin: 0 }}>
+                        {p.produktnavn}
+                      </p>
+                      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: C.textMuted, margin: 0 }}>
+                        {p.recept_nr}
+                      </p>
+                    </div>
                     <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0 }}>
                       {p.tons} Tons
                     </p>
