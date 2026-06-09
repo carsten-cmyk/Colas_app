@@ -23,7 +23,7 @@ import { BottomTabBar } from './components/BottomTabBar'
 import type { TabName } from './components/BottomTabBar'
 
 type AppScreen = 'splash' | 'app'
-type PrototypeSubScreen = 'ankomst' | 'ankomst-plads' | 'timereg' | 'opgaveliste' | 'pause-reminder' | 'samles-paa-en-bil' | null
+type PrototypeSubScreen = 'timereg' | 'pause-reminder' | 'samles-paa-en-bil' | null
 
 const MESSAGE_COUNT = mockConversations.filter(
   c => !c.lastMessage.isRead && c.lastMessage.senderId !== 'me'
@@ -209,10 +209,6 @@ export function ChauffoerPrototype() {
               Prototyper
             </p>
             {[
-              { title: 'Ankomst til fabrik', desc: 'QR-scanning ved siloanlæg', screen: 'ankomst' as PrototypeSubScreen },
-              { title: 'Ankomst til udførselssted', desc: 'Geofencing ved plads + aflæsning', screen: 'ankomst-plads' as PrototypeSubScreen },
-              { title: 'Timeregistrering', desc: 'Oversigt over dagsforbrug', screen: 'timereg' as PrototypeSubScreen },
-              { title: 'Opgaveliste', desc: 'Dagsoversigt over opgaver', screen: 'opgaveliste' as PrototypeSubScreen },
               { title: 'Pause-reminder (30 min)', desc: 'Simulér modal der popper op efter længere pause', screen: 'pause-reminder' as PrototypeSubScreen },
               { title: 'Samles på en bil (multi-produkt)', desc: 'Flow 12 — flere produkter på samme bil med vejning mellem hvert', screen: 'samles-paa-en-bil' as PrototypeSubScreen },
             ].map((item) => (
@@ -265,12 +261,6 @@ export function ChauffoerPrototype() {
       )}
 
       {/* Prototype sub-screens */}
-      {isPrototyperTab && prototypeSubScreen === 'ankomst' && (
-        <AnkommetFabrikScreen onClose={() => setPrototypeSubScreen(null)} messageCount={MESSAGE_COUNT} />
-      )}
-      {isPrototyperTab && prototypeSubScreen === 'ankomst-plads' && (
-        <AnkommetUdfoerselsstedScreen onClose={() => setPrototypeSubScreen(null)} messageCount={MESSAGE_COUNT} />
-      )}
       {prototypeSubScreen === 'timereg' && (
         <TimeRegistrationScreen
           onClose={() => {
@@ -279,9 +269,6 @@ export function ChauffoerPrototype() {
           }}
           messageCount={MESSAGE_COUNT}
         />
-      )}
-      {isPrototyperTab && prototypeSubScreen === 'opgaveliste' && (
-        <TaskListScreen onClose={() => setPrototypeSubScreen(null)} messageCount={MESSAGE_COUNT} />
       )}
       {isPrototyperTab && prototypeSubScreen === 'pause-reminder' && (
         <>

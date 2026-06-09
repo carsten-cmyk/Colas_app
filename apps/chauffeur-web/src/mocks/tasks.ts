@@ -51,8 +51,8 @@ export const mockTasks: Task[] = [
     formandNote: 'Husk: mødetid ved vægten kl. 05.30. Kontakt Lars ved forsinkelse.',
     recept_nr: '94101A',
     produktnavn: 'SMA 11S 8mm',
-    bestilt_total: 75,
-    hentet: 41,
+    bestilt_total: 340,
+    hentet: 0,
   },
   {
     id: '2',
