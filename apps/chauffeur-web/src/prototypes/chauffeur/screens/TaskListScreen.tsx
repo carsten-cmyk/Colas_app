@@ -1,10 +1,10 @@
 /**
  * PROTOTYPE — Opgaveliste (web-port af Expo-version)
- * Dagsoversigt med grupper, badges og genåbn-flow.
+ * Dagsoversigt med grupper, badges og pause-warning-flow.
  * Må ikke importeres i produktionskode.
  */
 import { useState } from 'react'
-import { RefreshCw, ChevronRight, X } from 'lucide-react'
+import { RefreshCw, X } from 'lucide-react'
 import { BottomTabBar } from '../components/BottomTabBar'
 import type { TabName } from '../components/BottomTabBar'
 
@@ -36,6 +36,8 @@ const INITIAL_GROUPS: DayGroup[] = [
     tasks: [
       { id: '1', orderNumber: '1212343', ton: 75, produkt: '82101H', recept_nr: '82101H', produktnavn: 'AB 11T 22mm', pickupName: 'Køge Asfaltfabrik', deliveryName: 'Uddannelsescenter Syd', meetingTime: '05.30', state: 'completed', completedAt: TWENTY_HOURS_AGO },
       { id: '2', orderNumber: '1212344', ton: 60, produkt: '82201H', recept_nr: '82201H', produktnavn: 'GAB 0/16', pickupName: 'Køge Asfaltfabrik', deliveryName: 'Motorvej E20', meetingTime: '07.00', state: 'active' },
+      // TODO: Erstat med Supabase når klar
+      { id: '4', orderNumber: '1212346', ton: 50, produkt: '82301H', recept_nr: '82301H', produktnavn: 'PA 8', pickupName: 'Køge Asfaltfabrik', deliveryName: 'Slagelse Nord', meetingTime: '08.30', state: 'paused' },
     ],
   },
   {
@@ -45,8 +47,6 @@ const INITIAL_GROUPS: DayGroup[] = [
     ],
   },
 ]
-
-const REOPEN_REASONS = ['Forkert afsluttet', 'Manglende registrering', 'GPS-fejl', 'Teknisk fejl', 'Andet']
 
 function canReopen(completedAt?: string): boolean {
   if (!completedAt) return false
@@ -85,20 +85,54 @@ export interface TaskListScreenProps {
 export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false, onTaskPress, onViewTimereg }: TaskListScreenProps) {
   const [groups, setGroups] = useState<DayGroup[]>(INITIAL_GROUPS)
   const [activeTab] = useState<TabName>('prototyper')
-  const [reopenTaskId, setReopenTaskId] = useState<string | null>(null)
+  // ID på den opgave brugeren ønsker at åbne/genoptage — bruges til pause-warning
+  const [pendingActivateId, setPendingActivateId] = useState<string | null>(null)
 
   const allTasks = groups.flatMap(g => g.tasks)
-  const activeOrPausedTask = allTasks.find(t => t.state === 'active' || t.state === 'paused')
+  const activeOrPausedTask = allTasks.find(t => t.state === 'active')
 
-  const handleReopen = (taskId: string) => {
+  // Aktivér en opgave direkte (ingen aktiv opgave i vejen)
+  const activateTask = (taskId: string) => {
     setGroups(prev => prev.map(g => ({
       ...g,
       tasks: g.tasks.map(t =>
         t.id === taskId ? { ...t, state: 'active' as TaskState, completedAt: undefined } : t
       ),
     })))
-    setReopenTaskId(null)
   }
+
+  // Brugeren trykker "Åbn opgave" eller "Genoptag opgave"
+  const handleOpenTask = (taskId: string) => {
+    const currentlyActive = allTasks.find(t => t.state === 'active')
+    if (!currentlyActive) {
+      // Ingen aktiv opgave — åbn direkte
+      activateTask(taskId)
+    } else {
+      // Vis pause-warning med info om den aktive opgave
+      setPendingActivateId(taskId)
+    }
+  }
+
+  // Bruger bekræfter i pause-warning modal
+  const handleConfirmActivate = () => {
+    if (!pendingActivateId) return
+    const idToActivate = pendingActivateId
+    // Én samlet setState: sæt aktive til 'paused', sæt valgte til 'active'
+    setGroups(prev => prev.map(g => ({
+      ...g,
+      tasks: g.tasks.map(t => {
+        if (t.state === 'active') return { ...t, state: 'paused' as TaskState }
+        if (t.id === idToActivate) return { ...t, state: 'active' as TaskState, completedAt: undefined }
+        return t
+      }),
+    })))
+    setPendingActivateId(null)
+  }
+
+  const handleCancelActivate = () => {
+    setPendingActivateId(null)
+  }
+
 
   return (
     <div
@@ -190,9 +224,11 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
         )}
 
         {groups.map(group => {
-          const active = group.tasks.filter(t => t.state !== 'completed')
+          // Sortering: active/idle → paused → completed
+          const active = group.tasks.filter(t => t.state !== 'completed' && t.state !== 'paused')
+          const paused = group.tasks.filter(t => t.state === 'paused')
           const completed = group.tasks.filter(t => t.state === 'completed')
-          const sorted = [...active, ...completed]
+          const sorted = [...active, ...paused, ...completed]
           return (
             <div key={group.date} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {/* Datogruppe-label — uppercase, muted */}
@@ -213,7 +249,7 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
                 <TaskEntry
                   key={task.id}
                   task={task}
-                  onReopenPress={() => setReopenTaskId(task.id)}
+                  onOpenPress={() => handleOpenTask(task.id)}
                   onPress={onTaskPress ? () => onTaskPress(task.id) : undefined}
                   timeregMode={timeregMode}
                   onViewTimereg={onViewTimereg ? () => onViewTimereg(task.id) : undefined}
@@ -231,8 +267,8 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
         messageCount={messageCount}
       />
 
-      {/* Genåbn-modal — behold som den er */}
-      {reopenTaskId && (
+      {/* Pause-warning modal — vises når en opgave skal åbnes men en anden allerede er aktiv */}
+      {pendingActivateId && (
         <div
           style={{
             position: 'absolute',
@@ -241,8 +277,9 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'flex-end',
+            paddingBottom: 58,
           }}
-          onClick={() => setReopenTaskId(null)}
+          onClick={handleCancelActivate}
         >
           <div
             style={{
@@ -252,7 +289,7 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
               padding: '16px 16px 32px',
               display: 'flex',
               flexDirection: 'column',
-              gap: 10,
+              gap: 12,
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -268,39 +305,60 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
               }}
             />
 
-            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal }}>
-              Årsag til genåbning
-            </span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.textMuted, marginBottom: 4 }}>
-              Vælg årsag til at genåbne opgaven
+            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, textAlign: 'center', alignSelf: 'center' }}>
+              Aktiv opgave sættes på pause
             </span>
 
-            <div style={{ backgroundColor: C.softAqua, borderRadius: 12, overflow: 'hidden' }}>
-              {REOPEN_REASONS.map((reason, index) => (
-                <button
-                  key={reason}
-                  onClick={() => handleReopen(reopenTaskId)}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '14px 16px',
-                    border: 'none',
-                    borderBottom: index < REOPEN_REASONS.length - 1 ? `1px solid ${C.boxOutline}` : 'none',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.textPrimary }}>{reason}</span>
-                  <ChevronRight size={16} color={C.textMuted} />
-                </button>
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontFamily: 'Inter, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  color: C.textPrimary,
+                  textAlign: 'center',
+                }}
+              >
+                Din nuværende aktive opgave sættes på pause.
+              </p>
+              <p
+                style={{
+                  margin: 0,
+                  fontFamily: 'Inter, sans-serif',
+                  fontWeight: 400,
+                  fontSize: 14,
+                  color: C.textMuted,
+                  textAlign: 'center',
+                  lineHeight: 1.5,
+                }}
+              >
+                Timeregistrering og vejesedler følger den aktive opgave.
+              </p>
             </div>
 
             <button
-              onClick={() => setReopenTaskId(null)}
+              onClick={handleConfirmActivate}
               style={{
+                width: '100%',
+                height: 52,
+                border: 'none',
+                borderRadius: 50,
+                backgroundColor: C.deepTeal,
+                cursor: 'pointer',
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: 15,
+                color: C.white,
+              }}
+            >
+              Skift til denne opgave
+            </button>
+
+            <button
+              onClick={handleCancelActivate}
+              style={{
+                width: '100%',
                 height: 52,
                 border: `1px solid ${C.deepTeal}`,
                 borderRadius: 50,
@@ -310,7 +368,6 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
                 fontWeight: 600,
                 fontSize: 15,
                 color: C.deepTeal,
-                marginTop: 4,
               }}
             >
               Annuller
@@ -325,23 +382,29 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
 // ─── TaskEntry ─────────────────────────────────────────────────────────────────
 interface TaskEntryProps {
   task: PrototypeTask
-  onReopenPress: () => void
+  /** Callback når bruger trykker "Åbn opgave" (completed) eller "Genoptag opgave" (paused) */
+  onOpenPress: () => void
   /** Callback når kortet klikkes — åbner TaskDetailScreen */
   onPress?: () => void
-  /** Når sand: afsluttede kort viser "Se timeregistrering"-knap i stedet for "Genåbn opgave"-chip */
+  /** Når sand: afsluttede kort viser "Se timeregistrering"-knap i stedet for "Åbn opgave"-chip */
   timeregMode?: boolean
   /** Callback når bruger trykker "Se timeregistrering" */
   onViewTimereg?: () => void
 }
 
-function TaskEntry({ task, onReopenPress, onPress, timeregMode = false, onViewTimereg }: TaskEntryProps) {
+function TaskEntry({ task, onOpenPress, onPress, timeregMode = false, onViewTimereg }: TaskEntryProps) {
   const isCompleted = task.state === 'completed'
   const isActive = task.state === 'active'
-  // Vis "Genåbn"-chip kun i normal mode (ikke timeregMode)
-  const showReopen = isCompleted && canReopen(task.completedAt) && !timeregMode
+  const isPaused = task.state === 'paused'
+  // Vis "Åbn opgave"-chip kun på completed i normal mode
+  const showOpen = isCompleted && canReopen(task.completedAt) && !timeregMode
+  // Vis "Genoptag opgave"-chip på pausede opgaver i normal mode
+  const showResume = isPaused && !timeregMode
   // Vis "Se timeregistrering"-knap kun i timeregMode på afsluttede opgaver
   const showViewTimereg = isCompleted && timeregMode
   const receptNr = task.recept_nr ?? task.produkt
+
+  const hasBottomAction = showOpen || showResume || showViewTimereg
 
   return (
     <div
@@ -350,9 +413,8 @@ function TaskEntry({ task, onReopenPress, onPress, timeregMode = false, onViewTi
         borderRadius: 12,
         overflow: 'hidden',
         position: 'relative',
-        // Standard border — ingen grøn outline ved aktiv, ingen rød ved completed
         border: `1px solid ${C.border}`,
-        // Completed-kort: let dæmpet
+        // Completed-kort: let dæmpet — pausede kort forbliver fuldt synlige
         opacity: isCompleted ? 0.65 : 1,
         cursor: onPress ? 'pointer' : 'default',
       }}
@@ -365,7 +427,7 @@ function TaskEntry({ task, onReopenPress, onPress, timeregMode = false, onViewTi
           display: 'flex',
           flexDirection: 'column',
           gap: 8,
-          paddingBottom: (showReopen || showViewTimereg) ? 44 : 16,
+          paddingBottom: hasBottomAction ? 44 : 16,
         }}
       >
         {/* Top-række: ordrenummer + badge */}
@@ -381,8 +443,21 @@ function TaskEntry({ task, onReopenPress, onPress, timeregMode = false, onViewTi
             Ordrenummer {task.orderNumber}
           </span>
 
-          {/* "I gang"-badge — gul baggrund, deepTeal tekst */}
+          {/* "I gang"-badge — grøn baggrund (C.green), hvid tekst */}
           {isActive && (
+            <div
+              style={{
+                backgroundColor: C.green,
+                borderRadius: 12,
+                padding: '4px 10px',
+                flexShrink: 0,
+              }}
+            >
+              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.white }}>I gang</span>
+            </div>
+          )}
+          {/* "Pauset"-badge — gul baggrund (C.yellow), deepTeal tekst */}
+          {isPaused && (
             <div
               style={{
                 backgroundColor: C.yellow,
@@ -391,7 +466,7 @@ function TaskEntry({ task, onReopenPress, onPress, timeregMode = false, onViewTi
                 flexShrink: 0,
               }}
             >
-              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.deepTeal }}>I gang</span>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.deepTeal }}>Pauset</span>
             </div>
           )}
           {/* "Afsluttet"-badge — rød (C.error baggrund, C.white tekst) */}
@@ -409,7 +484,7 @@ function TaskEntry({ task, onReopenPress, onPress, timeregMode = false, onViewTi
           )}
         </div>
 
-        {/* Recept-nr + tons på samme linje, produktnavn under — matcher Dashboard-mønster */}
+        {/* Produktnavn + tons på samme linje (primær), recept_nr under (sekundær) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: -4, width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span
@@ -421,7 +496,7 @@ function TaskEntry({ task, onReopenPress, onPress, timeregMode = false, onViewTi
                 lineHeight: 1.2,
               }}
             >
-              {receptNr}
+              {task.produktnavn ?? receptNr}
             </span>
             <span
               style={{
@@ -435,18 +510,16 @@ function TaskEntry({ task, onReopenPress, onPress, timeregMode = false, onViewTi
               {task.ton} Tons
             </span>
           </div>
-          {task.produktnavn && (
-            <span
-              style={{
-                fontFamily: 'Inter, sans-serif',
-                fontSize: 12,
-                color: C.textMuted,
-                marginTop: 1,
-              }}
-            >
-              {task.produktnavn}
-            </span>
-          )}
+          <span
+            style={{
+              fontFamily: 'Inter, sans-serif',
+              fontSize: 12,
+              color: C.textMuted,
+              marginTop: 1,
+            }}
+          >
+            {receptNr}
+          </span>
         </div>
 
         {/* Rute-linje */}
@@ -472,11 +545,11 @@ function TaskEntry({ task, onReopenPress, onPress, timeregMode = false, onViewTi
         )}
       </div>
 
-      {/* Genåbn chip — neutral styling da vi ikke bruger rød overlay */}
-      {showReopen && (
+      {/* "Åbn opgave"-chip — completed-kort (renamed fra "Genåbn") */}
+      {showOpen && (
         <button
-          onClick={(e) => { e.stopPropagation(); onReopenPress() }}
-          aria-label="Genåbn opgave"
+          onClick={(e) => { e.stopPropagation(); onOpenPress() }}
+          aria-label="Åbn opgave"
           style={{
             position: 'absolute',
             bottom: 0,
@@ -494,7 +567,33 @@ function TaskEntry({ task, onReopenPress, onPress, timeregMode = false, onViewTi
           }}
         >
           <RefreshCw size={13} color={C.deepTeal} />
-          <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.deepTeal }}>Genåbn opgave</span>
+          <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.deepTeal }}>Skift til denne opgave</span>
+        </button>
+      )}
+
+      {/* "Skift til denne opgave"-chip — paused-kort, samme styling som completed-chip */}
+      {showResume && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpenPress() }}
+          aria-label="Skift til denne opgave"
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            backgroundColor: C.softAqua,
+            border: 'none',
+            borderTop: `1px solid ${C.border}`,
+            padding: '10px 16px',
+            cursor: 'pointer',
+          }}
+        >
+          <RefreshCw size={13} color={C.deepTeal} />
+          <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.deepTeal }}>Skift til denne opgave</span>
         </button>
       )}
 

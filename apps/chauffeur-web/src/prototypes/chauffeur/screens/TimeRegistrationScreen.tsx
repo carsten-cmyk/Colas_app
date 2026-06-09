@@ -20,10 +20,10 @@ const MOCK = {
 const INITIAL_ENTRIES = [
   { id: '1', category: 'Kørsel',   minutes: 180 },
   { id: '2', category: 'Ventetid', minutes: 120 },
-  { id: '3', category: 'Pause',    minutes: 60 },
+  { id: '3', category: 'Hviletid', minutes: 60 },
 ]
 
-const REASONS = ['GPS-fejl', 'Ventetid fejlregistreret', 'Glemt pause', 'Teknisk fejl', 'Andet']
+const REASONS = ['GPS-fejl', 'Ventetid fejlregistreret', 'Glemt hviletid', 'Teknisk fejl', 'Andet']
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Entry = { id: string; category: string; minutes: number; modified?: boolean }

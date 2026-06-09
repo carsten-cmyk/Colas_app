@@ -168,14 +168,62 @@ export function TaskDetailScreen({
             overflow: 'hidden',
           }}
         >
-          {/* Række 1: Ton | Produkt */}
+          {/* Række 1: Produkt | Ton */}
           <div style={{ display: 'flex' }}>
-            {/* Ton */}
+            {/* Produkt */}
             <div
               style={{
                 flex: 1,
                 padding: '14px 13px',
                 borderRight: `1px solid ${C.border}`,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+              }}
+            >
+              <p
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: 11,
+                  color: C.textMuted,
+                  margin: '0 0 2px 0',
+                  textAlign: 'center',
+                }}
+              >
+                Produkt
+              </p>
+              <p
+                style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 22,
+                  color: C.textPrimary,
+                  margin: 0,
+                  lineHeight: 1.2,
+                  textAlign: 'center',
+                }}
+              >
+                {task.produktnavn ?? (task.recept_nr ?? task.produkt)}
+              </p>
+              <p
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontWeight: 400,
+                  fontSize: 11,
+                  color: C.textMuted,
+                  margin: '2px 0 0 0',
+                  textAlign: 'center',
+                }}
+              >
+                {task.recept_nr ?? task.produkt}
+              </p>
+            </div>
+
+            {/* Ton */}
+            <div
+              style={{
+                flex: 1,
+                padding: '14px 13px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -207,56 +255,6 @@ export function TaskDetailScreen({
                   ? String(Math.max(task.bestilt_total - (task.hentet ?? 0), 0))
                   : String(task.ton)}
               </p>
-            </div>
-
-            {/* Produkt */}
-            <div
-              style={{
-                flex: 1,
-                padding: '14px 13px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-              }}
-            >
-              <p
-                style={{
-                  fontFamily: 'Inter, sans-serif',
-                  fontSize: 11,
-                  color: C.textMuted,
-                  margin: '0 0 2px 0',
-                  textAlign: 'center',
-                }}
-              >
-                Produkt
-              </p>
-              <p
-                style={{
-                  fontFamily: 'Poppins, sans-serif',
-                  fontWeight: 600,
-                  fontSize: 22,
-                  color: C.textPrimary,
-                  margin: 0,
-                  lineHeight: 1.2,
-                  textAlign: 'center',
-                }}
-              >
-                {task.recept_nr ?? task.produkt}
-              </p>
-              {task.produktnavn && (
-                <p
-                  style={{
-                    fontFamily: 'Inter, sans-serif',
-                    fontWeight: 400,
-                    fontSize: 11,
-                    color: C.textMuted,
-                    margin: '2px 0 0 0',
-                    textAlign: 'center',
-                  }}
-                >
-                  {task.produktnavn}
-                </p>
-              )}
             </div>
           </div>
 
@@ -701,7 +699,7 @@ export function TaskDetailScreen({
                 fontSize: 15,
               }}
             >
-              Pause
+              Hviletid
             </button>
             <button
               onClick={() => setCompleteConfirmOpen(true)}
@@ -771,10 +769,10 @@ export function TaskDetailScreen({
             onClick={(e) => e.stopPropagation()}
           >
             <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, textAlign: 'center' }}>
-              Pause?
+              Start hviletid?
             </span>
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.textMuted, textAlign: 'center' }}>
-              Bekræft at du tager en pause. Tryk Genoptag når du er klar til at fortsætte.
+              Bekræft at du tager hviletid. Tryk Genoptag når du er klar til at fortsætte.
             </span>
             <div style={{ display: 'flex', gap: 10, marginTop: 4, width: '100%' }}>
               <button
@@ -809,7 +807,7 @@ export function TaskDetailScreen({
                   color: C.white,
                 }}
               >
-                Pause
+                Hviletid
               </button>
             </div>
           </div>
