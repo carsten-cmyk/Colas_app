@@ -177,7 +177,7 @@ For `undervejs`-biler beregnes live ETA fra faktisk timestamps. `planlagt`-biler
 **Viser:** Ordredetaljer, lokation, kontakt, **chaufførens egen mødetid på fabrik** (HH:MM — afhængig af læs-nummer), **læs-nummer** ("Du er 2. læs"), OG **kommentar til chauffør** (`kommentar_til_chauffoer` fra bilbestillingen — kørselsspecifikke instruktioner fra formand).
 **Læser:** `assigned_tasks` WHERE `driver_phone = auth.user.phone` OR `truck_plate = chauffeur.plate`, henter KUN denne chaufførs `confirmed_vehicles[]`-row (filtreret på reg_nr/tlf) — sin **moedetid_fabrik** + **laes_nummer** vises prominent.
 **Vigtigt:** Mødetiden på fabrik er **forskellig pr. læs-nummer** — 1. læs møder først, 2. læs møder `intervalMinutter` senere osv. Chaufføren ser KUN sin egen — ikke de andre biler.
-**Note:** Chauffør identificeres via tlf-nummer og nummerplade — ikke login.
+**Note:** Chauffør har et minimalt login-system (LÅST 2026-06-09) — se [[chauffeur-login]] sektion nedenfor. SMS-OTP ved ny enhed eller token-fornyelse, derefter altid direkte til forside. **Bil + konfiguration administreres dynamisk af vognmand** og opdateres on-the-fly i chauffør-app, formand-app og fabrik-app — chauffør foretager INGEN bil-valg i appen.
 **TBD:** Distributions-mekanisme — push-notifikation, polling, eller event på reg.nr? Skal afklares før prod.
 
 ### Variant: "Egen bil"-flow (LÅST 2026-05-22) — Formand → Chauffør (uden vognmand)
@@ -226,6 +226,145 @@ orders.asfalt_koersel[].egen_bil: boolean (default false)
 
 **🟡 ÅBENT SPØRGSMÅL (skal stilles ved implementering):**
 - **Chauffør-kilde:** Oprettes manuelt af formand vs. arves fra holdpakken? Brugeren afklarer.
+
+---
+
+### Variant: Chauffør Login + Dynamisk bil-administration (LÅST 2026-06-09)
+
+**Anker:** `chauffeur-login`
+
+**Forretningsregel:** Chauffør-appen er **tynd**. Chaufføren foretager INGEN administrative valg (bil-valg, konfigurations-valg, bil-skifte) i appen. Han logger ind med SMS-OTP, og derefter er appen et passivt vindue ind i dispositionen som vognmanden ejer. Alt om bil + konfiguration administreres dynamisk af vognmand og opdateres on-the-fly på tværs af chauffør-app, formand-app og fabrik-app.
+
+**Hvorfor tynd app:**
+- Vognmanden har allerede styr på dispositioner — det er hans primære arbejde
+- Chauffør Ole er Ole uanset hvilken bil han sidder i. Opgaven er knyttet til Ole, ikke til en bilsession
+- Edge cases (sygdom, bil i stykker) løses naturligt via vognmandens disponering — chaufføren skal ikke "vælge" sig ud af problemer
+- Færre skærme = mindre forvirring + færre fejlkilder + hurtigere udvikling
+
+---
+
+#### Login — SMS-OTP (sjælden, kun ved ny enhed eller token-fornyelse)
+
+**Trigger:** Første gang chauffør åbner appen på en enhed (eller efter token-udløb / log-out).
+
+**Flow:**
+1. Chauffør indtaster mobilnummer (DK-format, +45 auto-prefix)
+2. App sender 6-cifret SMS-kode via Supabase Auth (eller anden leverandør — se INFRA-AUTH-001)
+3. Chauffør indtaster koden
+4. Ved succes: token gemmes i `localStorage` med expiration-timestamp. Token gyldig 30 dage (webapp-fase 1) / 6 måneder (native-fase 2).
+5. App refresher → direkte til forside (dashboard). Ingen mellem-skærm.
+
+**Webapp-fase 1 (LÅST 2026-06-09):**
+- Token-storage: `localStorage` med expiration-timestamp (30 dage)
+- Auto-login: gyldigt token → direkte til forside, login-skærm vises ikke
+- Logout: knap under brugerprofil — sletter localStorage + redirect til login
+- INGEN token-revoke fra server i MVP — `localStorage`-storage er per-enhed, og expiration efter 30 dage fungerer som de-facto auto-revoke
+
+**SMS ikke modtaget (LÅST 2026-06-09 — reduceret scope):**
+- Resend-knap: aktiveres efter 30 sek cooldown, max 3 resends per session
+- "Forkert nummer? Skift"-link → tilbage til mobilnummer-input
+- Voice OTP, helpdesk-skærm m.m. = FASE 2
+
+**Acceptkriterier:**
+- Token mangler/udløbet: LoginScreen vises (mobilnummer → OTP → permissions) → derefter DashboardScreen ("dagens opgaver med swipe")
+- Token gyldigt: SplashScreen vises ("Godmorgen" + pil) → chauffør trykker pil → DashboardScreen
+- LoginScreen og SplashScreen leder begge til samme target: DashboardScreen (default landing for chauffør)
+- Logout: token slettet → LoginScreen vises ved næste åbning
+- Forkert kode 3 gange → lock-out 5 min (eller cooldown — afklares ved Supabase-integration)
+- LoginScreen er visuelt designet som "ny splash" (samme split-layout som SplashScreen, men med SMS-login + OTP-input + permissions i bottom-left hvor godmorgen + pil sad)
+
+**Trin 3 — Permissions (LÅST 2026-06-09 — obligatorisk del af login):**
+
+Chauffører SKAL acceptere to permissions for at fortsætte til appen — det er ikke et valg:
+
+| Permission | Begrundelse | Teknisk integration (Fase 1, webapp) |
+|---|---|---|
+| **Kamera** | Scan af vejekort på fabrik (NFC HCE i Fase 2 — kamera er fallback / fase 1-løsning til QR-scan eller fotobaseret) | `navigator.mediaDevices.getUserMedia({ video: true })` — frigør straks med `.getTracks().forEach(t => t.stop())` |
+| **PWA install** | App-ikon på hjemmeskærm — uden ikon skal chauffør finde webapp via bookmark eller URL. For meget friktion ved daglig brug. | Android Chrome: `beforeinstallprompt`-event. iOS Safari: manuel instruks-modal (kan ikke trigges programmatisk) |
+
+**UI-design:**
+- To toggle-knapper i permissions-trinet
+- Begge defaultes til ON (chauffør skal aktivt deaktivere hvis nødvendigt — sandsynligvis ikke en use case)
+- "Færdig"-knap disabled hvis nogen er off
+- Toggles låses i ON-state efter accept (kan ikke vendes off uden at gå i settings)
+
+**Permission-flow ved klik på toggle (skal implementeres):**
+1. Kamera-toggle klik → trigger `getUserMedia({ video: true })` → ved succes: toggle on, stream frigives. Ved afvisning: toggle forbliver off, fejl-besked vises
+2. PWA-toggle klik → Android: trigger `beforeinstallprompt` capture-event. iOS: vis instruks-modal med screenshot/tekst om at gå via Safari share-menu → "Føj til hjemmeskærm"
+
+**Status i prototype (2026-06-09):** Toggles er **UI-mock** — viser visuel feedback men trigger ikke reel `getUserMedia` eller `beforeinstallprompt`. Faktisk integration kommer i separat produktionskode-issue (CHAF-LOGIN-009).
+
+**PWA-forudsætninger (kræves for at install-prompt fungerer):**
+- `apps/chauffeur-web/public/manifest.json` med app-navn, ikoner, theme-color, start_url, display=standalone
+- Apple-touch-icons i forskellige størrelser (180×180, 152×152, 167×167) i `public/`
+- `<link rel="manifest">` + apple-specifikke meta-tags i `index.html`
+- HTTPS (Netlify preview/produktion er HTTPS)
+
+**Hvis chauffør afviser i browser-prompt (Fase 2-håndtering):**
+- Kamera afvist → blokerende besked: "Kamera er nødvendigt for at scanne vejekort. Tillad kameraet i din browser-indstilling og prøv igen."
+- PWA install afvist eller udsat → ikke blokerende, men toggle forbliver off. Bruger kan fortsætte (i Fase 1 — kan opdateres til blokerende i Fase 2)
+
+**Reset af permissions:**
+- Hvis chauffør har slået permissions fra i browser-settings → next login vil bede igen på trin 3
+- Logout sletter ikke browser-permissions — det er en browser-level setting
+
+---
+
+#### Dynamisk bil-administration (LÅST 2026-06-09)
+
+**Forretningsregel:** Alle ændringer om bil, konfiguration og tildeling sker hos **vognmanden** og propageres on-the-fly til chauffør-app, formand-app og fabrik-app. Chauffør-appen viser altid den NUVÆRENDE state — opfrisker live via Supabase realtime-subscription (eller polling i fallback).
+
+**Vognmandens disponering er sandhedskilden:**
+- `disponering` indeholder `{ chauffoer_tlf, bil_reg_nr, konfiguration, ordre_id, dato, status }`
+- Chauffør-app læser `disponering WHERE chauffoer_tlf = auth.user.phone AND dato = i_dag()` → viser tilknyttede opgaver
+- Når vognmand opdaterer dispositionen → alle apps får update (realtime sub eller polling)
+
+**Konfiguration — hvad er det:**
+- En bil kan have flere mulige setups: "Normal", "Med hænger", "Med grab", "Med tipper" osv.
+- Konfigurations-varianter pr. bil defineres af vognmand i bil-administrationen (se VOGN-DISP-CONFIG-001)
+- Når vognmand disponerer bilen, vælger han ÉN konfiguration. Dispositionen rummer `konfiguration_id`
+- Chauffør ser konfigurationen som info på opgaven, men kan IKKE ændre den
+- Formand og fabrik ser ligeledes konfigurationen som info (vigtigt for fabrik: hvilket setup ankommer)
+
+**Edge case-flows — alle løses hos vognmand:**
+
+| Scenario | Hvad sker | Chauffør-handling |
+|---|---|---|
+| **Ole bliver syg kl. 12** | Ole afslutter sin igangværende opgave (eller markerer afbrudt). Vognmand tilføjer Per som ny bil/chauffør på resten af ordren i sin disponering. | Ole: ingen. Per: ser opgaven dukke op i sin app efter vognmand opdaterer |
+| **Bil i stykker** | Vognmand opdaterer dispositionen til en ny bil + samme chauffør. Chauffør-app refresher (eller chauffør pull-to-refresh) → ny bil vises på opgaverne | Ingen handling |
+| **Konfiguration forkert** | Chauffør ringer til vognmand → vognmand opdaterer disponering → chauffør-app refresher | Ringe til vognmand |
+| **Ole sidder i en anden bil end disponeret** | Chauffør ringer til vognmand → vognmand opdaterer disponering → chauffør-app viser ny bil | Ringe til vognmand |
+| **Formand afmelder chauffør** (🟡 TBD-funktionalitet) | Formand markerer chauffør som afmeldt for dagen → vognmand notificeres → vognmand finder erstatning | Ingen handling — chauffør-app viser "Du er afmeldt af formand" eller intet |
+| **Realtime-nedbrud (Supabase realtime ikke virker)** | App falder tilbage til polling (fx hvert 60. sek) eller manuel pull-to-refresh | Manuel pull-to-refresh hvis nødvendigt |
+| **Token udløber midt på dag** | Chauffør får besked "Session udløbet" → SMS-OTP login → tilbage til forside med samme data | Logge ind igen |
+| **Ole skifter bil midt på opgave** (uden vognmand opdaterer) | App'en viser stadig den oprindelige bil. Events (tidsstempler, vejesedler) går på den oprindelige bil. Fejl-rettelse via vognmand bagefter | Ingen handling — vognmand retter bagefter |
+
+**Datafelter (LÅST 2026-06-09):**
+- `chauffoer_tlf` (auth.user.phone) — fra login, persistent
+- Bil + konfiguration kommer fra `disponering`-tabellen LIVE, ikke gemt lokalt
+- INGEN sessionStorage til bil/konfiguration — alt er server-side
+
+**Realtime / dynamisk opdatering — krav:**
+- Chauffør-app: subscribe til `disponering WHERE chauffoer_tlf = mig` → re-render ved ændring
+- Formand-app: subscribe til `disponering WHERE ordre_id IN mine_ordrer` → re-render ved ændring
+- Fabrik-app: subscribe til `disponering WHERE dato = i_dag AND bil_skal_til_min_fabrik` → re-render ved ændring
+- Default mekanisme: Supabase realtime subscriptions
+- Fallback: polling hvert 60. sek hvis realtime ikke tilgængelig
+
+**Formand-afmelder-chauffør (🟡 TBD — funktionalitet ikke bygget endnu):**
+- Skal kunne markere en chauffør "afmeldt af formand for resten af dagen"
+- Trigger: chauffør gør noget uacceptabelt, ankommer ikke, eller skal flyttes til anden opgave
+- Vognmand notificeres + skal finde erstatning
+- Skal defineres som eget issue ved senere afklaring
+
+**Out of MVP (Fase 2):**
+- Push-notifikationer ved dispositions-ændringer
+- Multi-device login (én chauffør på flere telefoner)
+- Token revoke fra server
+- Voice OTP fallback
+- Helpdesk-skærm med åbningstider
+- Native secure storage (Keychain / EncryptedSharedPreferences)
+- Formand-afmelder-chauffør-funktionalitet
 
 ---
 
@@ -526,40 +665,56 @@ Hvis en chauffør er på produkt A og produkt B venter, kører han videre på pr
 
 ---
 
-### Variant: Pause-reminder ved længere pause (LÅST 2026-06-08)
+### Variant: Hviletids-reminder ved længere hviletid (LÅST 2026-06-08, omdøbt 2026-06-09)
 
-**Forretningsregel:** Når en chauffør sætter sin aktive opgave på pause, kører en intern 30-minutters timer. Når timeren udløber, vises en blokerende modal i chauffør-appen der spørger om han stadig er på pause. Formålet er at fange tilfælde hvor chaufføren har glemt at trykke "Genoptag opgave" efter en reel pause er slut — så ventetiden ikke fortsætter med at tælle.
+**Terminologi (LÅST 2026-06-09):** Vi bruger ordet **"hviletid"** for chaufførens lovpligtige hvile (køre-/hviletidsloven). Ordet **"pause"** er reserveret til opgave-pause (opgave-skift via opgavelisten — frosset ur). Konsistent terminologi forhindrer forvirring mellem de to begreber, der har fundamentalt forskellig data-konsekvens.
 
-**Trigger:** `TaskState` skifter fra `active` → `paused` på en opgave. Pause-timer starter (30 minutter).
+**Forretningsregel:** Når en chauffør trykker **"Hviletid"** på sin aktive opgave, kører en intern 30-minutters timer. Når timeren udløber, vises en blokerende modal i chauffør-appen der spørger om han stadig holder hviletid. Formålet er at fange tilfælde hvor chaufføren har glemt at trykke "Genoptag opgave" efter en reel hviletid er slut — så ventetiden ikke fortsætter med at tælle.
+
+**Vigtig skelnen — hviletid vs opgave-skift (LÅST 2026-06-09):**
+
+| Hviletid (lovpligtig hvile) | Opgave-skift |
+|---|---|
+| Trigger: "Hviletid"-knap på TaskDetailScreen for AKTIV opgave | Trigger: "Skift til denne opgave"-knap i opgavelisten |
+| Opgavens `TaskState` forbliver `active` (sub-state: hviletids-segment åbnes) | Forrige opgaves `TaskState` skifter til `paused`, ny opgave bliver `active` |
+| Uret kører videre på opgaven, kategori = Hviletid | Uret på forrige opgave **fryser helt** — ingen tid logges |
+| 30-min reminder-modal triggeres (denne variant) | Ingen reminder |
+| Hviletid tæller med i `pause_minutter` i timereg | Tæller IKKE som hviletid i timereg — kun et kontekstskift |
+
+> **Note om data-felter:** Datafelter `pause_minutter`, `task_pause_log[]`, `pause_start`, `pause_slut` beholder deres tekniske navne for nu — de er valgt før omdøbningen og refererer i dag til hviletids-segmenter. Felterne kan omdøbes til `hviletid_*` ved Supabase-skema-design hvis ønsket.
+
+Hviletids-reminder-flowet nedenfor gælder **kun for hviletid** på en aktiv opgave.
+
+**Trigger:** Chauffør trykker "Hviletid"-knap på TaskDetailScreen. Hviletids-segment åbnes i `task_pause_log[]`. Hviletids-timer starter (30 minutter). `TaskState` forbliver `active`.
 
 **Modal-indhold:**
-- Titel: "Er du stadig på pause?"
-- Beskrivelse: "Du har været på pause i 30 minutter. Bekræft venligst om du stadig er på pause, eller genoptag opgaven."
-- Knap 1 (sekundær): "Ja, stadig på pause" → modal lukkes, timer nulstilles og kører igen i 30 min
-- Knap 2 (primær): "Genoptag opgave" → `TaskState` skifter til `active`, modal lukkes, timer stoppes
+- Titel: "Er du stadig på hviletid?"
+- Beskrivelse: "Du har haft hviletid i 30 minutter. Bekræft venligst om du stadig er på hviletid, eller genoptag opgaven."
+- Knap 1 (sekundær): "Ja, stadig på hviletid" → modal lukkes, timer nulstilles og kører igen i 30 min
+- Knap 2 (primær): "Genoptag opgave" → hviletids-segment lukkes, modal lukkes, timer stoppes. `TaskState` forbliver `active` (var det hele tiden).
 
 **Forretningsregler:**
 
 | Scenario | Adfærd |
 |---|---|
-| Chauffør trykker "Ja, stadig på pause" | Timer nulstilles → ny 30-min cyklus. Pause-tid fortsætter med at tælle som pause i timereg. |
-| Chauffør trykker "Genoptag opgave" | `TaskState` = `active`. Pause-perioden lukkes (pause-tid bevares i timereg). |
+| Chauffør trykker "Ja, stadig på hviletid" | Timer nulstilles → ny 30-min cyklus. Hviletid fortsætter med at tælle i timereg. |
+| Chauffør trykker "Genoptag opgave" | Hviletids-segment lukkes (hviletid bevares i timereg). `TaskState` uændret = `active`. |
 | Chauffør genoptager opgaven manuelt INDEN 30 min er gået | Timer cancelles. Ingen modal vises. |
-| Chauffør afslutter opgaven mens på pause | Timer cancelles ved opgave-afslutning. Eksisterende afslut-flow gælder. |
-| App er lukket / telefon er låst når timer udløber | Push-notifikation sendes (Fase 2). I Fase 1 vises modalen blot næste gang chauffør åbner appen mens opgaven stadig er paused. |
+| Chauffør afslutter opgaven mens på hviletid | Timer cancelles ved opgave-afslutning. Eksisterende afslut-flow gælder. |
+| App er lukket / telefon er låst når timer udløber | Push-notifikation sendes (Fase 2). I Fase 1 vises modalen blot næste gang chauffør åbner appen mens hviletids-segment stadig er åbent. |
 
-**Data-konsekvens:** Pause-perioder logges som tidligere. Pause-tid mellem to "Ja, stadig på pause"-bekræftelser tæller stadig som pause i timereg. Reglen ændrer IKKE afregningsmodellen — den er en UX-sikring mod at glemt-pause forurener tids-logikken.
+**Data-konsekvens:** Hviletids-perioder logges som tidligere. Tid mellem to "Ja, stadig på hviletid"-bekræftelser tæller stadig som hviletid i timereg. Reglen ændrer IKKE afregningsmodellen — den er en UX-sikring mod at glemt-hviletid forurener tids-logikken.
 
 **🟡 Fase 2-udvidelser:**
 - Push-notifikation når app er i baggrunden
-- Auto-afslut-pause hvis chauffør ikke svarer på modal inden N minutter (konfigurerbart)
-- Formand kan se i Udførelse-mode hvilke biler der har været på pause længere end X minutter
+- Auto-afslut-hviletid hvis chauffør ikke svarer på modal inden N minutter (konfigurerbart)
+- Formand kan se i Udførelse-mode hvilke biler der har haft hviletid længere end X minutter
 
 ---
 
-### Variant: Aktiv opgave — single-task, start-bekræftelse, baggrund-kørsel (LÅST 2026-06-08)
+### Variant: Aktiv opgave — single-task, start-bekræftelse, baggrund-kørsel (LÅST 2026-06-08, opdateret 2026-06-09)
 
-**Forretningsregel:** En chauffør kan kun have ÉN aktiv opgave ad gangen. Når en opgave er startet (`TaskState = active`) eller på pause (`TaskState = paused`) fortsætter den med at logge tid (timestamps + state-overgange) i baggrunden, uanset hvilken skærm chaufføren navigerer til i appen. Reglen forhindrer at chaufføren ved et tilfælde dobbelt-starter opgaver og derved får forurenede timer. **GPS er IKKE en del af Fase 1** (se Flow 4 Trin 1 — beslutning 2026-06-08).
+**Forretningsregel:** En chauffør kan kun have ÉN `active` opgave ad gangen, men kan have FLERE `paused` opgaver. `active` betyder uret kører og tid logges. `paused` betyder uret er frosset — ingen tid logges før chaufføren skifter tilbage. Reglen forhindrer at chaufføren ved et tilfælde dobbelt-starter opgaver og derved får forurenede timer. **GPS er IKKE en del af Fase 1** (se Flow 4 Trin 1 — beslutning 2026-06-08).
 
 **Start-bekræftelse:**
 - Når chauffør trykker "Start opgave" vises en blokerende modal:
@@ -569,13 +724,37 @@ Hvis en chauffør er på produkt A og produkt B venter, kører han videre på pr
   - Knap 2 (primær, grøn): "Start opgave"
 - Først ved bekræftelse skifter `TaskState` til `active` og time-logging starter.
 
-**Single-task-constraint:**
-- Hvis chauffør har en aktiv eller paused opgave (kald den `A`) og åbner en anden opgave (`B`) og trykker "Start opgave", vises en blokerende modal i stedet for start-bekræftelsen:
-  - Titel: "Du har allerede en aktiv opgave"
-  - Beskrivelse: "Du arbejder på opgave [orderNumber] · [produkt]. Afslut den først før du starter en ny."
-  - Knap 1 (sekundær): "Bliv her" → lukker modalen, chauffør forbliver på opgave `B`'s detalje-skærm uden at have startet noget
-  - Knap 2 (primær): "Gå til aktiv opgave" → navigerer til opgave `A`'s detalje-skærm
-- Det er IKKE muligt at have to opgaver i `active` eller `paused`-state samtidig — `state[A]` skal være `completed` (eller `idle` via fortryd) før `B` kan starte.
+**Opgave-skift (LÅST 2026-06-09):**
+Opgave-skift sker UDELUKKENDE fra opgavelisten (`TaskListScreen`) — IKKE fra `TaskDetailScreen`. Chaufføren kan skifte aktiv opgave ved at trykke "Skift til denne opgave" på enhver opgave-række der ikke allerede er aktiv (pauset eller afsluttet inden for 24 timer).
+
+- Knap-tekst på opgaveliste-kort:
+  - Pauset opgave: **"Skift til denne opgave"**
+  - Afsluttet opgave (`canReopen` = inden for 24t): **"Skift til denne opgave"**
+- Ved tryk vises en pause-warning-modal:
+  - Titel: "Aktiv opgave sættes på pause"
+  - Body: "Opgave [orderNumber] ([pickup → delivery]) sættes på pause, så du kan arbejde på den valgte opgave. Timeregistrering og vejesedler følger den aktive opgave."
+  - Primær CTA: "Skift til denne opgave" → `state[A]` ← `paused`, `state[B]` ← `active`, A's ur fryser, B's ur starter (eller fortsætter hvis B var pauset)
+  - Sekundær: "Annuller"
+- Hvis der IKKE er en aktiv opgave på skift-tidspunktet (alle pausede eller completed), åbner den valgte opgave direkte uden modal — chaufføren skal stadig konfirmere på TaskDetailScreen via "Start opgave"-modalen.
+- A's pause-periode mellem skift fra A → B → tilbage til A tæller IKKE som pause-tid i timereg (A's ur er frosset i mellemtiden).
+
+**Pille-farver i opgavelisten (LÅST 2026-06-09):**
+
+| Tilstand | Pille-tekst | Baggrund | Tekstfarve |
+|---|---|---|---|
+| `active` | "I gang" | `bg-green` (`#2E9E65`) | `text-white` |
+| `paused` | "Pauset" | `bg-yellow` (`#FEEE32`) | `text-deep-teal` |
+| `completed` | "Afsluttet" | `bg-error` (`#B42828`) | `text-white` |
+
+Farverne signalerer status hierarkisk: grøn = i gang (aktiv akkumulering), gul = mellem-tilstand (frosset, kan genoptages), rød = lukket. Hviletid (sub-state inden for `active`) påvirker IKKE pille-farven — opgaven viser stadig "I gang" pille selvom hviletids-segment kører.
+
+**Produkt-præsentation i chauffør-UI (LÅST 2026-06-09):**
+Produktnavnet (`produktnavn`, fx "GAB 0/16", "SMA 11S 8mm") er det PRIMÆRE identifikationsfelt for chaufføren. Recept-koden (`recept_nr`, fx "82101H", "94101A") er en SEKUNDÆR reference til fabrikkens recept-system. Visuel rangordning på tværs af alle chauffør-skærme:
+
+- Primær (større, fet, `text-deep-teal`): `produktnavn`
+- Sekundær (mindre, `text-text-muted`): `recept_nr`
+
+Gælder: TaskListScreen-kort, TaskDetailScreen-info, DashboardScreen-aktiv-opgave-kort, AnkommetFabrikScreen (vejning), AnkommetUdfoerselsstedScreen, SamlesPaaEnBilScreen og alle vejeseddel-relaterede skærme. Tidligere mønster (recept_nr primær, produktnavn sekundær) er udfaset 2026-06-09.
 
 **Baggrund-kørsel:**
 - Når chauffør navigerer væk fra TaskDetailScreen (fx til Beskeder, Timereg, Start-tab) BLIVER opgaven i sin nuværende state (`active` eller `paused`). Den bliver ikke pauset eller stoppet.
@@ -602,7 +781,7 @@ Hvis en chauffør er på produkt A og produkt B venter, kører han videre på pr
 - Native app med background-GPS for præcisions-validering
 - Lokal kø + offline-sync af state-changes
 - Global "aktiv opgave"-banner med tap-to-return navigation
-- Pause-reminder push-notifikation (se [[pause-reminder]])
+- Hviletids-reminder push-notifikation (se [[pause-reminder]])
 
 ---
 
@@ -1161,7 +1340,7 @@ Produkt-QR (på silo) scannes ÉN gang mellem de to vej-scans for at bekræfte r
 | `ankomst_udfoerselssted` | "Ankommet til plads"-knap (adresseboks) | Manuel knap-tryk |
 | `aflaesning_start` | "Start aflæsning"-knap på pladsen 🟡 *(KNAP MANGLER — se nedenfor)* | Manuel knap-tryk |
 | `aflaesning_slut` | "Aflæsning færdig"-knap 🟡 *(KNAP MANGLER)* | Manuel knap-tryk |
-| `pause_start` / `pause_slut` | Pause-knap / Genoptag-knap | State-overgang |
+| `pause_start` / `pause_slut` | Hviletid-knap / Genoptag-knap | Hviletids-segment åbnes/lukkes (TaskState forbliver `active`) |
 | `opgave_afsluttet` | "Afslut opgave"-knap | Manuel knap-tryk |
 
 **Felter beregnet automatisk fra timestamps:**
@@ -1191,7 +1370,13 @@ Begge knapper opfører sig som "Ankommet til plads"-knappen: outline-stil, full-
 
 **Skriver til:** `task_timestamps.{ankomst_fabrik, indvejning_tom, udvejning_lastet, ankomst_udfoerselssted, aflaesning_start, aflaesning_slut, opgave_afsluttet}`, `task_pause_log[]`
 
-**Read-only TimeRegistrationScreen:** Viser de beregnede felter (fabrikstid, køretid, ventetid på plads, aflæsning, pauser) som læsbar oversigt for chauffør. Chauffør kan IKKE redigere — kun se. Formand justerer ved behov i sit Udførelse-view.
+**Editable TimeRegistrationScreen (LÅST 2026-06-09):** Viser de beregnede felter (Kørsel, Ventetid, Hviletid) som liste. Chauffør KAN redigere hver kategori med "Rediger"-blyant-knap. Edit-modalen kræver:
+- Timer + minutter (input-felter)
+- Årsag (dropdown: GPS-fejl, Ventetid fejlregistreret, Glemt hviletid, Teknisk fejl, Andet)
+- Hvis Årsag = "Andet" → fritekst-felt
+- Modificerede rækker markeres med ` *` efter kategorinavnet
+
+Formand modtager både rå-værdier (auto-beregnet fra events) og chauffør-redigerede værdier, og godkender/afviser i Udførelse-view. Edit-flowet sikrer at chauffør kan rette åbenlyse fejl (glemt hviletid-knap, GPS-glitch i Fase 2) uden at vente på formand-godkendelse. **Note:** Tidligere "read-only" regel (LÅST 2026-06-08) er erstattet af denne — beslutning 2026-06-09 fordi prototype-flowet allerede tilbyder edit og formand-review-loopet håndterer fejl effektivt nok.
 
 **Note om Fase 2 (GPS-tilføjelse):** Når vi senere bygger native app, KAN GPS tilføjes som ekstra præcisions-lag: validere at chauffør faktisk var ved fabrik/plads ved knap-tryk, auto-detektere ventetid uden manuelt knap-tryk, ETA-baseret routing. Men Fase 1 fungerer fuldt ud uden.
 
@@ -1268,9 +1453,9 @@ Edit-tilstand (inde i samme screen)
 **Viser:**
 - **Type-pill** (time/akkord) — fra vognmand-systemet (kun synlig på asfalt-biler — materiel er altid time)
 - **Felter:**
-  - Asfalt-bil time-afregning → Køretimer / Ventetid / Pause
+  - Asfalt-bil time-afregning → Køretimer / Ventetid / Hviletid
   - Asfalt-bil akkord → Tons kørt / Ventetid
-  - **Materiel-bil (badge "Kørt materiel") → ALTID time-afregning, kun Timer + Ventetid (INGEN pause)**
+  - **Materiel-bil (badge "Kørt materiel") → ALTID time-afregning, kun Timer + Ventetid (INGEN hviletid)**
 - **Chauffør-kommentar** (`ChauffoerKommentarBox`) — vises **nederst i expanderen, efter Godkend-knappen**
 - **Forretningsregel:** Hvis chauffør kører flere materiel-enheder på samme bil/reg.nr → ÉN samlet afregning per chauffør (gruppering på `regnr`), IKKE per materiel-enhed.
 **Handling:** Formand kan redigere felter — eller godkende direkte hvis de stemmer.
@@ -1336,17 +1521,17 @@ Edit-tilstand (inde i samme screen)
 **Chaufførens registrering (GPS-baseret, 3 felter):**
 - **Kørsel** — inkl. læsning + aflæsning (registreres ved ankomst fabrik/plads); folder ind i kørsel, ikke separate felter
 - **Ventetid** — chauffør holder stille og venter på at komme til udlægger eller ind på fabrik
-- **Pause**
-**Kilde:** `time_registreringer` (samme tabel chaufføren skriver til i Trin 2)
+- **Hviletid** — chaufførens lovpligtige hvile (køre-/hviletidsloven)
+**Kilde:** `time_registreringer` (samme tabel chaufføren skriver til i Trin 2). Bemærk: datafelt-navnet er `pause_minutter` / `pause` af tekniske historiske grunde, men UI-kategorien hedder **Hviletid** overalt.
 
 **To linjer i visningen:**
 | Linje | Indhold |
 |---|---|
-| Chauffør timer | Kørsel · Ventetid · Pause (rå fra chauffør-app) |
+| Chauffør timer | Kørsel · Ventetid · Hviletid (rå fra chauffør-app) |
 | Godkendt af formand | Styret af `afregning_type`: `time` → alle tre · `akkord`/tons → **kun Ventetid** |
 
-**Forretningsregel (time vs. tons):** Chaufføren logger ALTID de samme timer (kørsel/ventetid/pause) uanset afregningstype. Ved **akkord/tons** betales per tons, så formanden godkender **kun ventetid** — kørsel + pause dækkes implicit af tons-raten. Ved **time** godkendes alle tre.
-**Mock:** `apps/vognmand/src/mocks/afregning.ts` (NY) modellerer begge linjer + `afregning_type`. Aligner med `ChauffoerAfregning` (`koretimer`/`ventetid`/`pause`).
+**Forretningsregel (time vs. tons):** Chaufføren logger ALTID de samme timer (kørsel/ventetid/hviletid) uanset afregningstype. Ved **akkord/tons** betales per tons, så formanden godkender **kun ventetid** — kørsel + hviletid dækkes implicit af tons-raten. Ved **time** godkendes alle tre.
+**Mock:** `apps/vognmand/src/mocks/afregning.ts` (NY) modellerer begge linjer + `afregning_type`. Aligner med `ChauffoerAfregning` (`koretimer`/`ventetid`/`pause` — bemærk teknisk `pause`-felt-navn rummer hviletids-data).
 **Adskilt fra Trin 6:** Trin 6 (godkendte afregninger til reklamation/faktura) er en ANDEN side med andet formål. Trin 6b er dag-dokumentation per chauffør.
 **Issue:** #14
 
@@ -2534,7 +2719,7 @@ afregninger                                   // fra Colas til vognmand
 
 ## Forretningsregler (ikke-åbenlyse)
 
-- Chauffør identificeres via tlf-nummer OG nummerplade — der er ikke et login-system for chauffører
+- Chauffør har minimalt login: SMS-OTP ved ny enhed eller token-fornyelse, ellers altid direkte til forside. Bil + konfiguration kommer fra vognmandens disponering — chauffør foretager INGEN bil-valg. Se "Chauffør Login + Dynamisk bil-administration"-sektionen ovenfor
 - Én bil kan dække flere materiel-linjer på samme ordre (kapacitet vurderes manuelt af vognmand)
 - Asfalt og materiel er separate sektioner på samme ordre — hvert har sit eget bekræftelsesbadge
 - Vognmand ser materiel-linjer som en ekstra sektion UNDER asfalt-disponeringen — ikke som separat ordre
