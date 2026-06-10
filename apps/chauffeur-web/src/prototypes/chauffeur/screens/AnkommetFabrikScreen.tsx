@@ -4,6 +4,7 @@
  */
 import { useState } from 'react'
 import { Camera, X, Check } from 'lucide-react'
+import { SAFE_AREA, FS } from '@/styles/spacing'
 import { BottomTabBar } from '../components/BottomTabBar'
 import type { TabName } from '../components/BottomTabBar'
 
@@ -60,7 +61,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
       }}
     >
       {/* Handle bar */}
-      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 59, paddingBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: SAFE_AREA.top, paddingBottom: 4 }}>
         <div style={{ width: 36, height: 4, backgroundColor: '#C4C4C4', borderRadius: 2 }} />
       </div>
 
@@ -118,7 +119,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 style={{
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 28,
+                  fontSize: FS['2xl'],
                   color: C.deepTeal,
                   margin: 0,
                   textAlign: 'center',
@@ -131,7 +132,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 style={{
                   fontFamily: 'Inter, sans-serif',
                   fontWeight: 400,
-                  fontSize: 15,
+                  fontSize: FS.md,
                   color: C.textMuted,
                   margin: 0,
                   textAlign: 'center',
@@ -139,6 +140,22 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 }}
               >
                 Velkommen til {MOCK.pickup.name}
+              </p>
+              <p
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontWeight: 400,
+                  fontSize: FS.sm,
+                  color: C.textMuted,
+                  margin: 0,
+                  marginTop: 6,
+                  textAlign: 'center',
+                  lineHeight: 1.3,
+                }}
+              >
+                Hvis du er i tvivl om noget,
+                <br />
+                så kommunikerer vi på kanal 17
               </p>
             </div>
 
@@ -176,7 +193,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                   style={{
                     fontFamily: 'Poppins, sans-serif',
                     fontWeight: 700,
-                    fontSize: 18,
+                    fontSize: FS.md,
                     color: C.white,
                     lineHeight: 1,
                   }}
@@ -184,7 +201,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                   1
                 </span>
               </div>
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Kør til vægten
               </p>
             </div>
@@ -223,7 +240,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                   style={{
                     fontFamily: 'Poppins, sans-serif',
                     fontWeight: 700,
-                    fontSize: 18,
+                    fontSize: FS.md,
                     color: C.white,
                     lineHeight: 1,
                   }}
@@ -231,7 +248,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                   2
                 </span>
               </div>
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Scan vægtens QR-kode
               </p>
               <button
@@ -246,7 +263,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 15,
+                  fontSize: FS.md,
                   color: C.deepTeal,
                 }}
               >
@@ -273,7 +290,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 gap: 16,
               }}
             >
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Scan vægtens QR kode
               </p>
               <div
@@ -294,7 +311,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 <p
                   style={{
                     fontFamily: 'Inter, sans-serif',
-                    fontSize: 12,
+                    fontSize: FS.xs,
                     color: C.textMuted,
                     margin: 0,
                     textAlign: 'center',
@@ -316,7 +333,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: FS.md,
                 color: C.deepTeal,
               }}
             >
@@ -330,7 +347,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 border: 'none',
                 cursor: 'pointer',
                 fontFamily: 'Inter, sans-serif',
-                fontSize: 13,
+                fontSize: FS.sm,
                 color: C.textMuted,
                 alignSelf: 'center',
               }}
@@ -378,7 +395,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                   style={{
                     fontFamily: 'Poppins, sans-serif',
                     fontWeight: 700,
-                    fontSize: 18,
+                    fontSize: FS.md,
                     color: C.white,
                     lineHeight: 1,
                   }}
@@ -386,7 +403,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                   1
                 </span>
               </div>
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Kør til Silo og start lastningen
               </p>
 
@@ -417,7 +434,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                     <p
                       style={{
                         fontFamily: 'Inter, sans-serif',
-                        fontSize: 13,
+                        fontSize: FS.sm,
                         color: C.textMuted,
                         margin: 0,
                       }}
@@ -429,7 +446,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                         style={{
                           fontFamily: 'Poppins, sans-serif',
                           fontWeight: 600,
-                          fontSize: 15,
+                          fontSize: FS.md,
                           color: C.deepTeal,
                           margin: 0,
                         }}
@@ -442,7 +459,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                           style={{
                             fontFamily: 'Poppins, sans-serif',
                             fontWeight: 600,
-                            fontSize: 16,
+                            fontSize: FS.md,
                             color: C.deepTeal,
                             margin: 0,
                             lineHeight: 1.2,
@@ -453,7 +470,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                         <p
                           style={{
                             fontFamily: 'Inter, sans-serif',
-                            fontSize: 11,
+                            fontSize: FS.xxs,
                             color: C.textMuted,
                             margin: 0,
                             lineHeight: 1.2,
@@ -502,7 +519,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                   style={{
                     fontFamily: 'Poppins, sans-serif',
                     fontWeight: 700,
-                    fontSize: 18,
+                    fontSize: FS.md,
                     color: C.white,
                     lineHeight: 1,
                   }}
@@ -510,7 +527,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                   2
                 </span>
               </div>
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Kør til vægten og bliv udvejet
               </p>
               <button
@@ -525,7 +542,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 15,
+                  fontSize: FS.md,
                   color: C.deepTeal,
                 }}
               >
@@ -555,7 +572,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 gap: 16,
               }}
             >
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Scan QR kode for udvejning
               </p>
               <div
@@ -576,7 +593,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 <p
                   style={{
                     fontFamily: 'Inter, sans-serif',
-                    fontSize: 12,
+                    fontSize: FS.xs,
                     color: C.textMuted,
                     margin: 0,
                     textAlign: 'center',
@@ -598,7 +615,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: FS.md,
                 color: C.deepTeal,
               }}
             >
@@ -612,7 +629,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                 border: 'none',
                 cursor: 'pointer',
                 fontFamily: 'Inter, sans-serif',
-                fontSize: 13,
+                fontSize: FS.sm,
                 color: C.textMuted,
                 alignSelf: 'center',
               }}
@@ -659,7 +676,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
               </div>
 
               {/* Overskrift — identisk styling med bokstitler i bekraeft */}
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Udvejning bekræftet
               </p>
 
@@ -685,7 +702,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                     <p
                       style={{
                         fontFamily: 'Inter, sans-serif',
-                        fontSize: 13,
+                        fontSize: FS.sm,
                         color: C.textMuted,
                         margin: 0,
                       }}
@@ -697,7 +714,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                         style={{
                           fontFamily: 'Poppins, sans-serif',
                           fontWeight: 600,
-                          fontSize: 15,
+                          fontSize: FS.md,
                           color: C.deepTeal,
                           margin: 0,
                         }}
@@ -710,7 +727,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                           style={{
                             fontFamily: 'Poppins, sans-serif',
                             fontWeight: 600,
-                            fontSize: 16,
+                            fontSize: FS.md,
                             color: C.deepTeal,
                             margin: 0,
                             lineHeight: 1.2,
@@ -721,7 +738,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                         <p
                           style={{
                             fontFamily: 'Inter, sans-serif',
-                            fontSize: 11,
+                            fontSize: FS.xxs,
                             color: C.textMuted,
                             margin: 0,
                             lineHeight: 1.2,
@@ -739,7 +756,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
               <p
                 style={{
                   fontFamily: 'Inter, sans-serif',
-                  fontSize: 13,
+                  fontSize: FS.sm,
                   color: C.textMuted,
                   margin: '8px 0 0',
                   textAlign: 'center',
@@ -759,7 +776,7 @@ export function AnkommetFabrikScreen({ onClose, messageCount = 0 }: AnkommetFabr
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 15,
+                  fontSize: FS.md,
                   color: C.white,
                   width: '100%',
                   marginTop: 16,

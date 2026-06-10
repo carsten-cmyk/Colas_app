@@ -5,6 +5,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChevronLeft, Phone, Send } from 'lucide-react'
 import type { Conversation, Message } from '@/types/messages'
+import { SAFE_AREA, FS } from '@/styles/spacing'
 
 export interface ConversationScreenProps {
   conversation: Conversation
@@ -61,7 +62,7 @@ export function ConversationScreen({ conversation, onBack }: ConversationScreenP
       <div
         style={{
           backgroundColor: '#0B3950',
-          paddingTop: 67,
+          paddingTop: `calc(${SAFE_AREA.top} + 8px)`,
           paddingLeft: 8,
           paddingRight: 16,
           paddingBottom: 8,
@@ -108,7 +109,7 @@ export function ConversationScreen({ conversation, onBack }: ConversationScreenP
                 flexShrink: 0,
                 fontFamily: 'Inter, sans-serif',
                 fontWeight: 700,
-                fontSize: 14,
+                fontSize: FS.sm,
                 color: '#0E4764',
               }}
             >
@@ -120,7 +121,7 @@ export function ConversationScreen({ conversation, onBack }: ConversationScreenP
               style={{
                 fontFamily: 'Inter, sans-serif',
                 fontWeight: 600,
-                fontSize: 14,
+                fontSize: FS.sm,
                 color: '#FFFFFF',
                 margin: 0,
               }}
@@ -130,7 +131,7 @@ export function ConversationScreen({ conversation, onBack }: ConversationScreenP
             <p
               style={{
                 fontFamily: 'Inter, sans-serif',
-                fontSize: 12,
+                fontSize: FS.xs,
                 color: '#A0C7D7',
                 margin: 0,
                 textTransform: 'capitalize' as const,
@@ -175,7 +176,7 @@ export function ConversationScreen({ conversation, onBack }: ConversationScreenP
           <span
             style={{
               fontFamily: 'Inter, sans-serif',
-              fontSize: 12,
+              fontSize: FS.xs,
               fontWeight: 600,
               color: '#0E4764',
             }}
@@ -185,7 +186,7 @@ export function ConversationScreen({ conversation, onBack }: ConversationScreenP
           <span
             style={{
               fontFamily: 'Inter, sans-serif',
-              fontSize: 12,
+              fontSize: FS.xs,
               color: '#717182',
             }}
           >
@@ -230,7 +231,7 @@ export function ConversationScreen({ conversation, onBack }: ConversationScreenP
                 <p
                   style={{
                     fontFamily: 'Inter, sans-serif',
-                    fontSize: 14,
+                    fontSize: FS.sm,
                     color: isSent ? '#FFFFFF' : '#1D1D1D',
                     margin: 0,
                     lineHeight: 1.45,
@@ -242,7 +243,7 @@ export function ConversationScreen({ conversation, onBack }: ConversationScreenP
               <p
                 style={{
                   fontFamily: 'Inter, sans-serif',
-                  fontSize: 10,
+                  fontSize: FS.xxs,
                   color: '#717182',
                   margin: '3px 4px 0',
                 }}
@@ -281,7 +282,7 @@ export function ConversationScreen({ conversation, onBack }: ConversationScreenP
             paddingLeft: 16,
             paddingRight: 16,
             fontFamily: 'Inter, sans-serif',
-            fontSize: 14,
+            fontSize: FS.sm,
             color: '#1D1D1D',
           }}
         />

@@ -5,6 +5,7 @@
  */
 import { X, Phone } from 'lucide-react'
 import type { Task } from '@/types/task'
+import { SAFE_AREA, FS } from '@/styles/spacing'
 import type { TabName } from '../components/BottomTabBar'
 import { BottomTabBar } from '../components/BottomTabBar'
 
@@ -115,7 +116,7 @@ export function KontakterScreen({
       }}
     >
       {/* Handle bar */}
-      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 59, paddingBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: SAFE_AREA.top, paddingBottom: 4 }}>
         <div style={{ width: 36, height: 4, backgroundColor: '#C4C4C4', borderRadius: 2 }} />
       </div>
 
@@ -134,7 +135,7 @@ export function KontakterScreen({
           style={{
             fontFamily: 'Poppins, sans-serif',
             fontWeight: 600,
-            fontSize: 18,
+            fontSize: FS.md,
             color: C.deepTeal,
             margin: 0,
           }}
@@ -184,7 +185,7 @@ export function KontakterScreen({
               style={{
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 16,
+                fontSize: FS.md,
                 color: C.textMuted,
                 margin: 0,
               }}
@@ -194,7 +195,7 @@ export function KontakterScreen({
             <p
               style={{
                 fontFamily: 'Inter, sans-serif',
-                fontSize: 13,
+                fontSize: FS.sm,
                 color: C.textMuted,
                 margin: 0,
               }}
@@ -218,7 +219,7 @@ export function KontakterScreen({
                   style={{
                     fontFamily: 'Inter, sans-serif',
                     fontWeight: 600,
-                    fontSize: 11,
+                    fontSize: FS.xxs,
                     color: C.textMuted,
                     letterSpacing: '0.06em',
                     textTransform: 'uppercase' as const,
@@ -258,7 +259,7 @@ export function KontakterScreen({
                         style={{
                           fontFamily: 'Poppins, sans-serif',
                           fontWeight: 600,
-                          fontSize: 15,
+                          fontSize: FS.md,
                           color: C.textPrimary,
                           margin: 0,
                           whiteSpace: 'nowrap',
@@ -271,7 +272,7 @@ export function KontakterScreen({
                       <p
                         style={{
                           fontFamily: 'Inter, sans-serif',
-                          fontSize: 12,
+                          fontSize: FS.xs,
                           color: C.textMuted,
                           margin: 0,
                         }}
@@ -283,7 +284,7 @@ export function KontakterScreen({
                         <p
                           style={{
                             fontFamily: 'Inter, sans-serif',
-                            fontSize: 11,
+                            fontSize: FS.xxs,
                             color: C.textMuted,
                             margin: 0,
                             marginTop: 2,
@@ -314,7 +315,7 @@ export function KontakterScreen({
                       <span
                         style={{
                           fontFamily: 'Inter, sans-serif',
-                          fontSize: 14,
+                          fontSize: FS.sm,
                           color: C.deepTeal,
                         }}
                       >

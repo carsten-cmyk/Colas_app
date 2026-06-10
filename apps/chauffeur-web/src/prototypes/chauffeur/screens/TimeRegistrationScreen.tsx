@@ -4,6 +4,7 @@
  */
 import { useState, useRef } from 'react'
 import { X, Pencil, Mic, ChevronDown, ChevronUp, Check } from 'lucide-react'
+import { SAFE_AREA, FS } from '@/styles/spacing'
 import { BottomTabBar } from '../components/BottomTabBar'
 import type { TabName } from '../components/BottomTabBar'
 
@@ -110,7 +111,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
       }}
     >
       {/* Handle bar — 59px Dynamic Island safe area */}
-      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 59, paddingBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: SAFE_AREA.top, paddingBottom: 4 }}>
         <div style={{ width: 36, height: 4, backgroundColor: '#C4C4C4', borderRadius: 2 }} />
       </div>
 
@@ -130,7 +131,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
             style={{
               fontFamily: 'Poppins, sans-serif',
               fontWeight: 600,
-              fontSize: 18,
+              fontSize: FS.md,
               color: C.deepTeal,
               margin: 0,
             }}
@@ -142,7 +143,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
               style={{
                 fontFamily: 'Inter, sans-serif',
                 fontWeight: 600,
-                fontSize: 11,
+                fontSize: FS.xxs,
                 color: C.textMuted,
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',
@@ -152,7 +153,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
             </span>
           )}
           {!reviewMode && (
-            <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 12, color: C.textMuted }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: FS.xs, color: C.textMuted }}>
               {MOCK.date}
             </span>
           )}
@@ -213,7 +214,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
               style={{
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 24,
+                fontSize: FS.xl,
                 color: C.deepTeal,
                 textAlign: 'center',
                 margin: 0,
@@ -225,7 +226,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
               style={{
                 fontFamily: 'Inter, sans-serif',
                 fontWeight: 400,
-                fontSize: 14,
+                fontSize: FS.sm,
                 color: C.textMuted,
                 textAlign: 'center',
                 margin: 0,
@@ -247,7 +248,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: FS.md,
                 color: C.deepTeal,
               }}
             >
@@ -264,7 +265,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
             style={{
               fontFamily: 'Inter, sans-serif',
               fontWeight: 600,
-              fontSize: 11,
+              fontSize: FS.xxs,
               color: C.textMuted,
               textTransform: 'uppercase',
               letterSpacing: '0.06em',
@@ -276,7 +277,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
             style={{
               fontFamily: 'Inter, sans-serif',
               fontWeight: 500,
-              fontSize: 14,
+              fontSize: FS.sm,
               color: C.textPrimary,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -285,7 +286,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
           >
             {MOCK.projectName}
           </span>
-          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.textMuted }}>
+          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.xs, color: C.textMuted }}>
             {MOCK.address}
           </span>
         </div>
@@ -316,7 +317,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
             <span
               style={{
                 fontFamily: 'Inter, sans-serif',
-                fontSize: 11,
+                fontSize: FS.xxs,
                 color: C.textMuted,
               }}
             >
@@ -326,7 +327,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
               style={{
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 16,
+                fontSize: FS.md,
                 color: C.textPrimary,
               }}
             >
@@ -335,7 +336,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
             <span
               style={{
                 fontFamily: 'Inter, sans-serif',
-                fontSize: 13,
+                fontSize: FS.sm,
                 color: C.deepTeal,
               }}
             >
@@ -359,7 +360,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
               style={{
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 18,
+                fontSize: FS.md,
                 color: C.textPrimary,
               }}
             >
@@ -368,7 +369,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
             <span
               style={{
                 fontFamily: 'Inter, sans-serif',
-                fontSize: 11,
+                fontSize: FS.xxs,
                 color: C.textMuted,
               }}
             >
@@ -382,7 +383,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
           style={{
             fontFamily: 'Inter, sans-serif',
             fontWeight: 600,
-            fontSize: 11,
+            fontSize: FS.xxs,
             color: C.textMuted,
             textTransform: 'uppercase' as const,
             letterSpacing: '0.06em',
@@ -412,7 +413,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                     flex: 1,
                     fontFamily: 'Inter, sans-serif',
                     fontWeight: 500,
-                    fontSize: 14,
+                    fontSize: FS.sm,
                     color: C.textPrimary,
                   }}
                 >
@@ -423,7 +424,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                     style={{
                       fontFamily: 'Inter, sans-serif',
                       fontWeight: 500,
-                      fontSize: 14,
+                      fontSize: FS.sm,
                       color: C.deepTeal,
                     }}
                   >
@@ -475,7 +476,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
               resize: 'none',
               padding: '12px 16px 8px',
               fontFamily: 'Inter, sans-serif',
-              fontSize: 14,
+              fontSize: FS.sm,
               color: C.textPrimary,
               backgroundColor: 'transparent',
               minHeight: 70,
@@ -490,7 +491,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
               padding: '0 16px 10px',
             }}
           >
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: C.textMuted }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.xxs, color: C.textMuted }}>
               {comment.length > 0 ? `${comment.length} tegn` : ''}
             </span>
             <button
@@ -527,7 +528,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: FS.md,
                 color: C.white,
               }}
             >
@@ -547,7 +548,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: FS.md,
                 color: C.deepTeal,
               }}
             >
@@ -572,7 +573,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 15,
+                  fontSize: FS.md,
                   color: C.white,
                 }}
               >
@@ -588,7 +589,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 15,
+                  fontSize: FS.md,
                   color: C.deepTeal,
                 }}
               >
@@ -643,7 +644,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
             {/* Header — fast */}
             <div style={{ padding: '20px 16px 0' }}>
               {/* fontSize 18 matcher bekræftelses-modalen (Poppins 600 18) */}
-              <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal }}>
+              <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal }}>
                 Rediger {editing.entry.category.toLowerCase()}
               </span>
             </div>
@@ -663,7 +664,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                 {/* Timer */}
                 <div style={{ flex: '0 0 90px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.textMuted }}>Timer</span>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.xs, color: C.textMuted }}>Timer</span>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -681,7 +682,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                       textAlign: 'center',
                       fontFamily: 'Inter, sans-serif',
                       fontWeight: 500,
-                      fontSize: 18,
+                      fontSize: FS.md,
                       color: C.deepTeal,
                       outline: 'none',
                     }}
@@ -689,7 +690,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                 </div>
                 {/* Minutter */}
                 <div style={{ flex: '0 0 90px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.textMuted }}>Minutter</span>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.xs, color: C.textMuted }}>Minutter</span>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -707,7 +708,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                       textAlign: 'center',
                       fontFamily: 'Inter, sans-serif',
                       fontWeight: 500,
-                      fontSize: 18,
+                      fontSize: FS.md,
                       color: C.deepTeal,
                       outline: 'none',
                     }}
@@ -715,7 +716,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                 </div>
                 {/* Årsag */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.textMuted }}>Årsag</span>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: FS.xs, color: C.textMuted }}>Årsag</span>
                   <button
                     onClick={() => setShowReasonList(v => !v)}
                     style={{
@@ -731,11 +732,11 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                       width: '100%',
                       outline: 'none',
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 14,
+                      fontSize: FS.sm,
                       color: C.textPrimary,
                     }}
                   >
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 14, color: editing.reason ? C.deepTeal : C.textMuted }}>
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: FS.sm, color: editing.reason ? C.deepTeal : C.textMuted }}>
                       {editing.reason || 'Vælg årsag...'}
                     </span>
                     {showReasonList ? <ChevronUp size={16} color={C.deepTeal} /> : <ChevronDown size={16} color={C.deepTeal} />}
@@ -767,7 +768,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                       <span
                         style={{
                           fontFamily: 'Inter, sans-serif',
-                          fontSize: 14,
+                          fontSize: FS.sm,
                           color: editing.reason === r ? C.deepTeal : C.textPrimary,
                           fontWeight: editing.reason === r ? 500 : 400,
                         }}
@@ -792,7 +793,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                     padding: '12px 16px',
                     minHeight: 60,
                     fontFamily: 'Inter, sans-serif',
-                    fontSize: 14,
+                    fontSize: FS.sm,
                     color: C.textPrimary,
                     outline: 'none',
                     resize: 'none',
@@ -822,7 +823,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 15,
+                  fontSize: FS.md,
                   color: C.deepTeal,
                 }}
               >
@@ -839,7 +840,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 15,
+                  fontSize: FS.md,
                   color: C.deepTeal,
                 }}
               >
@@ -877,10 +878,10 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, textAlign: 'center' }}>
+            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, textAlign: 'center' }}>
               Afslut opgave?
             </span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.textMuted, textAlign: 'center' }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.sm, color: C.textMuted, textAlign: 'center' }}>
               Er du sikker på du vil afslutte og sende data til formanden?
             </span>
             <div style={{ display: 'flex', gap: 10, marginTop: 4, width: '100%' }}>
@@ -895,7 +896,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.deepTeal,
                 }}
               >
@@ -912,7 +913,7 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.white,
                 }}
               >

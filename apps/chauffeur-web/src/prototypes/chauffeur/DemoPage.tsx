@@ -5,6 +5,7 @@
  */
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { FS } from '@/styles/spacing'
 import { IPhoneFrame } from './IPhoneFrame'
 import { ChauffoerPrototype } from './ChauffoerPrototype'
 
@@ -61,7 +62,7 @@ export function DemoPage() {
         <p
           style={{
             fontFamily: 'Inter, sans-serif',
-            fontSize: 12,
+            fontSize: FS.xs,
             fontWeight: 500,
             letterSpacing: '0.1em',
             textTransform: 'uppercase' as const,
@@ -85,7 +86,7 @@ export function DemoPage() {
         style={{
           marginTop: 32,
           fontFamily: 'Inter, sans-serif',
-          fontSize: 11,
+          fontSize: FS.xxs,
           color: 'rgba(255,255,255,0.2)',
           textAlign: 'center',
           position: 'relative',

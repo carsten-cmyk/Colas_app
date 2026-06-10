@@ -4,7 +4,20 @@ import type { Config } from 'tailwindcss'
 const config: Config = {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
+    screens: {
+      xs: '320px',
+      sm: '375px',
+      md: '430px',
+      lg: '768px',
+      xl: '1024px',
+    },
     extend: {
+      minWidth: {
+        touch: '44px',
+      },
+      minHeight: {
+        touch: '44px',
+      },
       colors: {
         yellow: '#FEEE32',
         'dark-teal': '#0E4764',

@@ -3,6 +3,7 @@
  * Start-fanen: Colas logo, billedgitter, opgaver-swiper.
  */
 import type { Task } from '@/types/task'
+import { SAFE_AREA, FS } from '@/styles/spacing'
 import type { TabName } from '../components/BottomTabBar'
 import { BottomTabBar } from '../components/BottomTabBar'
 
@@ -45,7 +46,7 @@ export function DashboardScreen({
         {/* Dashboard Header — Colas logo */}
         <div
           style={{
-            paddingTop: 67, // 59px Dynamic Island safe area + 8px
+            paddingTop: `calc(${SAFE_AREA.top} + 8px)`,
             paddingBottom: 48,
             paddingLeft: 16,
             paddingRight: 16,
@@ -149,7 +150,7 @@ export function DashboardScreen({
                 style={{
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 700,
-                  fontSize: 28,
+                  fontSize: FS['2xl'],
                   color: '#1D1D1D',
                   lineHeight: 1,
                   letterSpacing: '-0.5px',
@@ -162,7 +163,7 @@ export function DashboardScreen({
                 style={{
                   fontFamily: 'Inter, sans-serif',
                   fontWeight: 400,
-                  fontSize: 11,
+                  fontSize: FS.xxs,
                   color: '#717182',
                   lineHeight: 1.3,
                   textAlign: 'center',
@@ -186,7 +187,7 @@ export function DashboardScreen({
           <span
             style={{
               fontFamily: 'Inter, sans-serif',
-              fontSize: 11,
+              fontSize: FS.xxs,
               fontWeight: 600,
               letterSpacing: '0.08em',
               textTransform: 'uppercase' as const,
@@ -261,7 +262,7 @@ export function DashboardScreen({
                       padding: '4px 10px',
                     }}
                   >
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: '#0E4764' }}>
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: FS.xs, color: '#0E4764' }}>
                       I gang
                     </span>
                   </div>
@@ -278,7 +279,7 @@ export function DashboardScreen({
                       padding: '4px 10px',
                     }}
                   >
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: '#717182' }}>
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: FS.xs, color: '#717182' }}>
                       Afsluttet
                     </span>
                   </div>
@@ -288,7 +289,7 @@ export function DashboardScreen({
                 <span
                   style={{
                     fontFamily: 'Inter, sans-serif',
-                    fontSize: 12,
+                    fontSize: FS.xs,
                     color: '#717182',
                     margin: 0,
                     marginBottom: 4,
@@ -304,7 +305,7 @@ export function DashboardScreen({
                       style={{
                         fontFamily: 'Poppins, sans-serif',
                         fontWeight: 600,
-                        fontSize: 16,
+                        fontSize: FS.md,
                         color: '#0E4764',
                         margin: 0,
                         lineHeight: 1.2,
@@ -316,7 +317,7 @@ export function DashboardScreen({
                       style={{
                         fontFamily: 'Poppins, sans-serif',
                         fontWeight: 600,
-                        fontSize: 16,
+                        fontSize: FS.md,
                         color: '#0E4764',
                         margin: 0,
                         lineHeight: 1.2,
@@ -328,7 +329,7 @@ export function DashboardScreen({
                   <p
                     style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 12,
+                      fontSize: FS.xs,
                       color: '#717182',
                       margin: 0,
                       marginTop: 1,
@@ -343,7 +344,7 @@ export function DashboardScreen({
                   <p
                     style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
+                      fontSize: FS.sm,
                       color: '#717182',
                       margin: 0,
                       overflow: 'hidden',
@@ -361,7 +362,7 @@ export function DashboardScreen({
                   <p
                     style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 12,
+                      fontSize: FS.xs,
                       color: '#717182',
                       margin: 0,
                     }}
@@ -377,7 +378,7 @@ export function DashboardScreen({
                       <span
                         style={{
                           fontFamily: 'Inter, sans-serif',
-                          fontSize: 10,
+                          fontSize: FS.xxs,
                           color: '#717182',
                           fontWeight: 500,
                         }}
@@ -387,7 +388,7 @@ export function DashboardScreen({
                       <p
                         style={{
                           fontFamily: 'Inter, sans-serif',
-                          fontSize: 12,
+                          fontSize: FS.xs,
                           color: '#1D1D1D',
                           margin: 0,
                           display: '-webkit-box',

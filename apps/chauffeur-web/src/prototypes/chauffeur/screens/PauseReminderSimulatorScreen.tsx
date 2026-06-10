@@ -6,6 +6,7 @@
  */
 import { useState, useEffect, useRef } from 'react'
 import { X, Pause, Play, Clock } from 'lucide-react'
+import { SAFE_AREA, FS } from '@/styles/spacing'
 
 // ─── Farver (Colas tokens) ────────────────────────────────────────────────────
 const C = {
@@ -129,13 +130,13 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          paddingTop: 59,
+          paddingTop: SAFE_AREA.top,
           paddingLeft: 20,
           paddingRight: 16,
           paddingBottom: 12,
         }}
       >
-        <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0 }}>
+        <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0 }}>
           Pause-reminder simulator
         </p>
         <button
@@ -159,14 +160,14 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
 
       {/* Intro */}
       <div style={{ padding: '0 20px 12px' }}>
-        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0, lineHeight: 1.4 }}>
+        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.sm, color: C.textMuted, margin: 0, lineHeight: 1.4 }}>
           Test 30-min pause-reminder uden at vente 30 min. Vælg en kort delay, sæt opgaven på pause, og se hvad der sker når timeren udløber.
         </p>
       </div>
 
       {/* Delay-vælger */}
       <div style={{ padding: '0 20px 16px' }}>
-        <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 13, color: C.textPrimary, margin: '0 0 8px' }}>
+        <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.sm, color: C.textPrimary, margin: '0 0 8px' }}>
           Reminder-delay
         </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -185,7 +186,7 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
                   backgroundColor: isActive ? C.deepTeal : C.white,
                   color: isActive ? C.white : C.textPrimary,
                   fontFamily: 'Inter, sans-serif',
-                  fontSize: 13,
+                  fontSize: FS.sm,
                   fontWeight: 500,
                   cursor: taskState === 'paused' ? 'not-allowed' : 'pointer',
                   opacity: taskState === 'paused' ? 0.5 : 1,
@@ -211,7 +212,7 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 15, color: C.textPrimary, margin: 0 }}>
+            <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.textPrimary, margin: 0 }}>
               Demo-opgave
             </p>
             <span
@@ -221,7 +222,7 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
                 backgroundColor: taskState === 'paused' ? C.pauseBg : '#E6F5EC',
                 color: taskState === 'paused' ? '#8A6A00' : C.green,
                 fontFamily: 'Inter, sans-serif',
-                fontSize: 11,
+                fontSize: FS.xxs,
                 fontWeight: 600,
                 letterSpacing: 0.2,
               }}
@@ -229,7 +230,7 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
               {taskState === 'paused' ? 'PÅ PAUSE' : 'AKTIV'}
             </span>
           </div>
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: '0 0 12px' }}>
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.sm, color: C.textMuted, margin: '0 0 12px' }}>
             Order #1212344 · 60 t · 82201H · Køge → Motorvej E20
           </p>
 
@@ -249,15 +250,15 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
             >
               <Clock size={16} color="#8A6A00" />
               <div style={{ flex: 1 }}>
-                <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#8A6A00', margin: 0 }}>
+                <p style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.xs, color: '#8A6A00', margin: 0 }}>
                   Reminder om
                 </p>
-                <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 17, color: C.textPrimary, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.textPrimary, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
                   {mmss}
                 </p>
               </div>
               {reminderCount > 0 && (
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#8A6A00' }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.xxs, color: '#8A6A00' }}>
                   cyklus {reminderCount + 1}
                 </span>
               )}
@@ -279,7 +280,7 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -303,7 +304,7 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -322,7 +323,7 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
       {/* Event-log */}
       <div style={{ padding: '0 20px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 13, color: C.textPrimary, margin: 0 }}>
+          <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.sm, color: C.textPrimary, margin: 0 }}>
             Hændelser
           </p>
           <button
@@ -334,7 +335,7 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
               backgroundColor: C.white,
               color: C.textPrimary,
               fontFamily: 'Inter, sans-serif',
-              fontSize: 12,
+              fontSize: FS.xs,
               fontWeight: 500,
               cursor: 'pointer',
             }}
@@ -352,7 +353,7 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
           }}
         >
           {eventLog.length === 0 ? (
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.textMuted, margin: 0, fontStyle: 'italic' }}>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.xs, color: C.textMuted, margin: 0, fontStyle: 'italic' }}>
               Ingen hændelser endnu. Tryk Pause for at starte.
             </p>
           ) : (
@@ -361,7 +362,7 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
                 key={i}
                 style={{
                   fontFamily: 'Inter, sans-serif',
-                  fontSize: 12,
+                  fontSize: FS.xs,
                   color: i === 0 ? C.textPrimary : C.textMuted,
                   margin: i === 0 ? '0 0 4px' : '0 0 2px',
                   fontVariantNumeric: 'tabular-nums',
@@ -400,10 +401,10 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
               gap: 12,
             }}
           >
-            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, textAlign: 'center' }}>
+            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, textAlign: 'center' }}>
               Er du stadig på pause?
             </span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.textMuted, textAlign: 'center', lineHeight: 1.4 }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.sm, color: C.textMuted, textAlign: 'center', lineHeight: 1.4 }}>
               Du har været på pause i 30 minutter. Bekræft venligst om du stadig er på pause, eller genoptag opgaven.
             </span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4, width: '100%' }}>
@@ -417,7 +418,7 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.white,
                   minHeight: 44,
                 }}
@@ -434,7 +435,7 @@ export function PauseReminderSimulatorScreen({ onClose }: PauseReminderSimulator
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.deepTeal,
                   minHeight: 44,
                 }}

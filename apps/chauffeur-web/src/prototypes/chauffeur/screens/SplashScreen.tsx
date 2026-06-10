@@ -3,6 +3,7 @@
  * Venstre: konstruktionsfoto. Højre: gul stribe med logo + hilsen + start.
  */
 import { Sun } from 'lucide-react'
+import { FS } from '@/styles/spacing'
 
 export interface SplashScreenProps {
   onStart: () => void
@@ -80,7 +81,7 @@ export function SplashScreen({ onStart }: SplashScreenProps) {
             <span
               style={{
                 fontFamily: 'Inter, sans-serif',
-                fontSize: 12,
+                fontSize: FS.xs,
                 color: '#1D1D1D',
                 lineHeight: 1,
               }}
@@ -95,7 +96,7 @@ export function SplashScreen({ onStart }: SplashScreenProps) {
               style={{
                 fontFamily: 'Inter, sans-serif',
                 fontWeight: 700,
-                fontSize: 13,
+                fontSize: FS.sm,
                 color: '#1D1D1D',
                 margin: 0,
                 lineHeight: 1.4,
@@ -106,7 +107,7 @@ export function SplashScreen({ onStart }: SplashScreenProps) {
             <p
               style={{
                 fontFamily: 'Inter, sans-serif',
-                fontSize: 12,
+                fontSize: FS.xs,
                 color: '#1D1D1D',
                 margin: 0,
                 lineHeight: 1.4,
@@ -131,7 +132,7 @@ export function SplashScreen({ onStart }: SplashScreenProps) {
               alignItems: 'center',
               justifyContent: 'center',
               boxShadow: '0 2px 10px rgba(0,0,0,0.12)',
-              fontSize: 22,
+              fontSize: FS.xl,
               fontFamily: 'Inter, sans-serif',
               marginTop: 4,
             }}

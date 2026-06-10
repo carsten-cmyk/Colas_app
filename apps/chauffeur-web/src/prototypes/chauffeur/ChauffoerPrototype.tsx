@@ -8,6 +8,7 @@ import type { TaskState } from '@/types/task'
 import type { Conversation } from '@/types/messages'
 import { mockTasks } from '@/mocks/tasks'
 import { mockConversations } from '@/mocks/messages'
+import { SAFE_AREA, FS } from '@/styles/spacing'
 import { SplashScreen } from './screens/SplashScreen'
 import { DashboardScreen } from './screens/DashboardScreen'
 import { TaskDetailScreen } from './screens/TaskDetailScreen'
@@ -144,7 +145,7 @@ export function ChauffoerPrototype() {
             style={{
               fontFamily: 'Poppins, sans-serif',
               fontWeight: 600,
-              fontSize: 16,
+              fontSize: FS.md,
               color: '#717182',
               margin: 0,
             }}
@@ -154,7 +155,7 @@ export function ChauffoerPrototype() {
           <p
             style={{
               fontFamily: 'Inter, sans-serif',
-              fontSize: 13,
+              fontSize: FS.sm,
               color: '#C4C4C4',
               margin: '4px 0 0',
             }}
@@ -191,7 +192,7 @@ export function ChauffoerPrototype() {
         >
           <div
             style={{
-              paddingTop: 67,
+              paddingTop: `calc(${SAFE_AREA.top} + 8px)`,
               paddingLeft: 22,
               paddingRight: 22,
               paddingBottom: 16,
@@ -201,7 +202,7 @@ export function ChauffoerPrototype() {
               style={{
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 22,
+                fontSize: FS.xl,
                 color: '#1D1D1D',
                 margin: '0 0 20px 0',
               }}
@@ -236,7 +237,7 @@ export function ChauffoerPrototype() {
                   style={{
                     fontFamily: 'Poppins, sans-serif',
                     fontWeight: 600,
-                    fontSize: 15,
+                    fontSize: FS.md,
                     color: '#1D1D1D',
                     margin: 0,
                   }}
@@ -246,7 +247,7 @@ export function ChauffoerPrototype() {
                 <p
                   style={{
                     fontFamily: 'Inter, sans-serif',
-                    fontSize: 13,
+                    fontSize: FS.sm,
                     color: '#717182',
                     margin: 0,
                   }}

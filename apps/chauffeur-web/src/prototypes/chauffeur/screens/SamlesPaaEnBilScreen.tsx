@@ -5,6 +5,7 @@
  */
 import { useState } from 'react'
 import { Camera, X, Check, ChevronRight } from 'lucide-react'
+import { SAFE_AREA, FS } from '@/styles/spacing'
 import { BottomTabBar } from '../components/BottomTabBar'
 import type { TabName } from '../components/BottomTabBar'
 
@@ -74,7 +75,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
           style={{
             fontFamily: 'Poppins, sans-serif',
             fontWeight: 700,
-            fontSize: 18,
+            fontSize: FS.md,
             color: C.white,
             lineHeight: 1,
           }}
@@ -122,7 +123,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
           cursor: 'pointer',
           fontFamily: 'Poppins, sans-serif',
           fontWeight: 600,
-          fontSize: 15,
+          fontSize: FS.md,
           color: C.deepTeal,
           minHeight: 56,
         }}
@@ -143,7 +144,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
       }}
     >
       {/* Handle bar — identisk med AnkommetFabrikScreen */}
-      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 59, paddingBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: SAFE_AREA.top, paddingBottom: 4 }}>
         <div style={{ width: 36, height: 4, backgroundColor: '#C4C4C4', borderRadius: 2 }} />
       </div>
 
@@ -202,7 +203,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                 style={{
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 28,
+                  fontSize: FS['2xl'],
                   color: C.deepTeal,
                   margin: 0,
                   textAlign: 'center',
@@ -215,7 +216,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                 style={{
                   fontFamily: 'Inter, sans-serif',
                   fontWeight: 400,
-                  fontSize: 15,
+                  fontSize: FS.md,
                   color: C.textMuted,
                   margin: 0,
                   textAlign: 'center',
@@ -229,7 +230,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
             {/* Trin 1 — Kør til vægten */}
             <Boks>
               <TrinCirkel tal={1} />
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Kør til vægten
               </p>
             </Boks>
@@ -237,7 +238,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
             {/* Trin 2 — Scan vægtens QR-kode */}
             <Boks>
               <TrinCirkel tal={2} />
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Scan vægtens QR-kode
               </p>
               <GulPill label="Åbn scanner" onClick={() => setSubScreen('scan-vaegt')} />
@@ -262,7 +263,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                 gap: 16,
               }}
             >
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Scan vægtens QR kode
               </p>
               <div
@@ -283,7 +284,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                 <p
                   style={{
                     fontFamily: 'Inter, sans-serif',
-                    fontSize: 12,
+                    fontSize: FS.xs,
                     color: C.textMuted,
                     margin: 0,
                     textAlign: 'center',
@@ -305,7 +306,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: FS.md,
                 color: C.deepTeal,
                 minHeight: 56,
               }}
@@ -320,7 +321,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                 border: 'none',
                 cursor: 'pointer',
                 fontFamily: 'Inter, sans-serif',
-                fontSize: 13,
+                fontSize: FS.sm,
                 color: C.textMuted,
                 alignSelf: 'center',
                 minHeight: 44,
@@ -340,7 +341,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                 style={{
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 22,
+                  fontSize: FS.xl,
                   color: C.deepTeal,
                   margin: '0 0 4px 0',
                 }}
@@ -350,7 +351,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
               <p
                 style={{
                   fontFamily: 'Inter, sans-serif',
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.textMuted,
                   margin: 0,
                 }}
@@ -382,7 +383,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                     style={{
                       fontFamily: 'Poppins, sans-serif',
                       fontWeight: 600,
-                      fontSize: 16,
+                      fontSize: FS.md,
                       color: C.textPrimary,
                       margin: 0,
                     }}
@@ -392,7 +393,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                   <p
                     style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 12,
+                      fontSize: FS.xs,
                       color: C.textMuted,
                       margin: 0,
                     }}
@@ -402,7 +403,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                   <p
                     style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
+                      fontSize: FS.sm,
                       color: C.deepTeal,
                       margin: 0,
                     }}
@@ -423,24 +424,24 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
             {/* Boks 1 — Kør til Silo og start lastningen */}
             <Boks>
               <TrinCirkel tal={1} />
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Kør til Silo og start lastningen
               </p>
 
               {/* Tabel */}
               <div style={{ width: '100%', marginTop: 8 }}>
                 {[
-                  { label: 'Silo', valueNode: <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 15, color: C.deepTeal }}>{valgt.silo}</span> },
+                  { label: 'Silo', valueNode: <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal }}>{valgt.silo}</span> },
                   {
                     label: 'Forventet last',
-                    valueNode: <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 15, color: C.deepTeal }}>{valgt.tons} Tons</span>,
+                    valueNode: <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal }}>{valgt.tons} Tons</span>,
                   },
                   {
                     label: 'Produkt',
                     valueNode: (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                        <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 15, color: C.deepTeal }}>{valgt.produktnavn}</span>
-                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: C.textMuted }}>{valgt.recept_nr}</span>
+                        <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal }}>{valgt.produktnavn}</span>
+                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.xxs, color: C.textMuted }}>{valgt.recept_nr}</span>
                       </div>
                     ),
                   },
@@ -455,7 +456,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                       borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none',
                     }}
                   >
-                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0 }}>
+                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.sm, color: C.textMuted, margin: 0 }}>
                       {row.label}
                     </p>
                     {row.valueNode}
@@ -467,7 +468,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
             {/* Boks 2 — Kør til vægten og bliv udvejet */}
             <Boks>
               <TrinCirkel tal={2} />
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Kør til vægten og bliv udvejet
               </p>
               <GulPill label="Scan QR kode for udvejning" onClick={() => setSubScreen('scan-udvejning')} />
@@ -493,7 +494,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                 gap: 16,
               }}
             >
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Scan QR kode for udvejning
               </p>
               <div
@@ -514,7 +515,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                 <p
                   style={{
                     fontFamily: 'Inter, sans-serif',
-                    fontSize: 12,
+                    fontSize: FS.xs,
                     color: C.textMuted,
                     margin: 0,
                     textAlign: 'center',
@@ -544,7 +545,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: FS.md,
                 color: C.deepTeal,
                 minHeight: 56,
               }}
@@ -559,7 +560,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                 border: 'none',
                 cursor: 'pointer',
                 fontFamily: 'Inter, sans-serif',
-                fontSize: 13,
+                fontSize: FS.sm,
                 color: C.textMuted,
                 alignSelf: 'center',
                 minHeight: 44,
@@ -604,7 +605,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                 <Check size={20} color={C.white} />
               </div>
 
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, margin: 0, textAlign: 'center' }}>
                 Alle produkter lastet
               </p>
 
@@ -622,14 +623,14 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                     }}
                   >
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 14, color: C.deepTeal, margin: 0 }}>
+                      <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.sm, color: C.deepTeal, margin: 0 }}>
                         {p.produktnavn}
                       </p>
-                      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: C.textMuted, margin: 0 }}>
+                      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.xxs, color: C.textMuted, margin: 0 }}>
                         {p.recept_nr}
                       </p>
                     </div>
-                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.textMuted, margin: 0 }}>
+                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.sm, color: C.textMuted, margin: 0 }}>
                       {p.tons} Tons
                     </p>
                   </div>
@@ -640,7 +641,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
               <p
                 style={{
                   fontFamily: 'Inter, sans-serif',
-                  fontSize: 13,
+                  fontSize: FS.sm,
                   color: C.textMuted,
                   margin: '8px 0 0',
                   textAlign: 'center',
@@ -660,7 +661,7 @@ export function SamlesPaaEnBilScreen({ onClose, messageCount = 0 }: SamlesPaaEnB
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 15,
+                  fontSize: FS.md,
                   color: C.white,
                   width: '100%',
                   marginTop: 16,

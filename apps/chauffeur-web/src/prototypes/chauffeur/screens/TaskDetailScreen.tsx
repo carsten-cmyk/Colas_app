@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { X, MapPin, ArrowDown, ArrowUp } from 'lucide-react'
 import type { Task, TaskState } from '@/types/task'
+import { SAFE_AREA, FS } from '@/styles/spacing'
 
 // ─── Farver (Colas tokens) ────────────────────────────────────────────────────
 const C = {
@@ -71,7 +72,7 @@ export function TaskDetailScreen({
   const sectionLabel: React.CSSProperties = {
     fontFamily: 'Inter, sans-serif',
     fontWeight: 600,
-    fontSize: 11,
+    fontSize: FS.xxs,
     color: C.textMuted,
     textTransform: 'uppercase',
     letterSpacing: '0.06em',
@@ -97,7 +98,7 @@ export function TaskDetailScreen({
       }}
     >
       {/* Handle bar — 59px Dynamic Island safe area */}
-      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 59, paddingBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: SAFE_AREA.top, paddingBottom: 4 }}>
         <div style={{ width: 36, height: 4, backgroundColor: C.handleBar, borderRadius: 2 }} />
       </div>
 
@@ -116,7 +117,7 @@ export function TaskDetailScreen({
           style={{
             fontFamily: 'Poppins, sans-serif',
             fontWeight: 600,
-            fontSize: 14,
+            fontSize: FS.sm,
             color: C.textPrimary,
             margin: 0,
           }}
@@ -184,7 +185,7 @@ export function TaskDetailScreen({
               <p
                 style={{
                   fontFamily: 'Inter, sans-serif',
-                  fontSize: 11,
+                  fontSize: FS.xxs,
                   color: C.textMuted,
                   margin: '0 0 2px 0',
                   textAlign: 'center',
@@ -196,7 +197,7 @@ export function TaskDetailScreen({
                 style={{
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 22,
+                  fontSize: FS.xl,
                   color: C.textPrimary,
                   margin: 0,
                   lineHeight: 1.2,
@@ -209,7 +210,7 @@ export function TaskDetailScreen({
                 style={{
                   fontFamily: 'Inter, sans-serif',
                   fontWeight: 400,
-                  fontSize: 11,
+                  fontSize: FS.xxs,
                   color: C.textMuted,
                   margin: '2px 0 0 0',
                   textAlign: 'center',
@@ -232,7 +233,7 @@ export function TaskDetailScreen({
               <p
                 style={{
                   fontFamily: 'Inter, sans-serif',
-                  fontSize: 11,
+                  fontSize: FS.xxs,
                   color: C.textMuted,
                   margin: '0 0 2px 0',
                   textAlign: 'center',
@@ -244,7 +245,7 @@ export function TaskDetailScreen({
                 style={{
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 22,
+                  fontSize: FS.xl,
                   color: C.textPrimary,
                   margin: 0,
                   lineHeight: 1.2,
@@ -275,7 +276,7 @@ export function TaskDetailScreen({
                     flex: 1,
                     textAlign: 'center',
                     fontFamily: 'Inter, sans-serif',
-                    fontSize: 11,
+                    fontSize: FS.xxs,
                     lineHeight: 1,
                     color: C.textMuted,
                   }}
@@ -287,7 +288,7 @@ export function TaskDetailScreen({
                     flex: 1,
                     textAlign: 'center',
                     fontFamily: 'Inter, sans-serif',
-                    fontSize: 11,
+                    fontSize: FS.xxs,
                     lineHeight: 1,
                     color: C.textMuted,
                   }}
@@ -303,7 +304,7 @@ export function TaskDetailScreen({
                     textAlign: 'center',
                     fontFamily: 'Poppins, sans-serif',
                     fontWeight: 600,
-                    fontSize: 16,
+                    fontSize: FS.md,
                     lineHeight: 1.1,
                     color: C.textPrimary,
                   }}
@@ -318,7 +319,7 @@ export function TaskDetailScreen({
                     flex: 1,
                     textAlign: 'center',
                     fontFamily: 'Inter, sans-serif',
-                    fontSize: 14,
+                    fontSize: FS.sm,
                     lineHeight: 1.1,
                     color: C.deepTeal,
                     textDecoration: 'none',
@@ -348,7 +349,10 @@ export function TaskDetailScreen({
             >
               {/* Location-række: ikon + tekst + mødetid */}
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                <div
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pickup.address)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
                     width: 32,
                     height: 32,
@@ -358,15 +362,16 @@ export function TaskDetailScreen({
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0,
+                    textDecoration: 'none',
                   }}
                 >
                   <MapPin size={16} color={C.deepTeal} />
-                </div>
+                </a>
                 <div style={{ flex: 1 }}>
                   <p
                     style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 11,
+                      fontSize: FS.xxs,
                       fontWeight: 600,
                       letterSpacing: '0.06em',
                       textTransform: 'uppercase' as const,
@@ -380,30 +385,34 @@ export function TaskDetailScreen({
                     style={{
                       fontFamily: 'Inter, sans-serif',
                       fontWeight: 600,
-                      fontSize: 15,
+                      fontSize: FS.md,
                       color: C.textPrimary,
                       margin: '0 0 2px 0',
                     }}
                   >
                     {pickup.name}
                   </p>
-                  <p
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pickup.address)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
+                      fontSize: FS.sm,
                       color: C.textMuted,
                       margin: 0,
+                      textDecoration: 'none',
                     }}
                   >
                     {pickup.address}
-                  </p>
+                  </a>
                 </div>
                 {pickup.meetingTime && (
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <p
                       style={{
                         fontFamily: 'Inter, sans-serif',
-                        fontSize: 11,
+                        fontSize: FS.xxs,
                         color: C.textMuted,
                         margin: '0 0 2px 0',
                       }}
@@ -414,7 +423,7 @@ export function TaskDetailScreen({
                       style={{
                         fontFamily: 'Poppins, sans-serif',
                         fontWeight: 600,
-                        fontSize: 20,
+                        fontSize: FS.lg,
                         color: C.textPrimary,
                         margin: 0,
                       }}
@@ -438,7 +447,7 @@ export function TaskDetailScreen({
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 12,
+                  fontSize: FS.xs,
                   color: C.deepTeal,
                 }}
               >
@@ -481,7 +490,10 @@ export function TaskDetailScreen({
             >
               {/* Location-række: ikon + tekst */}
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                <div
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(delivery.address)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
                     width: 32,
                     height: 32,
@@ -491,15 +503,16 @@ export function TaskDetailScreen({
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0,
+                    textDecoration: 'none',
                   }}
                 >
                   <MapPin size={16} color={C.deliveryIconColor} />
-                </div>
+                </a>
                 <div style={{ flex: 1 }}>
                   <p
                     style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 11,
+                      fontSize: FS.xxs,
                       fontWeight: 600,
                       letterSpacing: '0.06em',
                       textTransform: 'uppercase' as const,
@@ -513,23 +526,27 @@ export function TaskDetailScreen({
                     style={{
                       fontFamily: 'Inter, sans-serif',
                       fontWeight: 600,
-                      fontSize: 15,
+                      fontSize: FS.md,
                       color: C.textPrimary,
                       margin: '0 0 2px 0',
                     }}
                   >
                     {delivery.name}
                   </p>
-                  <p
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(delivery.address)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
+                      fontSize: FS.sm,
                       color: C.textMuted,
                       margin: 0,
+                      textDecoration: 'none',
                     }}
                   >
                     {delivery.address}
-                  </p>
+                  </a>
                 </div>
               </div>
               {/* Ankomst-knap — fuld boks-bredde, ny række under location-rækken */}
@@ -546,7 +563,7 @@ export function TaskDetailScreen({
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 12,
+                  fontSize: FS.xs,
                   color: C.deepTeal,
                 }}
               >
@@ -569,7 +586,7 @@ export function TaskDetailScreen({
                   <p
                     style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
+                      fontSize: FS.sm,
                       color: C.textPrimary,
                       margin: 0,
                       lineHeight: 1.5,
@@ -590,7 +607,7 @@ export function TaskDetailScreen({
                   <p
                     style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
+                      fontSize: FS.sm,
                       color: C.textPrimary,
                       margin: 0,
                       lineHeight: 1.5,
@@ -622,7 +639,7 @@ export function TaskDetailScreen({
                   <p
                     style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
+                      fontSize: FS.sm,
                       color: C.danger,
                       margin: 0,
                       lineHeight: 1.5,
@@ -676,7 +693,7 @@ export function TaskDetailScreen({
               cursor: 'pointer',
               fontFamily: 'Poppins, sans-serif',
               fontWeight: 600,
-              fontSize: 15,
+              fontSize: FS.md,
             }}
           >
             Start opgave
@@ -696,7 +713,7 @@ export function TaskDetailScreen({
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: FS.md,
               }}
             >
               Hviletid
@@ -713,7 +730,7 @@ export function TaskDetailScreen({
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: FS.md,
               }}
             >
               Afslut opgave
@@ -732,7 +749,7 @@ export function TaskDetailScreen({
               cursor: 'pointer',
               fontFamily: 'Poppins, sans-serif',
               fontWeight: 600,
-              fontSize: 15,
+              fontSize: FS.md,
             }}
           >
             Genoptag opgave
@@ -768,10 +785,10 @@ export function TaskDetailScreen({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, textAlign: 'center' }}>
+            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, textAlign: 'center' }}>
               Start hviletid?
             </span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.textMuted, textAlign: 'center' }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.sm, color: C.textMuted, textAlign: 'center' }}>
               Bekræft at du tager hviletid. Tryk Genoptag når du er klar til at fortsætte.
             </span>
             <div style={{ display: 'flex', gap: 10, marginTop: 4, width: '100%' }}>
@@ -786,7 +803,7 @@ export function TaskDetailScreen({
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.deepTeal,
                 }}
               >
@@ -803,7 +820,7 @@ export function TaskDetailScreen({
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.white,
                 }}
               >
@@ -841,10 +858,10 @@ export function TaskDetailScreen({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, textAlign: 'center' }}>
+            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, textAlign: 'center' }}>
               Afslut opgave?
             </span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.textMuted, textAlign: 'center' }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.sm, color: C.textMuted, textAlign: 'center' }}>
               Er du sikker på du vil afslutte opgaven?
             </span>
             <div style={{ display: 'flex', gap: 10, marginTop: 4, width: '100%' }}>
@@ -859,7 +876,7 @@ export function TaskDetailScreen({
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.deepTeal,
                 }}
               >
@@ -876,7 +893,7 @@ export function TaskDetailScreen({
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.white,
                 }}
               >
@@ -914,10 +931,10 @@ export function TaskDetailScreen({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, textAlign: 'center' }}>
+            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, textAlign: 'center' }}>
               Start opgaven?
             </span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.textMuted, textAlign: 'center' }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.sm, color: C.textMuted, textAlign: 'center' }}>
               Når du starter, begynder vi at logge tid og GPS for denne opgave.
             </span>
             <div style={{ display: 'flex', gap: 10, marginTop: 4, width: '100%' }}>
@@ -932,7 +949,7 @@ export function TaskDetailScreen({
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.deepTeal,
                 }}
               >
@@ -949,7 +966,7 @@ export function TaskDetailScreen({
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.white,
                 }}
               >
@@ -987,10 +1004,10 @@ export function TaskDetailScreen({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, textAlign: 'center' }}>
+            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, textAlign: 'center' }}>
               Du har allerede en aktiv opgave
             </span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.textMuted, textAlign: 'center' }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.sm, color: C.textMuted, textAlign: 'center' }}>
               Du arbejder på opgave {otherActiveTask.orderNumber} · {otherActiveTask.produkt}. Afslut den først før du starter en ny.
             </span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4, width: '100%' }}>
@@ -1005,7 +1022,7 @@ export function TaskDetailScreen({
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.white,
                 }}
               >
@@ -1022,7 +1039,7 @@ export function TaskDetailScreen({
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.deepTeal,
                 }}
               >

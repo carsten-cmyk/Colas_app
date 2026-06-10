@@ -5,6 +5,7 @@
  */
 import { useState } from 'react'
 import { Check, X } from 'lucide-react'
+import { SAFE_AREA, FS } from '@/styles/spacing'
 import { BottomTabBar } from '../components/BottomTabBar'
 import type { TabName } from '../components/BottomTabBar'
 
@@ -58,7 +59,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
       }}
     >
       {/* Handle bar */}
-      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 59, paddingBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: SAFE_AREA.top, paddingBottom: 4 }}>
         <div style={{ width: 36, height: 4, backgroundColor: '#C4C4C4', borderRadius: 2 }} />
       </div>
 
@@ -124,7 +125,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
                 style={{
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 18,
+                  fontSize: FS.md,
                   color: C.deepTeal,
                   margin: 0,
                   textAlign: 'center',
@@ -136,7 +137,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
               <p
                 style={{
                   fontFamily: 'Inter, sans-serif',
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.textPrimary,
                   margin: 0,
                   marginTop: 4,
@@ -151,7 +152,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
                 style={{
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 18,
+                  fontSize: FS.md,
                   color: C.deepTeal,
                   margin: '16px auto 0',
                   textAlign: 'center',
@@ -172,7 +173,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: FS.md,
                 color: C.deepTeal,
                 width: '100%',
               }}
@@ -220,7 +221,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
                 style={{
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 18,
+                  fontSize: FS.md,
                   color: C.deepTeal,
                   margin: 0,
                   textAlign: 'center',
@@ -231,7 +232,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
               <p
                 style={{
                   fontFamily: 'Inter, sans-serif',
-                  fontSize: 15,
+                  fontSize: FS.md,
                   color: C.textMuted,
                   margin: 0,
                   textAlign: 'center',
@@ -258,7 +259,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: FS.md,
                 color: C.white,
                 width: '100%',
               }}
@@ -277,7 +278,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: FS.md,
                 color: C.deepTeal,
                 width: '100%',
                 marginTop: 8,
@@ -318,7 +319,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
                 style={{
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 600,
-                  fontSize: 18,
+                  fontSize: FS.md,
                   color: C.deepTeal,
                   textAlign: 'center',
                 }}
@@ -328,7 +329,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
               <span
                 style={{
                   fontFamily: 'Inter, sans-serif',
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.textMuted,
                   textAlign: 'center',
                 }}
@@ -347,7 +348,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
                     cursor: 'pointer',
                     fontFamily: 'Poppins, sans-serif',
                     fontWeight: 600,
-                    fontSize: 14,
+                    fontSize: FS.sm,
                     color: C.deepTeal,
                   }}
                 >
@@ -364,7 +365,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
                     cursor: 'pointer',
                     fontFamily: 'Poppins, sans-serif',
                     fontWeight: 600,
-                    fontSize: 14,
+                    fontSize: FS.sm,
                     color: C.white,
                   }}
                 >

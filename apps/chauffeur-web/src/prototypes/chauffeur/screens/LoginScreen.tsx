@@ -12,6 +12,7 @@
 import { useRef, useState, useEffect } from 'react'
 import type { KeyboardEvent, ClipboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { FS } from '@/styles/spacing'
 
 const CORRECT_OTP = import.meta.env.VITE_DEMO_PIN ?? '123456'
 const OTP_LENGTH = 6
@@ -192,7 +193,7 @@ export function LoginScreen() {
                 <h1 style={{
                   fontFamily: "'Poppins', sans-serif",
                   fontWeight: 600,
-                  fontSize: 18,
+                  fontSize: FS.md,
                   color: '#1D1D1D',
                   lineHeight: 1.2,
                   margin: 0,
@@ -201,7 +202,7 @@ export function LoginScreen() {
                 </h1>
                 <p style={{
                   fontFamily: "'Inter', sans-serif",
-                  fontSize: 13,
+                  fontSize: FS.sm,
                   fontWeight: 400,
                   color: 'rgba(29,29,29,0.75)',
                   margin: 0,
@@ -223,7 +224,7 @@ export function LoginScreen() {
               }}>
                 <span style={{
                   fontFamily: "'Inter', sans-serif",
-                  fontSize: 16,
+                  fontSize: FS.md,
                   fontWeight: 600,
                   color: '#1D1D1D',
                   userSelect: 'none' as const,
@@ -256,7 +257,7 @@ export function LoginScreen() {
                   style={{
                     flex: 1,
                     fontFamily: "'Inter', sans-serif",
-                    fontSize: 16,
+                    fontSize: FS.md,
                     color: '#1D1D1D',
                     backgroundColor: 'transparent',
                     border: 'none',
@@ -276,7 +277,7 @@ export function LoginScreen() {
                   color: '#1D1D1D',
                   fontFamily: "'Poppins', sans-serif",
                   fontWeight: 600,
-                  fontSize: 15,
+                  fontSize: FS.md,
                   border: '1px solid #1D1D1D',
                   cursor: phone.length < 8 ? 'not-allowed' : 'pointer',
                   opacity: phone.length < 8 ? 0.4 : 1,
@@ -295,7 +296,7 @@ export function LoginScreen() {
                 <h1 style={{
                   fontFamily: "'Poppins', sans-serif",
                   fontWeight: 600,
-                  fontSize: 18,
+                  fontSize: FS.md,
                   color: '#1D1D1D',
                   lineHeight: 1.2,
                   margin: 0,
@@ -304,7 +305,7 @@ export function LoginScreen() {
                 </h1>
                 <p style={{
                   fontFamily: "'Inter', sans-serif",
-                  fontSize: 13,
+                  fontSize: FS.sm,
                   fontWeight: 400,
                   color: 'rgba(29,29,29,0.75)',
                   margin: 0,
@@ -339,7 +340,7 @@ export function LoginScreen() {
                       height: 40,
                       textAlign: 'center',
                       fontFamily: "'Poppins', sans-serif",
-                      fontSize: 20,
+                      fontSize: FS.lg,
                       fontWeight: 600,
                       color: '#1D1D1D',
                       borderRadius: 10,
@@ -363,7 +364,7 @@ export function LoginScreen() {
               {/* Fejl-besked */}
               <p style={{
                 fontFamily: "'Inter', sans-serif",
-                fontSize: 13,
+                fontSize: FS.sm,
                 fontWeight: 500,
                 color: '#B42828',
                 margin: 0,
@@ -387,7 +388,7 @@ export function LoginScreen() {
                   color: '#1D1D1D',
                   fontFamily: "'Poppins', sans-serif",
                   fontWeight: 500,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   cursor: cooldown > 0 ? 'default' : 'pointer',
                   opacity: cooldown > 0 ? 0.6 : 1,
                   transition: 'opacity 0.15s',
@@ -404,7 +405,7 @@ export function LoginScreen() {
                   border: 'none',
                   padding: 0,
                   fontFamily: "'Inter', sans-serif",
-                  fontSize: 13,
+                  fontSize: FS.sm,
                   color: '#1D1D1D',
                   textDecoration: 'underline',
                   cursor: 'pointer',
@@ -423,7 +424,7 @@ export function LoginScreen() {
                 <h1 style={{
                   fontFamily: "'Poppins', sans-serif",
                   fontWeight: 600,
-                  fontSize: 18,
+                  fontSize: FS.md,
                   color: '#1D1D1D',
                   lineHeight: 1.2,
                   margin: 0,
@@ -432,7 +433,7 @@ export function LoginScreen() {
                 </h1>
                 <p style={{
                   fontFamily: "'Inter', sans-serif",
-                  fontSize: 13,
+                  fontSize: FS.sm,
                   fontWeight: 400,
                   color: 'rgba(29,29,29,0.75)',
                   margin: 0,
@@ -483,7 +484,7 @@ export function LoginScreen() {
                 </div>
                 <span style={{
                   fontFamily: "'Inter', sans-serif",
-                  fontSize: 13,
+                  fontSize: FS.sm,
                   color: '#1D1D1D',
                   lineHeight: 1.3,
                   flex: 1,
@@ -532,7 +533,7 @@ export function LoginScreen() {
                 </div>
                 <span style={{
                   fontFamily: "'Inter', sans-serif",
-                  fontSize: 13,
+                  fontSize: FS.sm,
                   color: '#1D1D1D',
                   lineHeight: 1.3,
                   flex: 1,
@@ -553,7 +554,7 @@ export function LoginScreen() {
                   color: '#1D1D1D',
                   fontFamily: "'Poppins', sans-serif",
                   fontWeight: 600,
-                  fontSize: 15,
+                  fontSize: FS.md,
                   border: '1px solid #1D1D1D',
                   cursor: (!cameraAllowed || !iconAdded) ? 'not-allowed' : 'pointer',
                   opacity: (!cameraAllowed || !iconAdded) ? 0.4 : 1,

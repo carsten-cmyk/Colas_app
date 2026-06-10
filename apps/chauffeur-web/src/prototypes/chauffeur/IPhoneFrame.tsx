@@ -1,8 +1,12 @@
 /**
  * PROTOTYPE — iPhone 14 Pro CSS frame
  * 393×852px screen area, Dynamic Island, home indicator, side buttons.
+ *
+ * Vises kun på desktop (≥1024px). På mobile + tablet returneres `children`
+ * fullscreen, så prototypen kører som rigtig PWA.
  */
 import type { ReactNode } from 'react'
+import { useViewport } from '@/hooks/useViewport'
 
 export interface IPhoneFrameProps {
   children: ReactNode
@@ -13,6 +17,13 @@ const SCREEN_H = 852
 const BORDER = 12
 
 export function IPhoneFrame({ children }: IPhoneFrameProps) {
+  const { isDesktop } = useViewport()
+
+  // På mobile/tablet: vis fullscreen uden ramme — PWA-mode.
+  if (!isDesktop) {
+    return <>{children}</>
+  }
+
   const outerW = SCREEN_W + BORDER * 2
   const outerH = SCREEN_H + BORDER * 2
 

@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { Edit, MessageCircle } from 'lucide-react'
 import type { Conversation } from '@/types/messages'
+import { SAFE_AREA, FS } from '@/styles/spacing'
 import type { TabName } from '../components/BottomTabBar'
 import { BottomTabBar } from '../components/BottomTabBar'
 
@@ -59,7 +60,7 @@ export function MessagesListScreen({
       <div
         style={{
           backgroundColor: '#0B3950',
-          paddingTop: 67,
+          paddingTop: `calc(${SAFE_AREA.top} + 8px)`,
           paddingLeft: 16,
           paddingRight: 16,
           paddingBottom: 0,
@@ -77,7 +78,7 @@ export function MessagesListScreen({
             style={{
               fontFamily: 'Poppins, sans-serif',
               fontWeight: 600,
-              fontSize: 20,
+              fontSize: FS.lg,
               color: '#FFFFFF',
               margin: 0,
             }}
@@ -129,7 +130,7 @@ export function MessagesListScreen({
               <span
                 style={{
                   fontFamily: 'Inter, sans-serif',
-                  fontSize: 13,
+                  fontSize: FS.sm,
                   fontWeight: msgTab === tab ? 600 : 400,
                   color: msgTab === tab ? '#FFFFFF' : 'rgba(255,255,255,0.55)',
                   textTransform: 'capitalize' as const,
@@ -153,7 +154,7 @@ export function MessagesListScreen({
                   <span
                     style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 10,
+                      fontSize: FS.xxs,
                       fontWeight: 700,
                       color: '#1D1D1D',
                     }}
@@ -191,7 +192,7 @@ export function MessagesListScreen({
             <p
               style={{
                 fontFamily: 'Inter, sans-serif',
-                fontSize: 14,
+                fontSize: FS.sm,
                 color: '#717182',
                 margin: 0,
               }}
@@ -247,7 +248,7 @@ export function MessagesListScreen({
                       flexShrink: 0,
                       fontFamily: 'Inter, sans-serif',
                       fontWeight: 700,
-                      fontSize: 16,
+                      fontSize: FS.md,
                       color: '#0E4764',
                     }}
                   >
@@ -261,7 +262,7 @@ export function MessagesListScreen({
                     <p
                       style={{
                         fontFamily: 'Inter, sans-serif',
-                        fontSize: 14,
+                        fontSize: FS.sm,
                         fontWeight: isUnread ? 700 : 500,
                         color: '#1D1D1D',
                         margin: 0,
@@ -272,7 +273,7 @@ export function MessagesListScreen({
                     <span
                       style={{
                         fontFamily: 'Inter, sans-serif',
-                        fontSize: 11,
+                        fontSize: FS.xxs,
                         color: '#717182',
                         flexShrink: 0,
                         marginLeft: 8,
@@ -285,7 +286,7 @@ export function MessagesListScreen({
                     <p
                       style={{
                         fontFamily: 'Inter, sans-serif',
-                        fontSize: 11,
+                        fontSize: FS.xxs,
                         color: '#0E4764',
                         margin: '0 0 2px 0',
                         fontWeight: 500,
@@ -297,7 +298,7 @@ export function MessagesListScreen({
                   <p
                     style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: 13,
+                      fontSize: FS.sm,
                       color: isUnread ? '#1D1D1D' : '#717182',
                       fontWeight: isUnread ? 500 : 400,
                       margin: 0,

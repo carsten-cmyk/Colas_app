@@ -5,6 +5,7 @@
  */
 import { useState } from 'react'
 import { RefreshCw, X } from 'lucide-react'
+import { SAFE_AREA, FS } from '@/styles/spacing'
 import { BottomTabBar } from '../components/BottomTabBar'
 import type { TabName } from '../components/BottomTabBar'
 
@@ -145,7 +146,7 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
       }}
     >
       {/* Handle bar */}
-      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 59, paddingBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: SAFE_AREA.top, paddingBottom: 4 }}>
         <div style={{ width: 36, height: 4, backgroundColor: '#C4C4C4', borderRadius: 2 }} />
       </div>
 
@@ -164,7 +165,7 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
           style={{
             fontFamily: 'Poppins, sans-serif',
             fontWeight: 600,
-            fontSize: 18,
+            fontSize: FS.md,
             color: C.deepTeal,
             margin: 0,
           }}
@@ -215,7 +216,7 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
               marginBottom: 12,
             }}
           >
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.deepTeal, margin: 0, lineHeight: 1.5 }}>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.sm, color: C.deepTeal, margin: 0, lineHeight: 1.5 }}>
               {activeOrPausedTask
                 ? 'Timeregistrering for aktive ordre vises når opgaven afsluttes.'
                 : 'Du har ingen opgaver i gang.'}
@@ -236,7 +237,7 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
                 style={{
                   fontFamily: 'Inter, sans-serif',
                   fontWeight: 600,
-                  fontSize: 11,
+                  fontSize: FS.xxs,
                   color: C.textMuted,
                   letterSpacing: '0.06em',
                   textTransform: 'uppercase' as const,
@@ -305,7 +306,7 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
               }}
             />
 
-            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 18, color: C.deepTeal, textAlign: 'center', alignSelf: 'center' }}>
+            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, textAlign: 'center', alignSelf: 'center' }}>
               Aktiv opgave sættes på pause
             </span>
 
@@ -315,7 +316,7 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
                   margin: 0,
                   fontFamily: 'Inter, sans-serif',
                   fontWeight: 600,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.textPrimary,
                   textAlign: 'center',
                 }}
@@ -327,7 +328,7 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
                   margin: 0,
                   fontFamily: 'Inter, sans-serif',
                   fontWeight: 400,
-                  fontSize: 14,
+                  fontSize: FS.sm,
                   color: C.textMuted,
                   textAlign: 'center',
                   lineHeight: 1.5,
@@ -348,7 +349,7 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: FS.md,
                 color: C.white,
               }}
             >
@@ -366,7 +367,7 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
                 cursor: 'pointer',
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: FS.md,
                 color: C.deepTeal,
               }}
             >
@@ -435,7 +436,7 @@ function TaskEntry({ task, onOpenPress, onPress, timeregMode = false, onViewTime
           <span
             style={{
               fontFamily: 'Inter, sans-serif',
-              fontSize: 12,
+              fontSize: FS.xs,
               color: C.textMuted,
               marginBottom: 4,
             }}
@@ -453,7 +454,7 @@ function TaskEntry({ task, onOpenPress, onPress, timeregMode = false, onViewTime
                 flexShrink: 0,
               }}
             >
-              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.white }}>I gang</span>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: FS.xs, color: C.white }}>I gang</span>
             </div>
           )}
           {/* "Pauset"-badge — gul baggrund (C.yellow), deepTeal tekst */}
@@ -466,7 +467,7 @@ function TaskEntry({ task, onOpenPress, onPress, timeregMode = false, onViewTime
                 flexShrink: 0,
               }}
             >
-              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.deepTeal }}>Pauset</span>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: FS.xs, color: C.deepTeal }}>Pauset</span>
             </div>
           )}
           {/* "Afsluttet"-badge — rød (C.error baggrund, C.white tekst) */}
@@ -479,7 +480,7 @@ function TaskEntry({ task, onOpenPress, onPress, timeregMode = false, onViewTime
                 flexShrink: 0,
               }}
             >
-              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.white }}>Afsluttet</span>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: FS.xs, color: C.white }}>Afsluttet</span>
             </div>
           )}
         </div>
@@ -491,7 +492,7 @@ function TaskEntry({ task, onOpenPress, onPress, timeregMode = false, onViewTime
               style={{
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 16,
+                fontSize: FS.md,
                 color: C.deepTeal,
                 lineHeight: 1.2,
               }}
@@ -502,7 +503,7 @@ function TaskEntry({ task, onOpenPress, onPress, timeregMode = false, onViewTime
               style={{
                 fontFamily: 'Poppins, sans-serif',
                 fontWeight: 600,
-                fontSize: 16,
+                fontSize: FS.md,
                 color: C.deepTeal,
                 lineHeight: 1.2,
               }}
@@ -513,7 +514,7 @@ function TaskEntry({ task, onOpenPress, onPress, timeregMode = false, onViewTime
           <span
             style={{
               fontFamily: 'Inter, sans-serif',
-              fontSize: 12,
+              fontSize: FS.xs,
               color: C.textMuted,
               marginTop: 1,
             }}
@@ -526,7 +527,7 @@ function TaskEntry({ task, onOpenPress, onPress, timeregMode = false, onViewTime
         <p
           style={{
             fontFamily: 'Inter, sans-serif',
-            fontSize: 13,
+            fontSize: FS.sm,
             color: C.textMuted,
             margin: 0,
             overflow: 'hidden',
@@ -539,7 +540,7 @@ function TaskEntry({ task, onOpenPress, onPress, timeregMode = false, onViewTime
 
         {/* Mødetid */}
         {task.meetingTime && (
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.textMuted, margin: 0 }}>
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.xs, color: C.textMuted, margin: 0 }}>
             Møde kl. {task.meetingTime}
           </p>
         )}
@@ -567,7 +568,7 @@ function TaskEntry({ task, onOpenPress, onPress, timeregMode = false, onViewTime
           }}
         >
           <RefreshCw size={13} color={C.deepTeal} />
-          <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.deepTeal }}>Skift til denne opgave</span>
+          <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: FS.xs, color: C.deepTeal }}>Skift til denne opgave</span>
         </button>
       )}
 
@@ -593,7 +594,7 @@ function TaskEntry({ task, onOpenPress, onPress, timeregMode = false, onViewTime
           }}
         >
           <RefreshCw size={13} color={C.deepTeal} />
-          <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12, color: C.deepTeal }}>Skift til denne opgave</span>
+          <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: FS.xs, color: C.deepTeal }}>Skift til denne opgave</span>
         </button>
       )}
 
@@ -629,7 +630,7 @@ function TaskEntry({ task, onOpenPress, onPress, timeregMode = false, onViewTime
               cursor: 'pointer',
             }}
           >
-            <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 12, color: C.deepTeal }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: FS.xs, color: C.deepTeal }}>
               Se timeregistrering
             </span>
           </button>

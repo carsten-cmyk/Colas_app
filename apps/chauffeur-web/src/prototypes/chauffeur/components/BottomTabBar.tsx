@@ -4,6 +4,7 @@
  * Matches original React Native BottomTabBar design.
  */
 import { Home, Truck, Scale, Clock, Phone, Wrench } from 'lucide-react'
+import { FS } from '@/styles/spacing'
 
 export type TabName = 'start' | 'opgaver' | 'vejning' | 'timereg' | 'kontakt' | 'prototyper'
 
@@ -70,7 +71,7 @@ export function BottomTabBar({ activeTab, onTabPress, messageCount: _messageCoun
             <span
               style={{
                 fontFamily: 'Inter, sans-serif',
-                fontSize: 10,
+                fontSize: FS.xxs,
                 color: '#FFFFFF',
                 lineHeight: 1,
               }}
