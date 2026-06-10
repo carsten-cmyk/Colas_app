@@ -1,7 +1,7 @@
 /**
  * PROTOTYPE — Demo-side
  * Viser iPhone 14 Pro-rammen med Chauffør App prototype centreret på siden.
- * Beskyttet af PIN-login (/). Kræver sessionStorage 'chauffeur_auth'.
+ * Beskyttet af PIN-login (/). Kræver localStorage 'chauffeur_auth' (30-dages token).
  */
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -13,7 +13,12 @@ export function DemoPage() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    if (!sessionStorage.getItem('chauffeur_auth')) {
+    // Auth-token gemmes i localStorage af LoginScreen med 30-dages udløb.
+    const authed = localStorage.getItem('chauffeur_auth') === '1'
+    const expires = Number(localStorage.getItem('chauffeur_auth_expires') ?? 0)
+    if (!authed || Date.now() > expires) {
+      localStorage.removeItem('chauffeur_auth')
+      localStorage.removeItem('chauffeur_auth_expires')
       navigate('/', { replace: true })
     }
   }, [navigate])
