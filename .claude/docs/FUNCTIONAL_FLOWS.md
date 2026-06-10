@@ -19,7 +19,7 @@ Opdateres manuelt når forretningsregler beskrives der ikke fremgår af kode.
 
 **Interval-regel (LÅST 2026-06-10 — opdateret fra 2026-05-26):** Intervallet (i minutter, typisk 12-20) er **kadencen for loop'et og starter efter det SIDSTE pinnede læs** — ikke mellem de pinnede. De pinnede tider kan formanden sætte frit. Eksempel: pinned bil 1 på plads 07:00, pinned bil 2 på plads 08:00 (60 min mellem, formandens valg), interval 20 min → næste bil 08:20, derefter 08:40 osv. i loop. **Per produkt:** Produkt 1 har normalt de pinnede opstarts-læs. Efterfølgende produkter kører blot med i loop'et MEDMINDRE formanden angiver et selvstændigt starttidspunkt + interval for produktet (jf. "Køres direkte i forlængelse af Produkt 1?"-toggle i bilbestillingen — Nej = egen starttid + interval).
 
-**Mødetid på fabrik (LÅST 2026-06-10):** Beregnes KUN for de **pinnede opstarts-biler**: `moedetid_fabrik = ankomst_plads − køretid`, hvor køretid = Google Maps + 10%. Loop-biler har ingen pinned mødetid — de møder ind i strømmen. Eksempel: pinned ankomst plads 07:15, køretid 36 min → mødetid fabrik 06:39.
+**Mødetid på fabrik (LÅST 2026-06-10):** **Hver bil** får ét opstarts-ankomsttidspunkt på pladsen under indfasningen → og dermed én mødetid på fabrik: `moedetid_fabrik = ankomst_plads − køretid`, hvor køretid = Google Maps + 10%. De pinnede biler bruger formandens eksplicitte plads-tider; de øvrige biler får deres opstarts-ankomst beregnet af intervallet fra sidste pinnede læs (08:20, 08:40 …) og indgår i flowet, **indtil ALLE biler er i rotation.** Når hele flåden er fyldt ind, kører de i loop uden flere planlagte tider. Eksempel: pinned ankomst plads 07:15, køretid 36 min → mødetid fabrik 06:39.
 
 **Kommentar til chauffør (LÅST 2026-05-22):** Feltet i bunden af bilbestillingen er omdøbt fra "Kommentar til formanden" → **"Kommentar til chauffør"**. Indholdet skal sendes sammen med ordren TIL CHAUFFØREN (synlig i chauffeur-appen — se Trin 8 / Flow 3). Formand bruger feltet til at give kørselsspecifikke instruktioner: "Brug bagvejen", "Lav støj-restriktion efter 22", "Aflæsningssted er flyttet 50m mod vest" osv.
 
@@ -90,13 +90,15 @@ Disse felter sendes retur til formand (Trin 7) og til chauffør (Trin 8) — hve
 ### Trin 5b — Fabrik notificeres om afhentningstidspunkt (LÅST 2026-05-22, udvidet 2026-05-26)
 **App:** (fabrik-system / integration)
 **Trigger:** Formand sender bil-bestilling (eller vognmand bekræfter) — afhængigt af hvor langt fremme i flowet fabrikken skal vide besked.
-**Beregning gælder KUN de pinnede opstarts-biler (LÅST 2026-06-10):** Fabrikken får en mødetid pr. pinnet opstarts-bil pr. produkt — IKKE for loop-bilerne, som blot møder ind i strømmen. De pinnede ankomsttider er formandens egne tider; loop-bilerne følger intervallet efter sidste pinnede læs (se Trin 1).
-- `moedetid_fabrik = ankomst_plads − køretid` for hver pinnet bil
+**Beregning gælder hver bils opstarts-ankomst (LÅST 2026-06-10):** Fabrikken får en mødetid pr. bil pr. produkt for bilens **første ankomst** under indfasningen. De pinnede biler bruger formandens egne tider; de øvrige biler følger intervallet efter sidste pinnede læs (se Trin 1) og indgår i flowet, indtil alle biler er i rotation. Derefter loop uden flere planlagte tider.
+- `moedetid_fabrik = ankomst_plads − køretid` for hver bils opstarts-ankomst
 - `køretid` = Google Maps fabrik→plads + 10% (kanonisk køretid, jf. Bilbehov)
-- Eksempel: pinned bil 1 plads 07:30, pinned bil 2 plads 08:00, køretid 36 min:
+- Eksempel: pinned bil 1 plads 07:30, pinned bil 2 plads 08:00, interval 15 min, køretid 36 min:
   - Pinned bil 1: plads 07:30 → fabrik 06:54
   - Pinned bil 2: plads 08:00 → fabrik 07:24
-  - Loop herefter (interval 15 min): plads 08:15, 08:30 … ingen pinned mødetid
+  - Bil 3 (interval): plads 08:15 → fabrik 07:39
+  - Bil 4 (interval): plads 08:30 → fabrik 07:54
+  - … indtil alle biler er i rotation, derefter loop
 
 **Skriver til:** fabrik-system får en **liste af afhentninger** (ikke én samlet tid):
   - `pickups[]: { reg_nr, chauffoer_navn, laes_nummer, pickup_time_fabrik, produkter[], samles_paa_en_bil_flag }`
@@ -208,9 +210,9 @@ For `undervejs`-biler beregnes live ETA fra faktisk timestamps. `planlagt`-biler
 ### Trin 8 — Chauffør modtager ordre
 **App:** chauffeur (React Native)
 **Komponent:** `TaskCard`, `TaskDetailScreen`
-**Viser:** Ordredetaljer, lokation, kontakt, OG **kommentar til chauffør** (`kommentar_til_chauffoer` fra bilbestillingen — kørselsspecifikke instruktioner fra formand). **Mødetid på fabrik** vises KUN hvis chaufføren er en pinnet opstarts-bil (HH:MM); er han en loop-bil, møder han ind i strømmen og ser ingen pinned mødetid. Ingen blivende "læs-rolle" vises (jf. Trin 1, LÅST 2026-06-10).
-**Læser:** `assigned_tasks` WHERE `driver_phone = auth.user.phone` OR `truck_plate = chauffeur.plate`, henter KUN denne chaufførs `confirmed_vehicles[]`-row (filtreret på reg_nr/tlf) — sin `moedetid_fabrik` vises prominent hvis han er pinnet opstarts-bil.
-**Vigtigt:** Kun de pinnede opstarts-biler har en mødetid på fabrik (forskudt efter formandens pinnede tider). Loop-biler møder ind i strømmen efter intervallet (se Trin 1) og har ingen pinned mødetid. Chaufføren ser KUN sin egen — ikke de andre biler.
+**Viser:** Ordredetaljer, lokation, kontakt, OG **kommentar til chauffør** (`kommentar_til_chauffoer` fra bilbestillingen — kørselsspecifikke instruktioner fra formand). **Mødetid på fabrik** vises for chaufførens opstarts-ankomst (HH:MM) — pinnede biler følger formandens tid, øvrige biler får tiden af intervallet. Ingen blivende "læs-rolle" vises (jf. Trin 1, LÅST 2026-06-10).
+**Læser:** `assigned_tasks` WHERE `driver_phone = auth.user.phone` OR `truck_plate = chauffeur.plate`, henter KUN denne chaufførs `confirmed_vehicles[]`-row (filtreret på reg_nr/tlf) — sin `moedetid_fabrik` vises prominent.
+**Vigtigt:** Hver bil har en mødetid på fabrik for sin opstarts-ankomst (pinnede = formandens tider, øvrige = interval-trin) indtil alle biler er i rotation. Derefter kører chaufføren i loop uden flere planlagte tider. Chaufføren ser KUN sin egen — ikke de andre biler.
 **Note:** Chauffør har et minimalt login-system (LÅST 2026-06-09) — se [[chauffeur-login]] sektion nedenfor. SMS-OTP ved ny enhed eller token-fornyelse, derefter altid direkte til forside. **Bil + konfiguration administreres dynamisk af vognmand** og opdateres on-the-fly i chauffør-app, formand-app og fabrik-app — chauffør foretager INGEN bil-valg i appen.
 **TBD:** Distributions-mekanisme — push-notifikation, polling, eller event på reg.nr? Skal afklares før prod.
 
@@ -352,6 +354,7 @@ Chauffører SKAL acceptere to permissions for at fortsætte til appen — det er
 - `disponering` indeholder `{ chauffoer_tlf, bil_reg_nr, konfiguration, ordre_id, dato, status }`
 - Chauffør-app læser `disponering WHERE chauffoer_tlf = auth.user.phone AND dato = i_dag()` → viser tilknyttede opgaver
 - Når vognmand opdaterer dispositionen → alle apps får update (realtime sub eller polling)
+- **Samme bil/chauffør på flere selvstændige ordrer samme dag (LÅST 2026-06-10):** En bil og chauffør kan dække flere ture på *samme* ordre (loop) — det er ÉN disponering. MEN sættes samme bil/chauffør på **flere forskellige ordrer** der IKKE er slået sammen som samleordre/samlelæs, skal vognmand rapportere bilen **pr. ordre** → én `disponering`-row pr. `ordre_id`. Chauffør-app viser alle rows for `chauffoer_tlf` (flere opgaver på dagen); hver formand ser kun sin egen ordres booking. Samleordre/samlelæs forbliver ÉN disponering med stop-liste (se Flow 11/12) — det er kun *separate* ordrer der kræver flere rows.
 
 **Konfiguration — hvad er det:**
 - En bil kan have flere mulige setups: "Normal", "Med hænger", "Med grab", "Med tipper" osv.

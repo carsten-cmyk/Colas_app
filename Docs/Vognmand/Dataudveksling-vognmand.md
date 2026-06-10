@@ -18,12 +18,12 @@ For hver kørselsbestilling sender vi:
 | **Produkt og forventede Tons** | Hvilket asfaltprodukt og hvor mange Tons der forventes pr. produkt |
 | **Aflæsningssted** | Adressen på pladsen hvor der lægges ud |
 | **Forventet antal biler** | Vores vejledende beregning af hvor mange biler dagen kræver |
-| **De første biler — faste ankomsttider** | For de første 1-3 biler pr. produkt angiver formanden et fast tidspunkt for, hvornår bilen skal være fremme på pladsen (for eksempel første bil klokken 07.00, anden bil klokken 08.00). Derefter følger et fast interval (for eksempel 20 Minutter), som gælder fra den sidste faste bil og frem — næste bil klokken 08.20, så 08.40 og så videre. De øvrige biler kører herefter blot i fast rytme, indtil dagens Tons er hentet. |
-| **Mødetid på fabrik (kun de første biler)** | For de biler der har en fast ankomsttid på pladsen, beregner og oplyser vi mødetiden på fabrikken — bygget på køreafstanden fra fabrik til plads plus 10 procent ekstra køretid. **I skal altså ikke selv regne mødetiden ud.** De øvrige biler i rytmen får ikke en fast mødetid — de møder bare ind i strømmen. |
+| **Opstart — ankomsttider på pladsen** | For de første 1-3 biler pr. produkt angiver formanden et fast tidspunkt for, hvornår bilen skal være fremme på pladsen (for eksempel første bil klokken 07.00, anden bil klokken 08.00). Derefter følger et fast interval (for eksempel 20 Minutter) fra den sidste faste bil og frem, som giver hver af de øvrige biler et opstartstidspunkt — næste bil klokken 08.20, så 08.40 og så videre, **indtil alle biler er kommet i gang.** Derfra kører bilerne videre i loop, indtil dagens Tons er hentet. |
+| **Mødetid på fabrik pr. bil** | For **hver** bil beregner og oplyser vi en mødetid på fabrikken til bilens **første ankomst** — bygget på køreafstanden fra fabrik til plads plus 10 procent ekstra køretid. De første 1-3 biler følger formandens faste tider; de øvrige biler følger intervallet (08.20, 08.40 …) indtil alle er i gang. Når hele flåden kører, fortsætter de i loop uden flere faste tider. **I skal altså ikke selv regne mødetiden ud.** |
 | **Kommentar til chaufføren** | Eventuelle kørselsspecifikke instruktioner fra formanden (for eksempel "Brug bagvejen" eller "Støjrestriktion efter klokken 22") |
 | **Afregningsform** | Om turen afregnes på akkord eller på timeløn |
 
-> Bilerne har **ingen blivende rolle som "første læs" eller "andet læs".** De faste ankomsttider gælder kun de første 1-3 biler pr. produkt og bruges til at få materialet i gang i en jævn strøm. Derefter kører bilerne frem og tilbage mellem plads og fabrik i den faste rytme og fylder, indtil ordrens Tons er hentet — på den sidste tur er der måske kun nogle få Tons tilbage.
+> Bilerne har **ingen blivende rolle som "første læs" eller "andet læs".** De eksplicit fastsatte ankomsttider gælder kun de første 1-3 biler pr. produkt; de øvrige biler får et opstartstidspunkt beregnet ud fra intervallet og indgår i flowet, indtil hele flåden er i gang. Derefter kører bilerne frem og tilbage mellem plads og fabrik og fylder, indtil ordrens Tons er hentet — på den sidste tur er der måske kun nogle få Tons tilbage.
 
 ---
 
@@ -37,20 +37,23 @@ Når I har disponeret, sender I tilbage — **for hver bil I sætter på dagen:*
 | **Chaufførens navn** | Navnet på den chauffør der kører bilen |
 | **Chaufførens mobilnummer** | Det nummer chaufføren har på sig — det er hertil vi sender SMS med ordren og linket til webappen |
 
-Hvis den samme bil og chauffør skal køre flere ture på dagen, oplyses bilen bare én gang.
+**Flere ture med samme bil:**
+
+- Kører den samme bil og chauffør flere ture på **samme ordre** — eller på en samleordre eller en "samles på en bil"-bestilling — oplyses bilen bare **én gang**. Den kører blot i loop, indtil ordren er færdig.
+- Sætter I derimod den samme bil og chauffør på **flere forskellige ordrer** i løbet af dagen (ordrer der **ikke** er slået sammen som samleordre eller samlelæs), **skal vi vide det.** Oplys da bilen på **hver** af de ordrer, den dækker, så chaufføren ser alle sine opgaver, og hver formand ved, at bilen er booket på netop deres ordre.
 
 ---
 
 ## 3. Undervejs på dagen
 
-- **Chaufføren bruger Colas' webapp** (modtaget via SMS) til at registrere ankomst, vejesedler og tider på pladsen og fabrikken.
+- **Chaufføren bruger Colas' webapp** (modtaget via SMS) til at registrere ankomst, foretage vejninger på fabrikken og aflæsning på pladsen.
 - **Hvis en chauffør bliver syg, eller en bil bryder ned:** chaufføren afslutter dagen i appen, formanden og I aftaler en erstatning over telefonen, I sætter en ny bil på, og den nye chauffør får automatisk en ny SMS med ordren.
 
 ---
 
 ## 4. Efter dagen — afregning
 
-Formanden godkender de registrerede Timer og Tons fra dagen og sender afregningsgrundlaget retur til jer. Dette sker separat og kræver ikke, at jeres eget system er koblet på.
+Formanden godkender de registrerede Timer og Tons fra dagen, som kommer via appen, og sender afregningsgrundlaget retur til jer. Dette sker separat og kræver ikke, at jeres eget system er koblet på.
 
 ---
 
