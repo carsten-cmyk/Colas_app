@@ -58,8 +58,8 @@ export function DagsoverblikSection({
       <OrdreInfoCard
         label="TONS I DAG"
         value={fmtTal(tonsIDag)}
-        unit="t"
-        subtekst={`á ${fmtTal(ordreTotalTons)} t`}
+        unit="Tons"
+        subtekst={`á ${fmtTal(ordreTotalTons)} Tons`}
       />
     </div>
   )

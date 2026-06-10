@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planlæg kørsel — Colas</title>
+<link rel="stylesheet" href="colas-tokens.css">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--colas-soft-aqua);color:var(--fg-1);
+    font-family:var(--font-body);-webkit-font-smoothing:antialiased}
+  body{padding:32px 24px 64px}
+
+  /* ── App card ─────────────────────────────────────────────── */
+  .card{
+    max-width:1100px;margin:0 auto;background:var(--bg-card);
+    border-radius:var(--r-2xl);box-shadow:0 6px 28px rgba(11,57,80,.10);
+    overflow:hidden;border:1px solid var(--colas-box-outline);
+  }
+
+  /* ── Card header ──────────────────────────────────────────── */
+  .head{
+    display:flex;align-items:center;justify-content:space-between;gap:24px;
+    padding:20px 28px;background:var(--colas-deep-teal);color:#fff;
+  }
+  .head .ttl{display:flex;flex-direction:column;gap:3px}
+  .head .ttl .ord{font-size:var(--fs-xs);letter-spacing:.06em;text-transform:uppercase;
+    color:rgba(255,255,255,.55);font-weight:600;white-space:nowrap}
+  .head .ttl h1{font-family:var(--font-display);font-weight:600;font-size:var(--fs-lg);
+    margin:0;letter-spacing:-.01em}
+  .head .loc{display:flex;align-items:center;gap:10px;font-size:var(--fs-sm);
+    color:rgba(255,255,255,.82)}
+  .head .loc svg{width:16px;height:16px;color:var(--colas-light-aqua)}
+  .head .loc b{color:#fff;font-weight:600}
+
+  /* ── Sections ─────────────────────────────────────────────── */
+  .body{padding:26px 28px}
+  .sec{padding:0 0 24px}
+  .sec + .sec{border-top:1px solid var(--colas-box-outline);padding-top:24px}
+  .label{font-family:var(--font-body);font-weight:600;font-size:var(--fs-xs);
+    letter-spacing:.04em;text-transform:uppercase;color:var(--fg-3);
+    display:block;margin-bottom:10px}
+  .sec-title{font-family:var(--font-display);font-weight:600;font-size:var(--fs-lg);
+    color:var(--colas-deep-teal);margin:0;letter-spacing:-.01em}
+  .sec-sub{font-size:var(--fs-sm);color:var(--fg-3);margin:4px 0 0}
+
+  /* form controls */
+  .field{position:relative}
+  .select,.input{
+    width:100%;height:42px;padding:0 14px;font-family:var(--font-body);
+    font-size:var(--fs-sm);color:var(--fg-1);background:#fff;
+    border:1px solid var(--colas-divider);border-radius:var(--r-md);
+    appearance:none;outline:none;transition:border-color var(--t-fast),box-shadow var(--t-fast);
+  }
+  .select{padding-right:38px;cursor:pointer}
+  .select:focus,.input:focus,.ta:focus{
+    border-color:var(--colas-dark-teal);box-shadow:0 0 0 3px rgba(14,71,100,.12)}
+  .field .chev{position:absolute;right:13px;top:50%;transform:translateY(-50%);
+    pointer-events:none;color:var(--fg-3);width:17px;height:17px}
+  .placeholdered{color:var(--fg-3)}
+
+  /* Vognmand row */
+  .vrow{display:grid;grid-template-columns:1fr auto;gap:24px;align-items:end}
+  .seg{display:inline-flex;background:var(--colas-soft-aqua);border-radius:var(--r-2xl);
+    padding:3px;gap:2px;border:1px solid var(--colas-box-outline)}
+  .seg button{font-family:var(--font-body);font-size:var(--fs-sm);font-weight:600;
+    color:var(--fg-3);background:none;border:none;padding:8px 20px;border-radius:var(--r-xl);
+    cursor:pointer;transition:all var(--t-fast)}
+  .seg button[aria-pressed="true"]{background:var(--colas-deep-teal);color:#fff;
+    box-shadow:0 1px 2px rgba(0,0,0,.12)}
+
+  /* ── Biler — compact list ─────────────────────────────────── */
+  .billist{border:1px solid var(--colas-box-outline);border-radius:var(--r-lg);overflow:hidden}
+  .bilrow{display:grid;grid-template-columns:34px 1fr auto auto 34px;align-items:center;gap:14px;
+    padding:9px 14px;background:#fff}
+  .bilrow + .bilrow{border-top:1px solid var(--colas-box-outline)}
+  .bilrow .ic{width:34px;height:34px;border-radius:var(--r-md);background:var(--colas-soft-aqua);
+    color:var(--colas-deep-teal);display:flex;align-items:center;justify-content:center}
+  .bilrow .ic svg{width:18px;height:18px}
+  .bilrow .nm{display:flex;align-items:baseline;gap:8px;min-width:0}
+  .bilrow .nm b{font-family:var(--font-display);font-weight:600;font-size:var(--fs-sm);color:var(--fg-1);white-space:nowrap}
+  .bilrow .nm span{font-size:var(--fs-xs);color:var(--fg-3);white-space:nowrap}
+  .stepper{display:inline-flex;align-items:center;border:1px solid var(--colas-divider);
+    border-radius:var(--r-md);height:34px;overflow:hidden;background:#fff}
+  .stepper button{width:34px;height:100%;border:none;background:none;color:var(--fg-2);
+    font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:background var(--t-fast)}
+  .stepper button:hover{background:var(--colas-soft-aqua)}
+  .stepper .n{min-width:30px;text-align:center;font-family:var(--font-display);font-weight:600;
+    font-size:var(--fs-sm);color:var(--fg-1);font-variant-numeric:tabular-nums}
+  .bilrow .tons{font-family:var(--font-display);font-weight:600;font-size:var(--fs-sm);
+    color:var(--colas-deep-teal);font-variant-numeric:tabular-nums;min-width:54px;text-align:right}
+  .xbtn{width:34px;height:34px;border-radius:var(--r-md);border:none;background:none;
+    color:var(--fg-3);display:flex;align-items:center;justify-content:center;cursor:pointer;
+    transition:all var(--t-fast)}
+  .xbtn:hover{background:#FBECEA;color:var(--colas-error)}
+  .xbtn svg{width:16px;height:16px}
+  .add-pill{display:inline-flex;align-items:center;gap:8px;margin-top:14px;
+    font-family:var(--font-body);font-size:var(--fs-sm);font-weight:600;
+    color:var(--colas-dark-teal);background:#fff;
+    border:1px dashed var(--colas-light-aqua);border-radius:var(--r-full);
+    padding:10px 18px;cursor:pointer;transition:all var(--t-fast)}
+  .add-pill:hover{background:rgba(160,199,215,.14);border-color:var(--colas-dark-teal)}
+  .add-pill svg{width:16px;height:16px}
+
+  /* ── Bilbehov dashboard ───────────────────────────────────── */
+  .behov-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .behov-head .label{margin:0}
+  .behov-head .hlp{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);
+    color:var(--fg-3)}
+  .behov-head .hlp svg{width:15px;height:15px;color:var(--colas-light-aqua)}
+  .dash{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+  .tile{background:#fff;border:1px solid var(--colas-box-outline);border-radius:var(--r-lg);
+    padding:14px 15px;display:flex;flex-direction:column;gap:6px;min-height:96px}
+  .tile .tl{font-size:var(--fs-xxs);letter-spacing:.05em;text-transform:uppercase;
+    color:var(--fg-3);font-weight:600}
+  .tile .tv{font-family:var(--font-display);font-weight:700;font-size:var(--fs-xl);
+    color:var(--colas-deep-teal);line-height:1;letter-spacing:-.01em;font-variant-numeric:tabular-nums;
+    margin-top:auto}
+  .tile .tv small{font-family:var(--font-body);font-weight:500;font-size:var(--fs-xs);
+    color:var(--fg-3);margin-left:3px;letter-spacing:0}
+  .tile .ts{font-size:var(--fs-xs);color:var(--fg-3)}
+  .tile.warn{background:#FBECEA;border-color:#F3C9C5}
+  .tile.warn .tv{color:var(--colas-error)}
+  .tile.warn .tl{color:var(--colas-error)}
+  .tile.warn .ts{color:#B5443F}
+  .tile .endt{display:flex;flex-direction:column;gap:7px;margin-top:auto}
+  .tile .endrow{display:flex;align-items:center;gap:8px}
+  .tile .endrow .pp{font-size:var(--fs-xxs);font-weight:700;color:#fff;background:var(--colas-deep-teal);
+    border-radius:var(--r-sm);padding:1px 5px;letter-spacing:.03em}
+  .tile .endrow b{font-family:var(--font-display);font-weight:700;font-size:var(--fs-md);
+    color:var(--colas-deep-teal);font-variant-numeric:tabular-nums;line-height:1}
+
+  /* ── Starttider — to bokse side om side ───────────────────── */
+  .flow{margin-top:18px}
+  .pgrid2{display:grid;grid-template-columns:1fr 56px 1fr;align-items:stretch}
+  .pcard{border:1px solid var(--colas-box-outline);border-radius:var(--r-lg);
+    padding:18px 20px;background:#fff;display:flex;flex-direction:column}
+  .pconn{position:relative;display:flex;align-items:center;justify-content:center}
+  .pconn .line{position:absolute;left:4px;right:4px;top:50%;height:2px;background:var(--colas-light-aqua)}
+  .pconn .arrow{position:relative;z-index:2;width:32px;height:32px;border-radius:50%;
+    background:var(--colas-deep-teal);color:#fff;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 0 0 4px var(--bg-card)}
+  .pconn .arrow svg{width:15px;height:15px}
+
+  .phead{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-bottom:16px}
+  .pnum{width:28px;height:28px;border-radius:50%;background:var(--colas-deep-teal);color:#fff;
+    font-family:var(--font-display);font-weight:700;font-size:var(--fs-xs);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .pbadge{font-family:var(--font-body);font-weight:600;font-size:var(--fs-xs);
+    letter-spacing:.02em;color:#fff;background:var(--colas-deep-teal);white-space:nowrap;
+    padding:5px 12px;border-radius:var(--r-full)}
+  .pname{font-family:var(--font-display);font-weight:600;font-size:var(--fs-md);
+    color:var(--fg-1);white-space:nowrap}
+  .pname .dot{color:var(--colas-light-aqua);margin:0 6px}
+  .ptons{font-family:var(--font-display);font-weight:600;color:var(--colas-deep-teal);
+    font-variant-numeric:tabular-nums}
+
+  .plan{margin-top:0}
+  .order-row{display:grid;grid-template-columns:1fr 116px;gap:12px;margin-bottom:12px}
+  .order-row:last-child{margin-bottom:0}
+  .field-label{font-size:var(--fs-xs);color:var(--fg-3);font-weight:500;
+    margin-bottom:6px;display:block}
+  .timefield{position:relative}
+  .timefield .clk{position:absolute;right:12px;top:50%;transform:translateY(-50%);
+    width:15px;height:15px;color:var(--fg-3);pointer-events:none}
+  .reco{display:flex;align-items:center;gap:9px;height:42px;padding:0 13px;background:#fff;
+    border:1px solid var(--colas-divider);border-radius:var(--r-md);font-size:var(--fs-sm);min-width:0}
+  .reco .av{width:24px;height:24px;border-radius:6px;background:var(--colas-soft-aqua);
+    color:var(--colas-deep-teal);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .reco .av svg{width:14px;height:14px}
+  .reco .nm{font-weight:500;color:var(--fg-1);white-space:nowrap}
+  .reco .id{color:var(--fg-3);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .timeval{display:flex;align-items:center;gap:8px;height:42px;padding:0 13px;background:#fff;
+    border:1px solid var(--colas-divider);border-radius:var(--r-md);
+    font-family:var(--font-display);font-weight:600;font-size:var(--fs-sm);color:var(--fg-1);
+    font-variant-numeric:tabular-nums}
+  .timeval svg{width:14px;height:14px;color:var(--fg-3);flex-shrink:0}
+
+  /* Produkt 2 coupling */
+  .couple{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:2px}
+  .couple .q{font-size:var(--fs-sm);color:var(--fg-2);font-weight:500}
+  .couple .q b{color:var(--fg-1);font-weight:600}
+  .yesno{display:inline-flex;background:#fff;border:1px solid var(--colas-divider);
+    border-radius:var(--r-md);padding:3px;gap:2px}
+  .yesno button{font-family:var(--font-body);font-size:var(--fs-sm);font-weight:600;white-space:nowrap;
+    color:var(--fg-3);background:none;border:none;padding:7px 18px;border-radius:6px;
+    cursor:pointer;transition:all var(--t-fast)}
+  .yesno button[aria-pressed="true"]{background:var(--colas-deep-teal);color:#fff}
+
+  .p2-direct{margin-top:14px;font-size:var(--fs-sm);color:var(--fg-3);display:flex;
+    align-items:center;gap:9px}
+  .p2-direct svg{width:16px;height:16px;color:var(--colas-light-aqua);flex-shrink:0}
+  .p2-extra[hidden]{display:none}
+  .p2-extra{margin-top:14px}
+  .p2-row{margin-bottom:12px}
+  .p2-times{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+  /* ── Kommentar ───────────────────────────────────────────── */
+  .ta{width:100%;min-height:88px;padding:13px;font-family:var(--font-body);
+    font-size:var(--fs-sm);color:var(--fg-1);background:#fff;resize:vertical;
+    border:1px solid var(--colas-divider);border-radius:var(--r-md);outline:none;line-height:1.5}
+  .ta::placeholder{color:var(--fg-3)}
+
+  /* ── Footer ──────────────────────────────────────────────── */
+  .foot-bar{display:flex;align-items:center;justify-content:space-between;gap:24px;
+    padding:18px 28px;background:var(--colas-soft-aqua);
+    border-top:1px solid var(--colas-box-outline)}
+  .foot-bar .sum{font-size:var(--fs-sm);color:var(--fg-3)}
+  .foot-bar .sum b{color:var(--colas-deep-teal);font-weight:600;font-variant-numeric:tabular-nums}
+  .foot-bar .grp{display:flex;align-items:center;gap:12px}
+  .btn{font-family:var(--font-body);font-size:var(--fs-sm);font-weight:600;
+    border-radius:var(--r-md);padding:12px 22px;border:none;cursor:pointer;
+    display:inline-flex;align-items:center;gap:8px;transition:all var(--t-fast)}
+  .btn.ghost{background:none;color:var(--fg-2)}
+  .btn.ghost:hover{color:var(--fg-1)}
+  .btn.primary{background:var(--colas-deep-teal);color:#fff}
+  .btn.primary:hover{filter:brightness(1.12)}
+  .btn.primary:active{transform:scale(.985)}
+
+  @media (max-width:860px){
+    .dash{grid-template-columns:repeat(2,1fr)}
+    .vrow{grid-template-columns:1fr}
+    .pgrid2{grid-template-columns:1fr;gap:16px}
+    .pconn{display:none}
+    .p2-times{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+  <div class="card" data-screen-label="Planlæg kørsel">
+
+    <!-- ── Header ─────────────────────────────────────────── -->
+    <header class="head">
+      <div class="ttl">
+        <span class="ord">Ordre 1212343 · Kørsel</span>
+        <h1>Planlæg kørsel</h1>
+      </div>
+      <div class="loc">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+        <span><b>Søvej 6D</b> · 4900 Nakskov</span>
+      </div>
+    </header>
+
+    <div class="body">
+
+      <!-- ── Vognmand + Afregning ─────────────────────────── -->
+      <section class="sec">
+        <div class="vrow">
+          <div>
+            <label class="label" for="vognmand">Vognmand</label>
+            <div class="field">
+              <select class="select" id="vognmand">
+                <option>Kloster A/S (primær)</option>
+                <option>Egholm Transport</option>
+                <option>HP Vognmandsforretning</option>
+              </select>
+              <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+          </div>
+          <div>
+            <span class="label">Afregning</span>
+            <div class="seg" role="group" aria-label="Afregning">
+              <button type="button" aria-pressed="true">Akkord</button>
+              <button type="button" aria-pressed="false">Timeløn</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Biler ────────────────────────────────────────── -->
+      <section class="sec">
+        <span class="label">Biler — vognmandens flåde</span>
+        <div class="billist">
+          <div class="bilrow">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
+            <span class="nm"><b>4-akslet</b></span>
+            <div class="stepper"><button type="button" aria-label="Færre">−</button><span class="n">1</span><button type="button" aria-label="Flere">+</button></div>
+            <span class="tons">30 t</span>
+            <button class="xbtn" type="button" aria-label="Fjern"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </div>
+          <div class="bilrow">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
+            <span class="nm"><b>Sættevogn</b></span>
+            <div class="stepper"><button type="button" aria-label="Færre">−</button><span class="n">1</span><button type="button" aria-label="Flere">+</button></div>
+            <span class="tons">34 t</span>
+            <button class="xbtn" type="button" aria-label="Fjern"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </div>
+          <div class="bilrow">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
+            <span class="nm"><b>5-akslet</b></span>
+            <div class="stepper"><button type="button" aria-label="Færre">−</button><span class="n">1</span><button type="button" aria-label="Flere">+</button></div>
+            <span class="tons">32 t</span>
+            <button class="xbtn" type="button" aria-label="Fjern"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </div>
+        </div>
+        <button class="add-pill" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Tilføj biltype
+        </button>
+      </section>
+
+      <!-- ── Bilbehov dashboard ───────────────────────────── -->
+      <section class="sec">
+        <div class="behov-head">
+          <span class="label">Bilbehov</span>
+          <span class="hlp">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
+            Beregnet ud fra tonnage, fabrik og rundtid
+          </span>
+        </div>
+        <div class="dash">
+          <div class="tile warn">
+            <span class="tl">Mangler</span>
+            <span class="tv">252<small>t</small></span>
+            <span class="ts">af 322 t i alt</span>
+          </div>
+          <div class="tile">
+            <span class="tl">Anbefalet</span>
+            <span class="tv">2<small>biler</small></span>
+            <span class="ts">á gns. 30 t</span>
+          </div>
+          <div class="tile">
+            <span class="tl">Rundtid</span>
+            <span class="tv">102<small>min</small></span>
+            <span class="ts">5 runder pr. bil</span>
+          </div>
+          <div class="tile">
+            <span class="tl">Afstand til fabrik</span>
+            <span class="tv">36<small>km</small></span>
+            <span class="ts">36 min køretur</span>
+          </div>
+          <div class="tile">
+            <span class="tl">Forventet slut</span>
+            <div class="endt">
+              <div class="endrow"><span class="pp">P1</span><b>12.30</b></div>
+              <div class="endrow"><span class="pp">P2</span><b>18.45</b></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Starttider og intervaller ────────────────────── -->
+      <section class="sec">
+        <h2 class="sec-title">Starttider og intervaller</h2>
+        <p class="sec-sub">Anbefaling til vognmand for de første biler. Ikke bindende — vognmand kan afvige.</p>
+
+        <div class="flow">
+          <div class="pgrid2">
+
+          <!-- ── Produkt 1 -->
+          <div class="pcard">
+            <div class="phead">
+              <span class="pnum">1</span>
+              <span class="pbadge">Produkt 1</span>
+              <span class="pname">GAB I<span class="dot">·</span><span class="ptons">70 t</span></span>
+            </div>
+
+            <div class="plan">
+              <div class="order-row">
+                <div>
+                  <span class="field-label">Bil nr. 1</span>
+                  <div class="reco"><span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span><span class="nm">Bil 1</span><span class="id">· KL 41 230</span></div>
+                </div>
+                <div>
+                  <span class="field-label">Startid</span>
+                  <div class="timeval"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>06.00</div>
+                </div>
+              </div>
+              <div class="order-row">
+                <div>
+                  <span class="field-label">Bil nr. 2</span>
+                  <div class="reco"><span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span><span class="nm">Bil 2</span><span class="id">· KL 38 117</span></div>
+                </div>
+                <div>
+                  <span class="field-label">Startid</span>
+                  <div class="timeval"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>06.20</div>
+                </div>
+              </div>
+              <div class="order-row">
+                <div>
+                  <span class="field-label">Herefter — interval</span>
+                  <div class="timeval"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>20 min mellem biler</div>
+                </div>
+                <div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Connector -->
+          <div class="pconn"><span class="line"></span><span class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></span></div>
+
+          <!-- ── Produkt 2 -->
+          <div class="pcard">
+            <div class="phead">
+              <span class="pnum">2</span>
+              <span class="pbadge">Produkt 2</span>
+              <span class="pname">SMA 11S<span class="dot">·</span><span class="ptons">252 t</span></span>
+            </div>
+
+            <div class="couple">
+              <span class="q">Køres <b>direkte i forlængelse</b> af Produkt 1?</span>
+              <div class="yesno" role="group" aria-label="Direkte efter Produkt 1" data-reveal="p2extra">
+                <button type="button" data-val="ja" aria-pressed="true">Ja</button>
+                <button type="button" data-val="nej" aria-pressed="false">Nej</button>
+              </div>
+            </div>
+
+            <div class="p2-direct" id="p2direct">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+              Kører direkte efter Produkt 1 — ingen separat starttid nødvendig.
+            </div>
+
+            <div class="p2-extra" id="p2extra" hidden>
+              <div class="p2-row">
+                <span class="field-label">Bil nr. 1</span>
+                <div class="field">
+                  <select class="select"><option>Bil 1 · KL 41 230</option><option>Bil 2 · KL 38 117</option><option>Bil 3 · KL 52 904</option></select>
+                  <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+              </div>
+              <div class="p2-times">
+                <div>
+                  <span class="field-label">Startid</span>
+                  <div class="field timefield">
+                    <input class="input" value="13.00">
+                    <svg class="clk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                  </div>
+                </div>
+                <div>
+                  <span class="field-label">Interval</span>
+                  <div class="field">
+                    <input class="input" value="15 min">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Kommentar ────────────────────────────────────── -->
+      <section class="sec">
+        <label class="label" for="komm">Kommentar til chauffør</label>
+        <textarea class="ta" id="komm" placeholder="Fx 'Brug bagvejen', 'Aflæsningssted flyttet 50 m mod vest', 'Støjrestriktion efter kl. 22'…"></textarea>
+      </section>
+
+    </div>
+
+    <!-- ── Footer ─────────────────────────────────────────── -->
+    <footer class="foot-bar">
+      <div class="sum">2 produkter · <b>322 t</b> i alt · <b>3</b> biler</div>
+      <div class="grp">
+        <button class="btn ghost" type="button">Annullér</button>
+        <button class="btn primary" type="button">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+          Gem kørsel
+        </button>
+      </div>
+    </footer>
+
+  </div>
+
+  <script>
+    // segmented + yes/no toggles
+    function bindGroup(group){
+      group.querySelectorAll('button').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          group.querySelectorAll('button').forEach(function(b){ b.setAttribute('aria-pressed','false'); });
+          btn.setAttribute('aria-pressed','true');
+          if(group.dataset.reveal){
+            var extra = document.getElementById('p2extra');
+            var direct = document.getElementById('p2direct');
+            var showExtra = btn.dataset.val === 'nej';
+            extra.hidden = !showExtra;
+            direct.style.display = showExtra ? 'none' : '';
+          }
+        });
+      });
+    }
+    document.querySelectorAll('.seg, .yesno').forEach(bindGroup);
+  </script>
+</body>
+</html>

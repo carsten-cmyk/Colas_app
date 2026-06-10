@@ -1,0 +1,154 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Colas Design System — colors_and_type.css
+   Mirror of apps/formand/tailwind.config.ts (frosset).
+   Use these CSS vars 1:1; never invent new values.
+   ────────────────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Brand */
+  --colas-yellow:        #FEEE32;
+  --colas-dark-teal:     #0E4764;   /* TopBar, BottomTabBar, modal header */
+  --colas-deep-teal:     #0B3950;   /* Primary heading + dark surfaces */
+  --colas-light-aqua:    #A0C7D7;   /* Borders, secondary chips */
+  --colas-soft-aqua:     #F0F7FA;   /* Page background */
+  --colas-soft-gray:     #F8F8F8;
+
+  /* Status */
+  --colas-success:       #CAE6E3;
+  --colas-warning:       #FAEF68;
+  --colas-error:         #F04E4E;
+
+  /* Lines & text */
+  --colas-box-outline:   #EDEDED;
+  --colas-divider:       #C4C4C4;
+  --colas-text-primary:  #1D1D1D;
+  --colas-text-secondary:#2B2B2B;
+  --colas-text-muted:    #717182;
+
+  /* Semantic shorthands (use these in components) */
+  --fg-1: var(--colas-text-primary);
+  --fg-2: var(--colas-text-secondary);
+  --fg-3: var(--colas-text-muted);
+  --bg-page: var(--colas-soft-aqua);
+  --bg-card: #FFFFFF;
+  --bg-nav:  var(--colas-deep-teal);
+  --accent:  var(--colas-yellow);
+  --link:    var(--colas-dark-teal);
+
+  /* Type families */
+  --font-display: 'Poppins', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body:    'Inter',   system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Type scale (px / line-height) */
+  --fs-xxs: 10px;  --lh-xxs: 14px;
+  --fs-xs:  12px;  --lh-xs:  16px;
+  --fs-sm:  14px;  --lh-sm:  20px;
+  --fs-md:  16px;  --lh-md:  24px;
+  --fs-lg:  20px;  --lh-lg:  28px;
+  --fs-xl:  24px;  --lh-xl:  32px;
+  --fs-2xl: 30px;  --lh-2xl: 38px;
+
+  /* Spacing — strict scale, no in-between values */
+  --sp-xxs:  2px;
+  --sp-xxxs: 4px;
+  --sp-xs:   8px;
+  --sp-sm:   16px;
+  --sp-md:   24px;
+  --sp-lg:   32px;
+
+  /* Radii */
+  --r-sm:  4px;
+  --r-md:  8px;
+  --r-lg:  12px;
+  --r-xl:  16px;
+  --r-2xl: 20px;
+  --r-full: 9999px;
+
+  /* Elevation — exactly one */
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.08);
+
+  /* Motion */
+  --ease: cubic-bezier(.2,.7,.2,1);
+  --t-fast: 120ms;
+  --t-base: 200ms;
+}
+
+/* ── Semantic typography ─────────────────────────────────────────────── */
+
+.h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-2xl);
+  line-height: var(--lh-2xl);
+  color: var(--colas-deep-teal);
+  letter-spacing: -0.01em;
+}
+
+.h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-xl);
+  line-height: var(--lh-xl);
+  color: var(--colas-deep-teal);
+}
+
+.h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
+  color: var(--colas-deep-teal);
+}
+
+.label {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: var(--fs-xxs);
+  line-height: var(--lh-xxs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+.p {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  color: var(--fg-2);
+}
+
+.p-sm {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--fg-2);
+}
+
+.meta {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--fg-3);
+}
+
+.mono-num {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--colas-deep-teal);
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────── */
+
+html, body {
+  font-family: var(--font-body);
+  color: var(--fg-1);
+  background: var(--bg-card);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
