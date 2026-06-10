@@ -15,13 +15,31 @@ Opdateres manuelt når forretningsregler beskrives der ikke fremgår af kode.
 **Komponent:** `OrdrePlanScreen` → asfalt-kørsel sektion
 **Handling:** Formand udfylder km, **kommentar til chauffør**, **forventet tidspunkt for første læs på udlægning** OG **interval mellem læs på pladsen** (minutter) per dag. Første-læs + interval er kritisk for både fabrik-notifikation (se Trin 5b) og vognmandens disponering (se Trin 3).
 
-**Første-læs-regel (LÅST 2026-05-22):** Den FØRSTE bil formanden tilføjer til asfalt-kørselsbestillingen er pr. definition "første-læs"-bilen. Rækkefølgen i bestillingen er semantisk — første bil = første læs, anden bil = andet læs osv. Formanden behøver ikke vælge eksplicit. Information forventes synlig overfor vognmanden i hans disponerings-view (se Trin 3).
+**Pinnede opstarts-læs (LÅST 2026-06-10 — erstatter Første-læs-reglen 2026-05-22):** Formanden sætter eksplicit ankomsttid på pladsen for de **første 1-3 læs pr. produkt** (typisk kun produkt 1). Antallet er formandens valg (1-3, som angivet i Asfalt kørsel-rækken). Disse "pinnede" opstarts-læs sikrer at materialet kommer i en jævn strøm fra start. **Læs-nummeret er KUN opstarts-styring — ikke en rolle bilen bærer hele dagen.** Efter de pinnede læs kører bilerne i **loop** (frem og tilbage mellem fabrik og plads), indtil produktets tons er hentet. Bruges læs-nummeret som intern styring bagved er det fint; det skal bare ikke fremstå som en blivende bil-rolle.
 
-**Interval-regel (LÅST 2026-05-26):** Formanden angiver et **interval i minutter** mellem hvert efterfølgende læs på pladsen (typisk 12-20 min). Bilerne skal ikke alle stå klar på fabrikken kl. X — de skal **forskydes** så de ankommer pladsen i en jævn strøm. Vognmandens disponering bruger intervallet til at beregne ankomst-tid pr. bil → tilbageregnet til mødetid på fabrik pr. bil (afhænger af `driveTimeMinutes` fra fabrik til plads). Eksempel: første læs på plads 07:15, interval 15 min, fabrik→plads 36 min → bil 1 fabrik 06:39 / bil 2 fabrik 06:54 / bil 3 fabrik 07:09.
+**Interval-regel (LÅST 2026-06-10 — opdateret fra 2026-05-26):** Intervallet (i minutter, typisk 12-20) er **kadencen for loop'et og starter efter det SIDSTE pinnede læs** — ikke mellem de pinnede. De pinnede tider kan formanden sætte frit. Eksempel: pinned bil 1 på plads 07:00, pinned bil 2 på plads 08:00 (60 min mellem, formandens valg), interval 20 min → næste bil 08:20, derefter 08:40 osv. i loop. **Per produkt:** Produkt 1 har normalt de pinnede opstarts-læs. Efterfølgende produkter kører blot med i loop'et MEDMINDRE formanden angiver et selvstændigt starttidspunkt + interval for produktet (jf. "Køres direkte i forlængelse af Produkt 1?"-toggle i bilbestillingen — Nej = egen starttid + interval).
+
+**Mødetid på fabrik (LÅST 2026-06-10):** Beregnes KUN for de **pinnede opstarts-biler**: `moedetid_fabrik = ankomst_plads − køretid`, hvor køretid = Google Maps + 10%. Loop-biler har ingen pinned mødetid — de møder ind i strømmen. Eksempel: pinned ankomst plads 07:15, køretid 36 min → mødetid fabrik 06:39.
 
 **Kommentar til chauffør (LÅST 2026-05-22):** Feltet i bunden af bilbestillingen er omdøbt fra "Kommentar til formanden" → **"Kommentar til chauffør"**. Indholdet skal sendes sammen med ordren TIL CHAUFFØREN (synlig i chauffeur-appen — se Trin 8 / Flow 3). Formand bruger feltet til at give kørselsspecifikke instruktioner: "Brug bagvejen", "Lav støj-restriktion efter 22", "Aflæsningssted er flyttet 50m mod vest" osv.
 
 **Skriver til:** `orders.asfalt_koersel[].planlagt = true`, `orders.asfalt_koersel[].kommentar_til_chauffoer`, `orders.asfalt_koersel[].foerste_laes_udlaegning_tid`, `orders.asfalt_koersel[].interval_minutter_mellem_laes`, `orders.asfalt_koersel[].biler[]` (ordnet array — index 0 = første læs)
+
+**Bilbehov-dashboard (LÅST 2026-06-10):** I "Planlæg kørsel"-panelet vises en read-only **Bilbehov**-dashboard (beregningsoverblik der hjælper formanden disponere antal biler). Tiles og deres beregninger:
+
+| Tile | Indhold | Beregning |
+|---|---|---|
+| **Forventet tons** | Produktets/dagens forventede tons, undertekst **"incl. ekstra bestilling"** | `getEffectiveTons(d) = d.tonsPlanned + (d.ekstraTons?.tons ?? 0)` — dvs. originalt planlagt + PLAN-pushet ekstra-bestilling (Flow 9b). *(Erstatter tidligere "Mangler"-tile.)* |
+| **Anbefalet** | Anbefalet antal biler (á gns. tons) | Som i dag: `ceil(forventet tons / (gns. tons pr. bil × runder pr. bil))` |
+| **Runder** | Runder pr. bil (hovedtal) + rundtid i minutter (undertekst) | Rundtid = `2 × køretid + 15 min læsning + 15 min aflæsning` — hvor **køretid = Google Maps +10%** (samme buffer som Afstand-tilen). |
+| **Afstand til fabrik** | Køreafstand + køretid til fabrik | **Google Maps-køreafstand + 10%** (buffer for reel kørsel vs. Google-estimat). Køretid afledt af samme +10%-værdi. |
+| **Forventet sidste bil** | Forventet tidspunkt for sidste bil pr. produkt (P1, P2 …) | **Genbruger vejesedler-beregningen** — tidspunktet for **forventet sidste bil/læs** pr. produkt (samme prognose som Vejesedler-sektionen). Én række pr. produkt. |
+
+**+10%-bufferen er kanonisk køretid** og slår igennem i ALLE afledte tal: Afstand til fabrik, Rundtid og Anbefalet antal biler (som afhænger af runder pr. bil).
+
+**Forventet sidste bil → markering til vognmand (LÅST 2026-06-10):** Den forventede sidste bil beregnes ikke kun til formandens Bilbehov og Vejesedler — den **markeres også til vognmanden** (cross-app), så vognmanden ved hvornår dagens kørsel forventes færdig. *(Modtager-side i vognmand-app bygges i separat sektion-pakke; kontrakt forfines der. Relaterer til sidste-læs-frigivelse.)*
+
+**Bilbehov er read-only** — ren beregning fra tonnage, fabrik (+10% køretid), rundtid og vejesedler-prognose. Formanden redigerer ikke felterne; de opdateres når han ændrer biler/tons.
 
 ### Trin 2 — Formand ser afventende status
 **App:** formand
@@ -72,14 +90,13 @@ Disse felter sendes retur til formand (Trin 7) og til chauffør (Trin 8) — hve
 ### Trin 5b — Fabrik notificeres om afhentningstidspunkt (LÅST 2026-05-22, udvidet 2026-05-26)
 **App:** (fabrik-system / integration)
 **Trigger:** Formand sender bil-bestilling (eller vognmand bekræfter) — afhængigt af hvor langt fremme i flowet fabrikken skal vide besked.
-**Beregning per bil (efter interval-modellen LÅST 2026-05-26):**
-- `ankomst_plads_n = foerste_laes_udlaegning_tid + (n−1) × interval_minutter_mellem_laes`
-- `moedetid_fabrik_n = ankomst_plads_n − driveTimeMinutes`
-- `driveTimeMinutes` hentes fra `orders.factory.driveTimeMinutes`
-- Eksempel: første læs på plads 07:30, interval 15 min, drive time 36 min:
-  - Bil 1 (1. læs): plads 07:30 → fabrik 06:54
-  - Bil 2 (2. læs): plads 07:45 → fabrik 07:09
-  - Bil 3 (3. læs): plads 08:00 → fabrik 07:24
+**Beregning gælder KUN de pinnede opstarts-biler (LÅST 2026-06-10):** Fabrikken får en mødetid pr. pinnet opstarts-bil pr. produkt — IKKE for loop-bilerne, som blot møder ind i strømmen. De pinnede ankomsttider er formandens egne tider; loop-bilerne følger intervallet efter sidste pinnede læs (se Trin 1).
+- `moedetid_fabrik = ankomst_plads − køretid` for hver pinnet bil
+- `køretid` = Google Maps fabrik→plads + 10% (kanonisk køretid, jf. Bilbehov)
+- Eksempel: pinned bil 1 plads 07:30, pinned bil 2 plads 08:00, køretid 36 min:
+  - Pinned bil 1: plads 07:30 → fabrik 06:54
+  - Pinned bil 2: plads 08:00 → fabrik 07:24
+  - Loop herefter (interval 15 min): plads 08:15, 08:30 … ingen pinned mødetid
 
 **Skriver til:** fabrik-system får en **liste af afhentninger** (ikke én samlet tid):
   - `pickups[]: { reg_nr, chauffoer_navn, laes_nummer, pickup_time_fabrik, produkter[], samles_paa_en_bil_flag }`
@@ -158,6 +175,23 @@ For `undervejs`-biler beregnes live ETA fra faktisk timestamps. `planlagt`-biler
 - Skal beregningen kompenseres for læsse-tid på fabrik (fx +10 min buffer)?
 - Hvad sker der hvis chauffør ankommer tidligere/senere end planlagt — re-notifikation eller bare ETA-update?
 
+### Trin 5c — Cross-app destination: PLAN / Asfalttavlen (bilbestilling)
+
+**App:** (PLAN-ekosystem / integration)
+**Trigger:** Samme som Trin 5b — formand sender bil-bestilling (eller vognmand bekræfter).
+
+**Hvad er "Asfalttavlen":** En PLAN-visning der konsoliderer dagens asfaltbestillinger + bil-bestillinger for fabrik-mester og koordinator. PLAN er master-system; Asfalttavlen er en specifik visning/destination i PLAN-ekosystemet hvor stakeholders får ét samlet overblik over dagens kørsler. **Bemærk dataretning:** Vi sender data BÅDE ind fra PLAN (jf. Flow 9b PLAN-push, Flow 13 fabrik-skift, Flow 5/6/7 holdpakke + ordre-data) OG ud til PLAN / Asfalttavlen (dette trin + ABE-2b nedenfor).
+
+**Skriver til PLAN / Asfalttavlen:**
+
+| Felt | Kilde | Notes |
+|---|---|---|
+| `antal_biler` | `orders.asfalt_koersel[].biler.length` (eller `confirmed_vehicles.length`) | Total antal biler bestilt for dagen |
+| `starttid` | `orders.asfalt_koersel[].foerste_laes_udlaegning_tid` | Første læs på plads (HH:MM) |
+| `interval_minutter_mellem_laes` | `orders.asfalt_koersel[].interval_minutter_mellem_laes` | Forskydning mellem efterfølgende læs |
+
+🟡 **ÅBENT (LÅST 2026-06-10): konkret payload-format aftales med PLAN-team.** Formatet skal kunne håndtere "Egen bil"-flag (jf. Variant nedenfor), "Samles på en bil"-markeringer (jf. Flow 12), og evt. per-bil-beregnede mødetider på fabrik (jf. Trin 5b-formlen). Det er endnu uafklaret om Asfalttavlen pull'er data fra Colas via API/webhook, eller om Colas push'er ved hver send/bekræftelse.
+
 ### Trin 6 — Formand ser bekræftelse
 **App:** formand
 **Komponent:** `VognmandBekraeftelseBadge`
@@ -174,9 +208,9 @@ For `undervejs`-biler beregnes live ETA fra faktisk timestamps. `planlagt`-biler
 ### Trin 8 — Chauffør modtager ordre
 **App:** chauffeur (React Native)
 **Komponent:** `TaskCard`, `TaskDetailScreen`
-**Viser:** Ordredetaljer, lokation, kontakt, **chaufførens egen mødetid på fabrik** (HH:MM — afhængig af læs-nummer), **læs-nummer** ("Du er 2. læs"), OG **kommentar til chauffør** (`kommentar_til_chauffoer` fra bilbestillingen — kørselsspecifikke instruktioner fra formand).
-**Læser:** `assigned_tasks` WHERE `driver_phone = auth.user.phone` OR `truck_plate = chauffeur.plate`, henter KUN denne chaufførs `confirmed_vehicles[]`-row (filtreret på reg_nr/tlf) — sin **moedetid_fabrik** + **laes_nummer** vises prominent.
-**Vigtigt:** Mødetiden på fabrik er **forskellig pr. læs-nummer** — 1. læs møder først, 2. læs møder `intervalMinutter` senere osv. Chaufføren ser KUN sin egen — ikke de andre biler.
+**Viser:** Ordredetaljer, lokation, kontakt, OG **kommentar til chauffør** (`kommentar_til_chauffoer` fra bilbestillingen — kørselsspecifikke instruktioner fra formand). **Mødetid på fabrik** vises KUN hvis chaufføren er en pinnet opstarts-bil (HH:MM); er han en loop-bil, møder han ind i strømmen og ser ingen pinned mødetid. Ingen blivende "læs-rolle" vises (jf. Trin 1, LÅST 2026-06-10).
+**Læser:** `assigned_tasks` WHERE `driver_phone = auth.user.phone` OR `truck_plate = chauffeur.plate`, henter KUN denne chaufførs `confirmed_vehicles[]`-row (filtreret på reg_nr/tlf) — sin `moedetid_fabrik` vises prominent hvis han er pinnet opstarts-bil.
+**Vigtigt:** Kun de pinnede opstarts-biler har en mødetid på fabrik (forskudt efter formandens pinnede tider). Loop-biler møder ind i strømmen efter intervallet (se Trin 1) og har ingen pinned mødetid. Chaufføren ser KUN sin egen — ikke de andre biler.
 **Note:** Chauffør har et minimalt login-system (LÅST 2026-06-09) — se [[chauffeur-login]] sektion nedenfor. SMS-OTP ved ny enhed eller token-fornyelse, derefter altid direkte til forside. **Bil + konfiguration administreres dynamisk af vognmand** og opdateres on-the-fly i chauffør-app, formand-app og fabrik-app — chauffør foretager INGEN bil-valg i appen.
 **TBD:** Distributions-mekanisme — push-notifikation, polling, eller event på reg.nr? Skal afklares før prod.
 
@@ -875,7 +909,41 @@ type DagDisponering = {
 
 Feltet er optional. `undefined` = ikke aflyst. Streng-union fremfor boolean så vi senere kan udvide til `'kunde-aflysning' | 'fabrik-nedbrud' | etc.` uden migration.
 
-**Cross-app status:** ✅ Implementeret i vognmand-prototyper. Formand-side mangler — aflysning sker pt. ved manuel mock-data-edit, ikke via UI-handling fra formanden. Næste skridt: Formand skal kunne aflyse en dag fra sit OrdrePlanScreen og se status-feedback når aflysningen er propageret.
+**Cross-app status:** ✅ Implementeret i vognmand-prototyper. ✅ Implementeret 2026-06-09 på Formand-siden — se "Formand-UI: Aflys-celle i ordredetalje-rækken" nedenfor.
+
+#### Formand-UI: Aflys-celle i ordredetalje-rækken (LÅST 2026-06-09)
+
+**Placering:** 6. celle i ordredetalje-grid'et (`makeOrdredetaljerCard` i `OrdrePlanScreen.tsx`) ved siden af "Udføres i perioden / Mængde tons / Produkt / Tykkelse / Fabrik". Grid'et udvides fra `grid-cols-5` til `grid-cols-6` i begge varianter (enkelt-ordre + samleordre-tabs).
+
+Aflys-cellen vises i **både Planlægning-mode og Udførsel-mode** — samme `makeOrdredetaljerCard`-factory bruges, men kaldes med `cardMode='udfoersel'` + `udfoerselSelectedDate` i Udførsel.
+
+**Komponent:** `AflysningCell` i samme fil.
+
+**Tilstande:**
+
+| Tilstand | Vises | Knap |
+|---|---|---|
+| Ingen dage aflyst | Næste ikke-aflyste dag (`formatLongDate`) som primær tekst | Rød "Aflys dag"-knap med `CloudRain`-ikon |
+| 1+ dage aflyst, flere tilbage | Liste af aflyste dage (rød tekst) + årsag i `(pga. [reason-label])` | Rød "Aflys flere"-knap (kun Planlægning-mode) |
+| Alle dage aflyst | Liste af aflyste dage | Ingen knap |
+| Udførsel-mode + valgt dag ER aflyst | Den valgte dato + "Aflyst pga. [reason]"-pille | Ingen knap (man kan kun aflyse fra Planlægning) |
+
+**Picker-flow:**
+- Klik på "Aflys dag"/"Aflys flere" åbner inline picker i samme celle (ikke modal).
+- Picker indeholder: dato-`<select>` (kun ikke-aflyste dage) + 4 årsag-knapper fra `CANCEL_REASONS` (`Regn`, `Frost`, `Underlag`, `Andet`) + "Fortryd"-knap.
+- Udførsel-mode: default-valgt dato i pickeren = `selectedDate` (den dag formanden ser på). Planlægning-mode: default = første ikke-aflyste dag.
+- Klik på en årsag = aflysning af valgt dato med valgt årsag (kalder `cancelDay(productId, dayId, reason)`).
+- Multi-aflysning understøttes: pickeren lukker efter aflysning, cellen re-rendrer, og man kan klikke "Aflys flere" igen.
+
+**Dobbelt-signal:** "Udføres i perioden"-cellen (1. celle) viser også rød sub-tekst med aflyste dage:
+```
+[dato] aflyst
+```
+i `font-inter text-xxs text-bad font-medium`. Sikrer at aflysningen ses uanset om formanden kigger på dato-cellen eller aflys-cellen.
+
+**Tokens:** `bg-bad/10`, `text-bad`, `font-inter text-xs font-semibold`, `px-xs py-xxs rounded-md`. Default celle-struktur (`p-sm flex flex-col h-full min-h-[96px]`) matcher de andre celler.
+
+**Fjernet samme dato:** Den gamle X-knap (lille kryds øverst-til-højre på hver dags `ProductBoxV2`) er fjernet — aflysning sker nu udelukkende via aflys-cellen. Gammel kode bevares i `apps/formand/src/prototypes/ordre-plan/v1/ProductBoxV2.v1.tsx`.
 
 #### Data-bevarelse ved dag-aflysning (LÅST 2026-06-03)
 
@@ -1866,6 +1934,8 @@ hvor `densitet_kg_per_m3` er heltal fra `recepter[receptkode].densitet` (fx 2400
 
 ## Flow 9b: Ekstra tons på dagen — Formand → Fabrik (telefon) → PLAN → Apps (LÅST 2026-06-03)
 
+**OPDATERING 2026-06-09:** "Tons opdateret af Fabrik"-banner ERSTATTET af synlig `EkstraBestillingBox` ved siden af det relevante produkt i Asfaltbestilling-rækken. Boksen viser +N tons + "Bekræftet fabrik"-pille (read-only fra PLAN). Telefon-flow + PLAN-pull-mekanik er uændret.
+
 **Beslutning (LÅST 2026-06-03):** Funktionen "Ekstra bestilling" i `OrdrePlanScreen` Asfaltbestilling-rækken **fjernes** fra Fase 1. Hvis formand har brug for ekstra tons på dagen — fx fordi kunden vil have ekstra meter, eller plan-fejl undervejs — ringer han direkte til fabrikken og bestiller mundtligt. PLAN-systemet opdateres med de nye forventede tons, og data-pull til apps sker automatisk.
 
 **Hvorfor fjernet:**
@@ -1886,9 +1956,11 @@ hvor `densitet_kg_per_m3` er heltal fra `recepter[receptkode].densitet` (fx 2400
 4. PLAN pusher opdaterede tons til formand-app
    - Felter ramt: ordre.produkter[].tons stiger (eller dag.tonsForventet)
    - Eksisterende produkt-boks viser ny værdi
-5. Banner-markering i formand-app:
-   "Tons opdateret af Fabrik" — vises som info-banner øverst i
-   Asfaltbestilling-rækken indtil formand klikker "OK, set"
+5. Synlig boks i formand-app (OPDATERET 2026-06-09):
+   `EkstraBestillingBox` vises ved siden af det relevante produkt
+   i Asfaltbestilling-rækken. Boksen viser "+N tons" + produktnavn +
+   "Bekræftet kl. HH:MM" + "Bekræftet fabrik"-pille under. Read-only —
+   ingen "OK, set"-knap (formand HAR allerede bestilt pr. telefon).
 6. Vejeseddel-listen udvides automatisk
    - Flere tons → flere planlagte vejesedler genereret
    - "Forventet sidste læs"-pille flyttes til ny sidste bil per produkt
@@ -1902,8 +1974,8 @@ hvor `densitet_kg_per_m3` er heltal fra `recepter[receptkode].densitet` (fx 2400
 
 **UI-konsekvenser:**
 
-- **Formand**: Fjernet UI: `EkstraBestillingBox`, "+ Ekstra"-knap, ekstra-bestilling-state, ekstra-bestilling-mock. Bevaret: Eksisterende produkt-bokse (`ProductBoxV2`) — det er her tons-stigningen vises.
-- **Formand**: Ny info-banner i Asfaltbestilling-rækken når PLAN har opdateret tons — tekst "Tons opdateret af Fabrik [tidspunkt]" + lille "OK, set"-knap der dismisser banneret. Banner persisterer indtil dismissed.
+- **Formand (OPDATERET 2026-06-09)**: Genintroduceret synlig `EkstraBestillingBox` i Asfaltbestilling-rækken — placeres ved siden af det produkt PLAN-pushet ekstra-bestilling vedrører. Boksen viser KUN delta-mængden ("+N tons") + produktnavn + bekræftelses-tidspunkt. "Bekræftet fabrik"-pille (`StatusPill kind='ekstra-bekraeftet'`) under boksen markerer utvetydigt at det er PLAN-data, ikke formandens bestilling. Read-only — ingen interaktion. Eksisterende `ProductBoxV2` (Forventet/Morgen tons) er uændret og viser stadig **originalt planlagt tonsPlanned** (uden ekstra) — alle DOWNSTREAM-beregninger (Vejesedler-statusbar, Dagsoverblik, Afregning, Ordredetaljer/Mængde tons, kørsels-kapacitet) bruger `getEffectiveTons(d) = d.tonsPlanned + (d.ekstraTons?.tons ?? 0)`.
+- **Formand**: ~~Info-banner "Tons opdateret af Fabrik [tidspunkt]" + "OK, set"-knap~~ — **fjernet 2026-06-09**. Den synlige boks ER bekræftelsen, banner var redundant. Banner-rendering bevaret i `apps/formand/src/prototypes/ordre-plan/v1/TonsOpdateretBanner.v1.tsx` som dokumentation.
 - **Vognmand**: Ingen ny mekanik. Eksisterende tons-felt opdateres automatisk via samme data-pull-pipeline som al anden ordre-data. Vognmand ser bare nyt antal og handler.
 - **Fabrik**: Samme — produktionsplan opdateres via PLAN-pull. Ingen nye notifikationer eller knapper.
 
@@ -1920,18 +1992,20 @@ PROD A EAST KØGE PH      ← font-inter text-xxs (ny — bottom-aligned)
 
 Fabriksnavnet hentes fra **ordrens tildelte standard-fabrik**. I prototypen hardcodes til "PROD A EAST KØGE PH" (samme værdi som mock-vejesedlerne bruger), eller læses fra `ordre.fabrik` hvis det findes på top-niveau.
 
-**Datamodel-konsekvens (kun deletion):**
+**Datamodel-konsekvens (OPDATERET 2026-06-09):**
 
-- `EkstraBestilling`-interface fjernes
-- `ekstra_bestillinger`-tabel fjernes fra Supabase-skemaet (når relevant)
-- `ordre.produkter[].tons` bliver eneste tons-felt (ingen separat ekstra-tons-felt)
-- `tons_opdateret_af_fabrik?: { tidspunkt: string, dismissed: boolean }` tilføjes per-dag for banner-tracking
+- `EkstraBestilling`-interface fjernes (uændret fra 2026-06-03)
+- `ekstra_bestillinger`-tabel fjernes fra Supabase-skemaet (når relevant) (uændret)
+- `ordre.produkter[].tons` forbliver det originalt planlagte tons-felt (uændret)
+- ~~`tons_opdateret_af_fabrik?: { tidspunkt: string, dismissed: boolean }`~~ — **fjernet 2026-06-09**
+- **NYT 2026-06-09:** `ekstraTons?: { tons: number, bekraeftetAf: 'fabrik', tidspunkt: string }` tilføjes per-dag (`DayPlan.ekstraTons`). Indeholder KUN delta-mængden — ikke totalen. Pushes fra PLAN når fabrik registrerer ekstra-bestillingen.
+- **Helper `getEffectiveTons(d) = d.tonsPlanned + (d.ekstraTons?.tons ?? 0)`** bruges i alle downstream-beregninger (Vejesedler, Dagsoverblik, Afregning, Ordredetaljer/Mængde tons, kørsels-kapacitet). Pendant `getEffectiveProductTotalTons(p)` aggregerer på produkt-niveau.
 
 **Samles på en bil — afgrænsning ift. denne ændring:**
 
 "Samles på en bil"-checkbox forbliver **kun på PRODUKTER** (`ProductBoxV2`). Den fjernes fra ekstra-bestilling-konstruktet (som ikke længere findes). Brugs-mønstret er uændret: typisk små ordrer hvor flere produkter hentes på samme bil — trigges multi-produkt-loading-flow i chauffør-appen (9-trins fabrik-script, se `[[project_samles_paa_en_bil_marker]]` og Flow 12).
 
-**🟡 Implementerings-status:** Spec LÅST 2026-06-03. Kode-ændring dispatches efter denne sektion.
+**🟢 Implementerings-status:** Spec LÅST 2026-06-03 + OPDATERING LÅST 2026-06-09. EkstraBestillingBox + "Bekræftet fabrik"-pille implementeret i `apps/formand/src/prototypes/ordre-plan/OrdrePlanScreen.tsx` (prototype). Banner-rendering arkiveret til `v1/TonsOpdateretBanner.v1.tsx`.
 
 ---
 
@@ -1955,11 +2029,12 @@ Fabriksnavnet hentes fra **ordrens tildelte standard-fabrik**. I prototypen hard
 
 ## Flow 11: Multilæs (inkl. samleordre) — Formand → Vognmand → Chauffør → Vejning
 
+**📝 Ekstra-bestilling-konstrukt fjernet 2026-06-03** (jf. Flow 9b). Dette flow er opdateret 2026-06-09 til kun at gælde produkt-baserede multilæs via samleordre på morgen-niveau.
+
 **LÅST 2026-05-21:** Samleordre og multilæs er DATAMÆSSIGT IDENTISKE — forskellen er kun beslutnings-niveau (morgen vs. drip). Begge bruger samme læs-, vejeseddel- og fordelings-flow.
 
-**To triggers:**
-- **A. Multilæs på ekstra-bestilling**: Formand opretter ekstra-bestilling med multilæs ON i Ordre-plan og vælger 2+ ordrer
-- **B. Samleordre**: Formand kombinerer 2+ ordrer i Dagsoversigt → alle morgen-bestillinger for de ordrer bliver automatisk multilæs
+**Trigger:**
+- **Samleordre**: Formand kombinerer 2+ ordrer i Dagsoversigt → alle morgen-bestillinger for de ordrer bliver automatisk multilæs.
 
 ### Trin 0A — Samleordre-trigger (morgen, valgfrit)
 **App:** formand
@@ -1968,18 +2043,17 @@ Fabriksnavnet hentes fra **ordrens tildelte standard-fabrik**. I prototypen hard
 **Skriver til:** `samleordrer` med `{ id, dato, ordre_ids: [a, b], anchor_ordre_id: a }`.
 **Konsekvens:** ALLE morgen-bestillinger for ordrerne på den dato sættes automatisk som multilæs med anchor + stop-liste fra samleordren.
 
-### Trin 1 — Formand opretter/ser multilæs-bestilling i Ordre-plan
+### Trin 1 — Formand ser multilæs-bestilling i Ordre-plan
 **App:** formand
-**Komponent:** `OrdrePlanScreen` → `EkstraBestillingBox` (drip) eller produkt-bokse (morgen via samleordre)
-**Handling A (drip):** Tilføj ekstra-bestilling. Toggle multilæs ON. Vælg andre ordrer via checkbox-liste. Vælg produkt fra union-dropdown. Indtast tons.
-**Handling B (samleordre):** Produkter på dagen er pre-set som multilæs (auto fra samleordre). Formand justerer tons-fordeling mellem children. Header viser "Samleordre: X + Y".
-**Skriver til:** `ekstra_bestillinger` (A) eller `morgen_bestillinger` (B) med `{ multilaes: true, andre_ordrer: [...], product_id, tons, anchor_ordre_id }`.
+**Komponent:** `OrdrePlanScreen` → produkt-bokse (morgen via samleordre)
+**Handling:** Produkter på dagen er pre-set som multilæs (auto fra samleordre). Formand justerer tons-fordeling mellem children. Header viser "Samleordre: X + Y".
+**Skriver til:** `morgen_bestillinger` med `{ multilaes: true, andre_ordrer: [...], product_id, tons, anchor_ordre_id }`.
 
 ### Trin 2 — Formand klikker Send til fabrik
 **App:** formand
 **Komponent:** `OrdrePlanScreen` → bekræftelses-modal
 **Handling:** Bekræft afsendelse.
-**Skriver til:** `ekstra_bestillinger.sent = true`. Bestillingen dispaches til fabrik OG vognmand.
+**Skriver til:** `morgen_bestillinger.sent = true`. Bestillingen dispaches til fabrik OG vognmand.
 
 ### Trin 3 — Vognmand modtager bil-bestilling
 **App:** vognmand
@@ -1990,14 +2064,14 @@ Fabriksnavnet hentes fra **ordrens tildelte standard-fabrik**. I prototypen hard
   - Anchor-udførselssted som rækkefølge #1
   - Komplet stop-liste i ordnet rækkefølge
   - Tons-andel pr. stop (fra formand's morgen-bestilling)
-**Læser:** `ekstra_bestillinger` JOIN `orders` for stop-adresser.
+**Læser:** `morgen_bestillinger` JOIN `orders` for stop-adresser.
 **Vigtigt:** Read-only på rækkefølgen — vognmand kan IKKE ændre. Formand bestemmer via anchor-valg.
 
 ### Trin 4 — Vognmand disponerer bil
 **App:** vognmand
 **Komponent:** `DisponeringsView`
 **Handling:** Tildel bil + chauffør til multilæs-bestilling. Bil-bookningen "arver" hele stop-listen.
-**Skriver til:** `ekstra_bestillinger.confirmed_vehicle = { reg_nr, chauffoer_navn, tlf, bil_type }`.
+**Skriver til:** `morgen_bestillinger.confirmed_vehicle = { reg_nr, chauffoer_navn, tlf, bil_type }`.
 
 ### Trin 5 — Chauffør får multi-stop task
 **App:** chauffeur
@@ -2031,14 +2105,14 @@ Fabriksnavnet hentes fra **ordrens tildelte standard-fabrik**. I prototypen hard
 ### Datamodel-noter
 
 ```
-ekstra_bestillinger
+morgen_bestillinger
 ├── id
 ├── ordre_id                          // anchor (for multilæs) eller den ene ordre (for puljelæs)
 ├── product_id
 ├── tons (total)
 ├── multilaes: bool
 ├── andre_ordrer: ordre_id[]          // hvis multilaes
-├── puljelaes: bool                   // hvis flere produkter samme bil til samme ordre
+├── puljelaes: bool                   // hvis flere produkter samme bil til samme ordre (samles-paa-en-bil)
 ├── sent: bool
 ├── confirmed_vehicle: { reg_nr, ... }
 └── multilaes_stops[]                 // ordnet rækkefølge med tons-andel (kun multilæs)
@@ -2056,27 +2130,28 @@ vejesedler
 
 ## Flow 12: "Samles på en bil" (tidligere Puljelæs) — Formand → Vognmand → Chauffør → Vejning
 
+**📝 Ekstra-bestilling-konstrukt fjernet 2026-06-03** (jf. Flow 9b). Dette flow er opdateret 2026-06-09 til kun at gælde produkt-baserede "samles på en bil"-markeringer.
+
 **Terminologi-update 2026-05-22:** "Puljelæs" er omdøbt til **"Samles på en bil"** i UI. Datamodel-felter (`puljelaesFlag`, `pulje_laes`) bevares som identifikatorer i database/typer, men UI-tekst bruger den nye terminologi konsekvent.
 
-**Trigger:** Formand sætter "Samles på en bil"-checkbox PÅ ET PRODUKT (ProductBoxV2) eller PÅ EN EKSTRA-BESTILLING (EkstraBestillingBox) i Asfaltbestilling-rækken. Markøren betyder: "dette produkts tons skal pakkes på SAMME bil som andre produkter der også er markeret samme dag — samme ordre eller samme samleordre".
+**Trigger:** Formand sætter "Samles på en bil"-checkbox PÅ ET PRODUKT (`ProductBoxV2`) i Asfaltbestilling-rækken. Markøren betyder: "dette produkts tons skal pakkes på SAMME bil som andre produkter der også er markeret samme dag — samme ordre eller samme samleordre".
 
-**Vigtig forskel fra tidligere model:** Puljelæs var en ordre-niveau-checkbox der pakkede ALLE ordrens produkter på én bil. Nu er det per-produkt på alle produkter — også ekstra-bestillinger. Formanden kan derfor have:
+**Vigtig forskel fra tidligere model:** Puljelæs var en ordre-niveau-checkbox der pakkede ALLE ordrens produkter på én bil. Nu er det per-produkt. Formanden kan derfor have:
 - Originalprodukt A + originalprodukt B på samme bil (klassisk puljelæs-pattern)
-- Ekstra-bestilling C der samkøres med original A
 - Op til 3 produkter på samme bil hvis bilens kompartmenter tillader det
 
 **Søsterflow til Flow 11 (multilæs/samleordre).** Forskellen er at samles-på-en-bil typisk har 1 destination (én ordre) — eller op til samleordrens stop hvis det er kombineret med samleordre-flow.
 
-### Trin 1 — Formand opretter puljelæs-bestilling
+### Trin 1 — Formand markerer "Samles på en bil" på produkt
 **App:** formand
-**Komponent:** `OrdrePlanScreen` → `EkstraBestillingBox` med puljelæs-toggle ON
-**Handling:** Toggle puljelæs ON (kan også være ON proaktivt før 2. produkt er oprettet). Indtast produkt og tons.
-**Skriver til:** `ekstra_bestillinger` med `{ puljelaes: true, multilaes: false, product_id, tons, ordre_id }`.
+**Komponent:** `OrdrePlanScreen` → `ProductBoxV2` med "Samles på en bil"-checkbox ON
+**Handling:** Toggle "Samles på en bil" ON på 2+ produkter samme dag.
+**Skriver til:** Produktet får `puljelaes: true` (på `morgen_bestillinger` ved send-tidspunkt).
 
 ### Trin 2 — Formand sender til fabrik
 **App:** formand
 **Komponent:** `OrdrePlanScreen` → bekræftelses-modal
-**Skriver til:** `ekstra_bestillinger.sent = true`.
+**Skriver til:** `morgen_bestillinger.sent = true` for de markerede produkter.
 
 ### Trin 3 — Vognmand modtager bil-bestilling med "Samles på en bil"-markering
 **App:** vognmand
@@ -2231,6 +2306,29 @@ Når en chauffør på en almindelig single-produkt-ordre når sidste-læs (rest 
 
 ---
 
+### ABE-2b: SendBatch → PLAN / Asfalttavlen
+
+**From:** Formand `useAsfaltbestilling.sendAlleForSelectedDate(kommentar)` (UX-flow C1 step 9) — samme trigger som ABE-1/ABE-2.
+**To:** PLAN-ekosystem → Asfalttavlen (konsoliderings-visning for fabrik-mester + koordinator). Se introduktion af "Asfalttavlen" i Flow 1 Trin 5c.
+**Trigger:** Formand klikker "Send til fabrik" i `SendBekraeftelsesModal` for en `(orderId, selectedPlanDate)` — samme moment hvor `transport_orders`-rows oprettes (jf. ABE-1).
+
+**Payload:** Som udgangspunkt samme felter som ABE-1/ABE-2 (`transport_orders`-row + joins på `recipe_code`, `recipe_name`, `factory_code`, `kommentar`, `samles_paa_en_bil`, `weather_active`), så Asfalttavlen kan vise dagens samlede bestillinger pr. fabrik/ordre. Felterne er allerede listet i ABE-1-tabellen og ABE-2 join-tabellen — duplikeres ikke her.
+
+🟡 **ÅBENT (LÅST 2026-06-10): konkret payload-format aftales med PLAN-team.** Format-spørgsmål der skal afklares:
+- Pull vs. push: hænter Asfalttavlen data via API fra Colas (`GET /asfaltbestillinger?date=...`), eller pusher Colas ved hver send?
+- Granularitet: én row pr. `transport_order`, eller aggregeret pr. `(date, order_id)` / pr. `(date, factory_code)`?
+- Cancel/cascade-håndtering: skal CancelDay (ABE-5) også sendes til Asfalttavlen, så stakeholders ser at en dag er aflyst? Sandsynligvis ja.
+- Multi-produkt + samles-på-en-bil: hvordan markeres når 2-3 produkter pakkes på samme bil? Skal Asfalttavlen vise dem som én "samlet bestilling" eller separate rows?
+- Recept-detaljer: skal recipe_code/recipe_name med, eller kun aggregeret tons-tal pr. ordre?
+
+**Receiver-handling (PLAN / Asfalttavlen):** Stakeholders (fabrik-mester, koordinator) får dagens bestillinger samlet visuelt. Read-only fra Colas-siden; PLAN konsoliderer på tværs af flere Colas-formænd + andre datakilder PLAN ejer.
+
+**Cross-reference:**
+- **Modsat retning (PLAN → Colas):** PLAN pusher ekstra tons til Colas-apps via Flow 9b (`EkstraBestillingBox`), fabrik-skift via Flow 13, og holdpakke/vejesedler/forundersøgelses-felter via Flow 5/6/7/8. Dataretningen er tovejs — denne ABE-2b dækker kun ud-retningen (Colas → PLAN/Asfalttavlen) for asfaltbestilling.
+- Bilbestilling har tilsvarende destination — se Flow 1 Trin 5c.
+
+---
+
 ### ABE-3: SendBatch → Formand.UdfoerselDagsoverblik
 
 **From:** Formand `useAsfaltbestilling.sendAlleForSelectedDate(kommentar)` (UX-flow C1 step 9)
@@ -2332,7 +2430,7 @@ Når en chauffør på en almindelig single-produkt-ordre når sidste-læs (rest 
 
 ### ABE-7: ToggleSamlesPaaEnBil → Vognmand.Disponering (+ downstream Chauffør)
 
-**From:** Formand `useAsfaltbestilling.toggleSamlesPaaEnBil(productId, dayId, samles)` eller `useEkstraBestilling.updateEkstra(id, { samlesPaaEnBil })` (UX-flow C5)
+**From:** Formand `useAsfaltbestilling.toggleSamlesPaaEnBil(productId, dayId, samles)` (UX-flow C5)
 **To:** Vognmand → Disponerings-sektion (→ derefter Chauffør-app via vognmand-disposition)
 **Trigger:** Formand toggler "Samles på en bil"-checkbox.
 
@@ -2340,7 +2438,7 @@ Når en chauffør på en almindelig single-produkt-ordre når sidste-læs (rest 
 
 | Felt | Format | Notes |
 |---|---|---|
-| `day_plan_id` eller `ekstra_bestilling_id` | uuid | Identifier |
+| `day_plan_id` | uuid | Identifier |
 | `samles_paa_en_bil` | boolean | Ny værdi |
 
 **Receiver-handling (vognmand):**
@@ -2391,15 +2489,16 @@ Når en chauffør på en almindelig single-produkt-ordre når sidste-læs (rest 
 
 ## Asfaltbestilling — Modeller modtaget af modtager-apps (kontrakt-resumé)
 
-Dette er minimum-felter som modtager-apps SKAL kunne læse fra Supabase når `transport_orders` + `day_plans` + `ekstra_bestillinger` er populeret:
+Dette er minimum-felter som modtager-apps SKAL kunne læse fra Supabase når `transport_orders` + `day_plans` er populeret:
+
+> 📝 **2026-06-09:** Ekstra-bestilling-tabellen er fjernet (jf. Flow 9b — ekstra tons håndteres nu via PLAN-push). `transport_orders.kind` er kollapset til kun `'morgen'`. Feltet bevares som union-type for fremtidig udvidelse.
 
 ```
 transport_orders                                  // Source-of-truth for "sendt til fabrik"
   ├── id: uuid
   ├── order_id: uuid                              // FK
-  ├── day_plan_id: uuid | null                    // FK (morgen) eller null (ekstra)
-  ├── ekstra_bestilling_id: uuid | null           // FK (ekstra) eller null (morgen)
-  ├── kind: 'morgen' | 'ekstra'
+  ├── day_plan_id: uuid                           // FK
+  ├── kind: 'morgen'                              // kollapset 2026-06-09 (var: 'morgen' | 'ekstra')
   ├── product_id: uuid                            // FK
   ├── date: date                                  // dato bestillingen er for
   ├── tons: int                                   // ≥ 0
@@ -2419,22 +2518,10 @@ day_plans                                          // Source-of-truth for "planl
   ├── cancel_reason_note: text | null              // KUN hvis cancel_reason='andet' (C-spg C5)
   ├── samles_paa_en_bil: boolean                   // false default
   └── weather_active: boolean                      // false default
-
-ekstra_bestillinger                                // Drip-bestillinger
-  ├── id: uuid
-  ├── order_id: uuid                                // FK
-  ├── product_id: uuid | null                       // null indtil bruger vælger
-  ├── date: date                                    // = formand's selectedPlanDate ved oprettelse
-  ├── tons: int                                     // ≥ 0
-  ├── samles_paa_en_bil: boolean                    // false default
-  ├── puljelaes: boolean                            // false default — DATA-ONLY (ikke UI på bestilling)
-  ├── multilaes: boolean                            // false default — DATA-ONLY
-  ├── sent: boolean                                 // false default
-  └── sent_at: timestamptz | null
 ```
 
 **Cross-app reads:**
-- **Vognmand** queryer `transport_orders JOIN day_plans JOIN ekstra_bestillinger JOIN products JOIN orders` for sin disposition-view
+- **Vognmand** queryer `transport_orders JOIN day_plans JOIN products JOIN orders` for sin disposition-view
 - **Fabrik** queryer samme set for sin ordre-kø
 - **Formand Udførsel-mode (Dagsoverblik)** queryer `transport_orders WHERE kind='morgen' AND date=?` for pre-fill af "faktisk udlagt"
 - **Chauffør** modtager opgaver via `assigned_tasks[]` der peger på `transport_orders` (downstream af vognmand-disposition)
@@ -2815,6 +2902,27 @@ Anvendes på **Asfaltbestilling-piller** og **"Udføres i perioden"-piller** —
 - "I gang" → mørkegrøn (`bg-good` + `text-white`)
 - Konsistent på tværs af Dagsoversigt + Gantt + alle fremtidige status-piller for ordrer
 - Kanonisk: `.claude/docs/STATUS_VOKABULAR.md` § `OrderStatus`
+
+### Per-dag vognmand + afregning i kørsel-planlægning (LÅST 2026-06-09)
+
+Formanden kan vælge **én vognmand** og **afregningsform** per dag i kørselspanelet (udvidet kørsel-sektion i Planlægning-mode).
+
+**Vognmand:**
+- Default = ordrens primære vognmand (fra aftalen i PLAN)
+- Kan ændres per dag — fx når en anden vognmand dækker ved sygdom
+- Kilde: `vognmand`-tabel (ikke implementeret, kun mock i prototype)
+
+**Afregning:**
+- To muligheder: `akkord` og `time` (dansk: "Akkord" / "Timeløn")
+- Default = `akkord`
+- Gemmes per dag på `plan_dag`-posten i Supabase (ikke implementeret, kun state i prototype)
+
+**BESLUTNING LÅST 2026-06-09 — Formandens afregningsvalg er sandheden:**
+Formandens valg af afregningsform per dag er udgangspunktet for afregning per bil downstream. Dette erstatter den tidligere kilde (`vognmand.aftaler.chauffoerer[]`). Selve downstream-koblingen (til `BilAfregningExpander` / Afregning-mode) er endnu ikke implementeret i prototypen (TODO).
+
+**Scope-afgrænsning:**
+- 1,5-times-reglen er uændret: automatisk i Afregning-mode baseret på vejeseddel-flag — ingen kobling til denne toggle
+- `VognmandBekraeftelse.afregning_type` og `ConfirmedTruck.afregning_type` er ikke ændret endnu — downstream-kobling sker i separat iteration
 
 ### Enheds-konvention — fulde ord (LÅST 2026-06-05)
 

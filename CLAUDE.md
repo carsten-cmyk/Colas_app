@@ -134,6 +134,64 @@ Inline `style={}` kun ved genuint runtime-beregnede værdier (fx `width: progres
 - Loading og error states altid implementeret
 - Touch targets minimum 44×44px
 
+### Responsive Design — web-apps
+
+Audit 2026-06-10 fandt 428+ hardcodede px-værdier + 0 breakpoints i chauffeur-web. Disse regler skal forhindre samme drift i andre apps.
+
+**Ingen hardcodede px-værdier i layout:**
+
+```tsx
+// ALDRIG
+style={{ paddingTop: 67, fontSize: 12 }}
+className="text-[14px]"
+
+// ALTID
+className="pt-md text-xs"
+```
+
+`w-[Npx]`/`h-[Npx]` kun til bevidste fixed komponenter (fx FAB, ProductBoxV2-grid) — IKKE til layout-containers eller wrappers.
+
+**Breakpoints — påkrævet på apps med mobile use case (chauffeur-web, PWA):**
+- `xs: 320px` — iPhone SE
+- `sm: 375px` — iPhone 12/13/14
+- `md: 430px` — iPhone Pro Max
+- `lg: 768px` — iPad / fullscreen
+- `xl: 1024px+` — desktop
+
+Mobile-first: skriv default for `xs`, brug `sm:`/`md:`/`lg:` til at udvide. Tailwind-config skal udvides hvis breakpoints mangler.
+
+**Safe areas — påkrævet for PWA på telefon:**
+
+```tsx
+// ALDRIG hardcodet for notch/dynamic island
+style={{ paddingTop: 59 }}
+
+// ALTID
+className="pt-[env(safe-area-inset-top,0)]"
+className="pb-[env(safe-area-inset-bottom,0)]"
+```
+
+`index.html` SKAL have `<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">` — `viewport-fit=cover` er obligatorisk for at safe-areas virker.
+
+**iPhone-ramme på desktop (chauffeur-web):**
+- Vises KUN på `lg:` (≥768px) — på mobile/iPad fullscreen
+- Brug `useViewport()`-hook eller `@media (max-width: 768px)` til at skjule
+- Aldrig hardcodede ramme-dimensioner — brug aspect-ratio
+
+**Touch targets ≥ 44×44 — uden undtagelse.** Inkluderer close-knapper, klikbare badges, små icons. Brug `min-h-touch min-w-touch`-tokens (skal tilføjes hvis manglende).
+
+**Test-matrix før produktion:**
+
+| Device | Bredde | Mål |
+|---|---|---|
+| iPhone SE | 375×667 | Touch targets + font legibility |
+| iPhone 14 | 393×852 | Default-design fungerer |
+| iPhone Pro Max | 430×932 | Layout udnytter bredde |
+| iPad Mini | 768×1024 | Fullscreen (ikke i ramme) |
+| Desktop | 1280×800+ | iPhone-ramme vises centreret |
+
+**Desktop-only apps (formand, vognmand):** Fixed pixel-værdier i grid-celler er OK fordi viewport altid er stort. Men touch targets + safe-areas gælder stadig hvis app'en åbnes på tablet.
+
 ### Testing
 - Kald først `/review` — kald derefter `/test`
 - Kør `npm run [app]:test` + `npm run [app]:lint` + `npm run [app]:typecheck` inden commit
