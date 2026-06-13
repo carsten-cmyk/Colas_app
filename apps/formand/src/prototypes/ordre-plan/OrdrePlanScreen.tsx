@@ -132,6 +132,33 @@ interface VehicleOrder {
   antal: number
 }
 
+/** Ordrenummer for den aktive demo-ordre (matcher adresse-feltet). */
+// TODO: Erstat med Supabase når klar — kommer fra orders-rækken.
+const DEMO_ORDRE_NR = '1212343'
+
+/**
+ * Bygger unikke bil-ordrenumre for ÉN dags bestilling (LÅST 2026-06-13).
+ * Format: `<ordrenr>-DDMMYY-NN` — løbenummeret (NN) nulstilles pr. dag og
+ * tæller på tværs af alle biltyper i bestillingens rækkefølge. Hvert bil-ønske
+ * sendes til vognmanden med sit eget nummer, fordi vognmændene behandler hver
+ * bil som en separat ordre og opretter nye ordrer pr. dag.
+ * Returnerer ét nummer pr. bestilt bil (antal udfoldes til individuelle biler).
+ * TODO: Erstat med Supabase — nummeret genereres backend-side ved send til vognmand.
+ */
+function buildBilOrdreNumre(ordreNr: string, isoDate: string, orders: VehicleOrder[]): string[][] {
+  const [y, m, d] = isoDate.split('-')
+  const ddmmyy = `${d}${m}${y.slice(2)}`
+  let lobenr = 0
+  return orders.map(o => {
+    const numre: string[] = []
+    for (let i = 0; i < o.antal; i++) {
+      lobenr++
+      numre.push(`${ordreNr}-${ddmmyy}-${String(lobenr).padStart(2, '0')}`)
+    }
+    return numre
+  })
+}
+
 interface KørselPause {
   id: string
   time: string
@@ -598,6 +625,8 @@ interface ConfirmedTruck {
   chauffoer: string
   tlf: string
   biltype: string
+  /** HH:MM — bekræftet ankomst på plads fra vognmand (jf. FF Flow 1 Trin 4). Maks. de 3 første vises i Udførsel-dashboardet. */
+  ankomst_plads_tid?: string
   afregning?: Omit<ChauffoerAfregning, 'chauffoer_navn' | 'reg_nr'>
   /** Sat til true for biler der kører materiel (blokvogn, kran-bånd etc.) */
   er_materiel_bil?: boolean
@@ -621,6 +650,8 @@ interface ConfirmedMaterielItem {
   chauffoer: string
   tlf: string
   transportType: string
+  /** HH:MM — bekræftet ankomst på plads fra vognmand (jf. FF Flow 2). Maks. de 3 første vises i Udførsel-dashboardet. */
+  ankomst_plads_tid?: string
   // Afregning — kun første materiel-enhed per chauffør bærer afregning
   // TODO: Erstat med Supabase når klar — afregning_type kommer fra vognmand.aftaler.chauffoerer[], timer fra chauffeur-app, tons fra plan_vejebilag-tabel
   afregning_type?: AfregningType
@@ -653,6 +684,7 @@ const INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE: VognmandMaterielBekraeftelse = {
       chauffoer: 'Lars Pedersen',
       tlf: '20 30 40 50',
       transportType: 'Blokvogn',
+      ankomst_plads_tid: '06:15',
       // Første og eneste materiel for Lars Pedersen → afregning herunder
       afregning_type: 'time',
       afregning_timer: 8.5,
@@ -677,6 +709,7 @@ const INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE: VognmandMaterielBekraeftelse = {
       chauffoer: 'Bent Sørensen',
       tlf: '31 42 53 64',
       transportType: 'Kran-bånd',
+      ankomst_plads_tid: '07:00',
       // Kun én enhed for Bent Sørensen → afregning herunder
       afregning_type: 'time',
       afregning_timer: 7,
@@ -704,6 +737,7 @@ const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
         chauffoer: 'Morten Lund',
         tlf: '22 33 44 55',
         biltype: '6 Aks',
+        ankomst_plads_tid: '06:30',
         // time-afregning med prædufyldte værdier fra chauffør-app
         afregning: {
           afregning_type: 'time',
@@ -734,6 +768,7 @@ const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
         chauffoer: 'Søren Karlsen',
         tlf: '26 77 88 99',
         biltype: '6 Aks',
+        ankomst_plads_tid: '06:50',
         // akkord-afregning — tons arves fra vejesedler (49.2t multilæs)
         afregning: {
           afregning_type: 'akkord',
@@ -765,6 +800,7 @@ const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
         chauffoer: 'Lars Holm',
         tlf: '40 12 56 78',
         biltype: '7 Aks',
+        ankomst_plads_tid: '07:10',
         // INGEN afregning_type → trigger fallback-banner + default time
         afregning: {
           afregning_type: undefined,
@@ -782,6 +818,7 @@ const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
         chauffoer: 'Kim Vestergaard',
         tlf: '51 62 73 84',
         biltype: '7 Aks',
+        ankomst_plads_tid: '07:30',
         afregning: {
           afregning_type: 'akkord',
           tons_koert: 35.0,
@@ -2065,47 +2102,67 @@ export function OrdrePlanScreen() {
 
                           {/* Biler — vognmandens flåde (kompakt liste) */}
                           <div>
-                            <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest mb-xs">Biler — vognmandens flåde</p>
-                            {orders.length > 0 && (
+                            <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest mb-xxxs">Biler — vognmandens flåde</p>
+                            {/* Hver bestilt bil får et unikt bil-ordrenummer (ordrenr-DDMMYY-NN, løbenr pr. dag) der
+                                sendes til vognmanden — som behandler hver bil som en separat ordre. LÅST 2026-06-13. */}
+                            <p className="font-inter text-xxs text-text-muted mb-xs">Hver bil sendes som separat ordre med eget nummer til vognmanden.</p>
+                            {orders.length > 0 && (() => {
+                              const bilOrdreNumre = buildBilOrdreNumre(DEMO_ORDRE_NR, day.date, orders)
+                              return (
                               <div className="rounded-lg border border-hairline overflow-hidden bg-white">
                                 {orders.map((o, idx) => {
                                   const vt = VEHICLE_TYPES.find(v => v.label === o.type)
+                                  const numre = bilOrdreNumre[idx] ?? []
                                   return (
                                     <div
                                       key={o.id}
-                                      className={`grid items-center gap-xs px-xs ${idx < orders.length - 1 ? 'border-b border-hairline' : ''}`}
-                                      style={{ gridTemplateColumns: 'auto 1fr auto auto auto' }}
+                                      className={idx < orders.length - 1 ? 'border-b border-hairline' : ''}
                                     >
-                                      <span className="w-8 h-8 rounded-md bg-soft-aqua text-deep-teal flex items-center justify-center flex-shrink-0">
-                                        <Truck size={16} />
-                                      </span>
-                                      <select
-                                        value={o.type}
-                                        onChange={e => updateOrder(o.id, 'type', e.target.value)}
-                                        className="min-w-0 font-inter text-xs font-medium text-text-primary bg-transparent border-none outline-none cursor-pointer py-xs focus:text-deep-teal"
+                                      <div
+                                        className="grid items-center gap-xs px-xs"
+                                        style={{ gridTemplateColumns: 'auto 1fr auto auto auto' }}
                                       >
-                                        <option value="">Vælg biltype</option>
-                                        <option value="Egen bil">Egen bil</option>
-                                        {VEHICLE_TYPES.map(v => (
-                                          <option key={v.label} value={v.label}>{v.label} · {v.tons} Tons</option>
-                                        ))}
-                                      </select>
-                                      <div className="flex items-center border border-hairline rounded-md overflow-hidden bg-white">
-                                        <button onClick={() => updateOrder(o.id, 'antal', Math.max(1, o.antal - 1))} className="w-8 h-8 font-inter text-sm text-text-muted hover:bg-soft-aqua transition-colors" aria-label="Færre">−</button>
-                                        <span className="px-xxs font-inter text-xs font-semibold text-text-primary w-[26px] text-center tabular-nums">{o.antal}</span>
-                                        <button onClick={() => updateOrder(o.id, 'antal', o.antal + 1)} className="w-8 h-8 font-inter text-sm text-text-muted hover:bg-soft-aqua transition-colors" aria-label="Flere">+</button>
+                                        <span className="w-8 h-8 rounded-md bg-soft-aqua text-deep-teal flex items-center justify-center flex-shrink-0">
+                                          <Truck size={16} />
+                                        </span>
+                                        <select
+                                          value={o.type}
+                                          onChange={e => updateOrder(o.id, 'type', e.target.value)}
+                                          className="min-w-0 font-inter text-xs font-medium text-text-primary bg-transparent border-none outline-none cursor-pointer py-xs focus:text-deep-teal"
+                                        >
+                                          <option value="">Vælg biltype</option>
+                                          <option value="Egen bil">Egen bil</option>
+                                          {VEHICLE_TYPES.map(v => (
+                                            <option key={v.label} value={v.label}>{v.label} · {v.tons} Tons</option>
+                                          ))}
+                                        </select>
+                                        <div className="flex items-center border border-hairline rounded-md overflow-hidden bg-white">
+                                          <button onClick={() => updateOrder(o.id, 'antal', Math.max(1, o.antal - 1))} className="w-8 h-8 font-inter text-sm text-text-muted hover:bg-soft-aqua transition-colors" aria-label="Færre">−</button>
+                                          <span className="px-xxs font-inter text-xs font-semibold text-text-primary w-[26px] text-center tabular-nums">{o.antal}</span>
+                                          <button onClick={() => updateOrder(o.id, 'antal', o.antal + 1)} className="w-8 h-8 font-inter text-sm text-text-muted hover:bg-soft-aqua transition-colors" aria-label="Flere">+</button>
+                                        </div>
+                                        <span className="font-poppins text-xs font-semibold text-deep-teal tabular-nums w-[64px] text-right whitespace-nowrap">
+                                          {vt ? vt.tons * o.antal : 0} Tons
+                                        </span>
+                                        <button onClick={() => removeOrder(o.id)} className="w-8 h-8 rounded-md text-text-muted hover:bg-bad-bg hover:text-bad flex items-center justify-center transition-colors" aria-label="Fjern">
+                                          <X size={15} />
+                                        </button>
                                       </div>
-                                      <span className="font-poppins text-xs font-semibold text-deep-teal tabular-nums w-[64px] text-right whitespace-nowrap">
-                                        {vt ? vt.tons * o.antal : 0} Tons
-                                      </span>
-                                      <button onClick={() => removeOrder(o.id)} className="w-8 h-8 rounded-md text-text-muted hover:bg-bad-bg hover:text-bad flex items-center justify-center transition-colors" aria-label="Fjern">
-                                        <X size={15} />
-                                      </button>
+                                      {/* Bil-ordrenumre — ét pr. bestilt bil i rækken (sendes til vognmand) */}
+                                      {numre.length > 0 && (
+                                        <div className="flex flex-wrap items-center gap-xxs px-xs pb-xs">
+                                          <span className="font-inter text-xxs font-medium text-text-muted">Bil-nr.:</span>
+                                          {numre.map(nr => (
+                                            <span key={nr} className="font-inter text-xxs text-deep-teal bg-soft-aqua rounded-md px-xs py-xxxs tabular-nums">{nr}</span>
+                                          ))}
+                                        </div>
+                                      )}
                                     </div>
                                   )
                                 })}
                               </div>
-                            )}
+                              )
+                            })()}
                             <button
                               onClick={addOrder}
                               className="inline-flex items-center gap-xs font-inter text-xs font-semibold text-dark-teal bg-white border border-dashed border-light-aqua rounded-full px-sm py-xs hover:bg-soft-aqua hover:border-dark-teal transition-colors mt-xs"
@@ -2881,7 +2938,12 @@ export function OrdrePlanScreen() {
             <UdfoerselContent
               forundersoegelseFotos={photos.filter(p => p.source === 'forundersoegelse')}
               onAddPhotos={(newPhotos) => setPhotos(prev => [...prev, ...newPhotos])}
-              vognmandBekraeftelse={activeDays[0] ? vognmandBekraeftelser[activeDays[0].id] : undefined}
+              // Bekræftelsen følger den valgte dato-pille — dashboardet hænger sammen med datoen (LÅST 2026-06-13).
+              // Hver dag har sin egen vognmand-bekræftelse; matcher selectedDate ingen aktiv dag → undefined (= "Afventer").
+              vognmandBekraeftelse={(() => {
+                const d = activeDays.find(day => day.date === udfoerselSelectedDate)
+                return d ? vognmandBekraeftelser[d.id] : undefined
+              })()}
               vognmandMaterielBekraeftelse={vognmandMaterielBekraeftelse}
               products={products}
               isSamleordreMode={isSamleordreMode}
@@ -4385,59 +4447,152 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
           // Hent mock-variation baseret på valgt produkt + dato
           const mockData = getMockDataForProductDate(selectedProductId, selectedDate)
           const selectedProductObj = products.find(p => p.id === selectedProductId)
+
+          // ── Bekræftet detalje (LÅST 2026-06-13) ──────────────────────────
+          // Bilbestillingen er en ønskeliste; vognmandens bekræftede data kan afvige.
+          // Vises kun i enkelt-ordre (samleordre har ikke per-child bil-liste i mock).
+          // TODO: Erstat med Supabase — confirmed_vehicles[] pr. (ordre, dag).
+          const optælTyper = (typer: string[]): string => {
+            const m = new Map<string, number>()
+            typer.forEach(t => m.set(t, (m.get(t) ?? 0) + 1))
+            return Array.from(m.entries()).map(([t, n]) => `${n}× ${t}`).join(' · ')
+          }
+          const byTid = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+
+          // Biler-boks: asfalt-biler (materiel-biler hører til Materiel-boksen)
+          const asfaltBiler = (vognmandBekraeftelse?.biler ?? []).filter(b => !b.er_materiel_bil)
+          const bilerTypeTekst = optælTyper(asfaltBiler.map(b => b.biltype))
+          const bilerMedTid = asfaltBiler
+            .filter(b => b.ankomst_plads_tid)
+            .sort((a, b) => byTid(a.ankomst_plads_tid!, b.ankomst_plads_tid!))
+          const bilerTop3 = bilerMedTid.slice(0, 3)
+          const bilerRest = bilerMedTid.length - bilerTop3.length
+          const visBilDetalje = activeChild === undefined && displayBilerBekraeftet && asfaltBiler.length > 0
+
+          // Materiel-boks: unik transport-bil pr. reg.nr (én bil kan bære flere enheder)
+          const materielItems = vognmandMaterielBekraeftelse?.items ?? []
+          const materielTypeTekst = optælTyper(materielItems.map(m => m.transportType))
+          const seenRegnr = new Set<string>()
+          const materielBilerUnik = materielItems.filter(m => {
+            if (seenRegnr.has(m.regnr)) return false
+            seenRegnr.add(m.regnr)
+            return true
+          })
+          const materielMedTid = materielBilerUnik
+            .filter(m => m.ankomst_plads_tid)
+            .sort((a, b) => byTid(a.ankomst_plads_tid!, b.ankomst_plads_tid!))
+          const materielTop3 = materielMedTid.slice(0, 3)
+          const materielRest = materielMedTid.length - materielTop3.length
+          const visMaterielDetalje = activeChild === undefined && displayMaterielBekraeftet && materielItems.length > 0
+
           return (
-            <div className={isSamleordreMode ? 'grid grid-cols-3 gap-xs auto-rows-fr' : 'grid grid-cols-3 xl:grid-cols-7 gap-xs auto-rows-fr'}>
-              {/* Biler — per-child i samleordre-mode, global i enkelt-ordre */}
-              <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${displayBilerBekraeftet ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
-                <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">
-                  Biler
-                </span>
-                <div className="flex-1 flex items-end pb-xxxs">
-                  <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
-                    {displayAntalBiler}
+            <div className="flex flex-col gap-xs">
+              {/* Status-bokse — Biler/Materiel udvides med bekræftet detalje (LÅST 2026-06-13) */}
+              <div className={isSamleordreMode ? 'grid grid-cols-3 gap-xs auto-rows-fr' : 'grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-5 gap-xs auto-rows-fr'}>
+                {/* Biler — per-child i samleordre-mode, global + bekræftet detalje i enkelt-ordre */}
+                <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${!isSamleordreMode ? 'xl:col-span-2' : ''} ${displayBilerBekraeftet ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
+                  <div className="w-full flex items-center justify-between gap-xs">
+                    <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">
+                      Biler
+                    </span>
+                    {visBilDetalje && (
+                      <span className="font-inter text-xxs font-semibold text-good">Bekræftet</span>
+                    )}
+                  </div>
+                  {visBilDetalje ? (
+                    <>
+                      <span className="font-poppins font-semibold text-sm text-text-primary mt-xxxs">
+                        {bilerTypeTekst} bekræftet
+                      </span>
+                      <div className="flex flex-col w-full mt-xxs">
+                        {bilerTop3.map(b => (
+                          <span key={b.regnr} className="font-inter text-xs text-text-secondary tabular-nums leading-snug">
+                            <span className="font-medium text-text-primary">{b.regnr}</span> · ankomst {b.ankomst_plads_tid}
+                          </span>
+                        ))}
+                        {bilerRest > 0 && (
+                          <span className="font-inter text-xxs text-text-muted mt-xxxs">+{bilerRest} flere</span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex-1 flex items-end pb-xxxs">
+                        <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
+                          {displayAntalBiler}
+                        </span>
+                      </div>
+                      <span className="font-inter text-xs text-text-muted min-h-[1em]">
+                        {displayBilerBekraeftet ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
+                      </span>
+                    </>
+                  )}
+                </div>
+                {/* Materiel transport — per-child i samleordre-mode, global + bekræftet detalje i enkelt-ordre */}
+                <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${!isSamleordreMode ? 'xl:col-span-2' : ''} ${displayMaterielBekraeftet ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
+                  <div className="w-full flex items-center justify-between gap-xs">
+                    <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">
+                      Materiel transport
+                    </span>
+                    {visMaterielDetalje && (
+                      <span className="font-inter text-xxs font-semibold text-good">Bekræftet</span>
+                    )}
+                  </div>
+                  {visMaterielDetalje ? (
+                    <>
+                      <span className="font-poppins font-semibold text-sm text-text-primary mt-xxxs">
+                        {materielTypeTekst} bekræftet
+                      </span>
+                      <div className="flex flex-col w-full mt-xxs">
+                        {materielTop3.map(m => (
+                          <span key={m.regnr} className="font-inter text-xs text-text-secondary tabular-nums leading-snug">
+                            <span className="font-medium text-text-primary">{m.regnr}</span>
+                            {m.ankomst_plads_tid ? ` · ankomst ${m.ankomst_plads_tid}` : ''}
+                          </span>
+                        ))}
+                        {materielRest > 0 && (
+                          <span className="font-inter text-xxs text-text-muted mt-xxxs">+{materielRest} flere</span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex-1 flex items-end pb-xxxs">
+                        <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
+                          {displayAntalMateriel}
+                        </span>
+                      </div>
+                      <span className="font-inter text-xs text-text-muted min-h-[1em]">
+                        {displayMaterielBekraeftet ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
+                      </span>
+                    </>
+                  )}
+                </div>
+                {/* Forundersøgelse — per-child i samleordre-mode, global i enkelt-ordre */}
+                <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${displayForundersoegelseOK ? 'bg-good-bg border-good/30' : 'bg-bad-bg border-bad/30'}`}>
+                  <span className={`font-inter text-xxs font-medium tracking-widest uppercase ${displayForundersoegelseOK ? 'text-text-muted' : 'text-bad/70'}`}>
+                    Forundersøgelse
+                  </span>
+                  <div className="flex-1 flex items-end pb-xxxs">
+                    <span className={`font-poppins font-semibold text-xl tabular-nums ${displayForundersoegelseOK ? 'text-text-primary' : 'text-bad'}`}>
+                      {displayForundersoegelseStatus === 'OK' ? 'OK' : '–'}
+                    </span>
+                  </div>
+                  <span className={`font-inter text-xs min-h-[1em] ${displayForundersoegelseOK ? 'text-text-muted' : 'text-bad/80'}`}>
+                    {displayForundersoegelseStatus === 'OK'
+                      ? 'Tilfredsstillende'
+                      : displayForundersoegelseStatus === 'IKKE_OK'
+                        ? 'Ikke tilfredsstillende'
+                        : 'Mangler vurdering'}
                   </span>
                 </div>
-                <span className="font-inter text-xs text-text-muted min-h-[1em]">
-                  {displayBilerBekraeftet ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
-                </span>
               </div>
-              {/* Materiel transport — per-child i samleordre-mode, global i enkelt-ordre */}
-              <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${displayMaterielBekraeftet ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
-                <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">
-                  Materiel transport
-                </span>
-                <div className="flex-1 flex items-end pb-xxxs">
-                  <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
-                    {displayAntalMateriel}
-                  </span>
-                </div>
-                <span className="font-inter text-xs text-text-muted min-h-[1em]">
-                  {displayMaterielBekraeftet ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
-                </span>
-              </div>
-              {/* Forundersøgelse — per-child i samleordre-mode, global i enkelt-ordre */}
-              <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${displayForundersoegelseOK ? 'bg-good-bg border-good/30' : 'bg-bad-bg border-bad/30'}`}>
-                <span className={`font-inter text-xxs font-medium tracking-widest uppercase ${displayForundersoegelseOK ? 'text-text-muted' : 'text-bad/70'}`}>
-                  Forundersøgelse
-                </span>
-                <div className="flex-1 flex items-end pb-xxxs">
-                  <span className={`font-poppins font-semibold text-xl tabular-nums ${displayForundersoegelseOK ? 'text-text-primary' : 'text-bad'}`}>
-                    {displayForundersoegelseStatus === 'OK' ? 'OK' : '–'}
-                  </span>
-                </div>
-                <span className={`font-inter text-xs min-h-[1em] ${displayForundersoegelseOK ? 'text-text-muted' : 'text-bad/80'}`}>
-                  {displayForundersoegelseStatus === 'OK'
-                    ? 'Tilfredsstillende'
-                    : displayForundersoegelseStatus === 'IKKE_OK'
-                      ? 'Ikke tilfredsstillende'
-                      : 'Mangler vurdering'}
-                </span>
-              </div>
-              {/* 4 OrdreInfoCards — KUN for enkelt-ordre. Areal/Produkt/Tykkelse/Tons giver ikke mening
+
+              {/* 4 OrdreInfoCards — egen række. KUN for enkelt-ordre. Areal/Produkt/Tykkelse/Tons giver ikke mening
                   for samleordre (flere ordrer, flere produkter). Brug Ordredetaljer-mini-strippen i stedet. */}
               {/* TODO (produktion): Kortene bruger mockData koblet til (selectedProductId, selectedDate) */}
               {recept && !isSamleordreMode && (
-                <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-xs auto-rows-fr">
                   <OrdreInfoCard
                     label="AREAL I DAG"
                     value={fmtTal(mockData.areal)}
@@ -4460,7 +4615,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                     // effective tons = produkt-total + evt. ekstra fra PLAN på produktets dage
                     subtekst={`á ${fmtTal(selectedProductObj ? getEffectiveProductTotalTons(selectedProductObj) : DEMO_ORDRE_TOTAL_TONS)} Tons`}
                   />
-                </>
+                </div>
               )}
             </div>
           )
