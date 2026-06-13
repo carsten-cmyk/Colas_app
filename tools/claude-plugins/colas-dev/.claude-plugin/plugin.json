@@ -1,0 +1,10 @@
+{
+  "name": "colas-dev",
+  "description": "Enforcement-hooks for Colas Transport Apps — håndhæver de ufravigelige regler fra CLAUDE.md mekanisk i stedet for at stole på at modellen husker dem.",
+  "version": "0.1.0",
+  "author": {
+    "name": "OOTB",
+    "email": "carsten@ootb.io"
+  },
+  "keywords": ["colas", "hooks", "design-tokens", "guardrails"]
+}

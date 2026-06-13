@@ -1,0 +1,20 @@
+{
+  "name": "ootb-claude-plugins",
+  "owner": {
+    "name": "OOTB",
+    "email": "carsten@ootb.io"
+  },
+  "description": "Delte Claude Code-plugins for OOTB's klientprojekter — fælles skills, hooks og permission-presets.",
+  "metadata": {
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "colas-dev",
+      "source": "./colas-dev",
+      "description": "AI-dev-setup for Colas Transport Apps monorepo: enforcement-hooks (frosne tokens, build-artefakter, dev-server-beskyttelse, lint-før-commit).",
+      "category": "development",
+      "keywords": ["colas", "transport", "expo", "react", "tokens", "hooks"]
+    }
+  ]
+}

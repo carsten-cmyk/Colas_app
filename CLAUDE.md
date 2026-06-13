@@ -105,6 +105,27 @@ Se `.claude/agents/` for fulde agent-definitioner.
 
 ---
 
+## Claude Code Plugin — `colas-dev`
+
+Repoet leverer et plugin der **håndhæver** reglerne nedenfor mekanisk via hooks (i stedet for kun at stole på modellen). Ligger i `tools/claude-plugins/`.
+
+**Installation (engangs pr. maskine):**
+```bash
+claude plugin marketplace add /Users/<dig>/Documents/Colas/tools/claude-plugins
+claude plugin install colas-dev@ootb-claude-plugins
+```
+Eller interaktivt: `/plugin marketplace add ...` → `/plugin install colas-dev@ootb-claude-plugins`.
+
+**Hooks:**
+- `guard-pkill` — blokerer bredt `pkill`/`killall` mod vite/node/expo (beskytter dev-serveren)
+- `block-build-artefacts` — blokerer edits af `dist/`, `build/`, `node_modules/`, native build-output, lockfiles
+- `guard-tokens` — kræver bekræftelse før edits af `tailwind.config.ts`, `tokens.ts`, `DESIGN_SYSTEM.md` (frosne)
+- `lint-before-commit` — kører `npm run lint:all` ved `git commit` (advarer; `COLAS_LINT_BLOCKING=1` for at blokere)
+
+Detaljer + genbrug på andre klientprojekter: `tools/claude-plugins/colas-dev/README.md`.
+
+---
+
 ## Ufravigelige regler — ALLE apps
 
 ### Design tokens — ingen undtagelser, heller ikke i prototyper

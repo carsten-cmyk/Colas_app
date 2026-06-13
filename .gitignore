@@ -68,3 +68,6 @@ Transport_Løsning/
 
 # Claude Code local cache
 .claude/screenshots/
+
+# Playwright MCP verifikations-artefakter (ephemeral)
+.playwright-mcp/
