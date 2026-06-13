@@ -13,6 +13,7 @@ For hver kørselsbestilling sender vi:
 | Oplysning | Forklaring |
 |---|---|
 | **Ordrenummer** | Reference på ordren |
+| **Bil-ordrenummer (pr. bil)** | Hver enkelt bestilt bil får sit eget unikke nummer i formatet `<ordrenummer>-DDMMYY-NN` (for eksempel `1212343-170326-01`). Løbenummeret nulstilles hver dag. Det betyder, at I kan behandle **hver bil som en separat ordre** — og at en ny dag giver nye ordrer. Nummeret skal bæres med tilbage på den bil, I sætter på (se afsnit 2), så vi kan koble jeres bil til den rigtige bestilling. |
 | **Dato** | Hvilken dag kørslen skal udføres |
 | **Fabrik** | Hvor materialet hentes |
 | **Produkt og forventede Tons** | Hvilket asfaltprodukt og hvor mange Tons der forventes pr. produkt |
@@ -33,6 +34,7 @@ Når I har disponeret, sender I tilbage — **for hver bil I sætter på dagen:*
 
 | Oplysning | Forklaring |
 |---|---|
+| **Bil-ordrenummer** | Det nummer (`<ordrenummer>-DDMMYY-NN`) vi sendte for netop den bil — så vi kan matche jeres bil mod den rigtige bestilling |
 | **Biltype** | For eksempel 4-akslet, sættevogn |
 | **Chaufførens navn** | Navnet på den chauffør der kører bilen |
 | **Chaufførens mobilnummer** | Det nummer chaufføren har på sig — det er hertil vi sender SMS med ordren og linket til webappen |
@@ -74,3 +76,56 @@ Vi vil gerne forstå, hvordan jeres eget disponeringssystem arbejder, så vi kan
 6. **Skift af chauffør i løbet af dagen:** Når en bil skiftes ud undervejs, hvordan vil I helst give os besked om den nye bil og chauffør?
 
 7. **Filformat:** Hvis jeres system skal modtage bestillingen elektronisk — er der et bestemt format, I har brug for, for at kunne læse den ind?
+
+---
+
+## Teknisk leverancemodel (arbejdsmodel — valgt 2026-06-10)
+
+> Foreløbig retning: **daglig fil-leverance dagen før.** Lavest fællesnævner — stort set ethvert disponeringssystem kan eksportere en CSV, og det kræver ingen realtids-integration. De fleste vognmænd forventes at kunne levere dette.
+
+### Hovedmodel — dagen før
+
+1. Vognmanden disponerer i **sit eget system**.
+2. Systemet eksporterer disponeringen som en **CSV-fil** (eller tilsvarende aftalt format).
+3. Filen lægges på et **nærmere defineret sted** — en **SFTP**-drop-mappe.
+4. Colas **henter og indlæser** filen automatisk.
+
+Dette dækker den planlagte disponering — det vil sige ~95 % af tilfældene, hvor alt er kendt dagen før.
+
+### Filkontrakten (skal låses pr. vognmand)
+
+| Felt | Krav | Hvorfor |
+|---|---|---|
+| **Bil-ordrenummer (Colas' reference pr. bil)** | Skal med i hver række | **Match-nøglen** (`<ordrenummer>-DDMMYY-NN`) — kobler jeres bil til præcis den bestilte bil. Hver bil er en separat ordre, så match sker på bil-niveau, ikke kun ordre-niveau |
+| **Ordrenummer (Colas' reference)** | Skal med i hver række | Menneskeligt-læsbar reference til moderordren (kan udledes af bil-ordrenummeret, men medsendes for læsbarhed) |
+| **Biltype** | Faste betegnelser | Mappes mod Colas' biltyper — aftal de eksakte tekster/koder |
+| **Chaufførnavn** | Påkrævet | Vises til formand + chauffør |
+| **Chaufførens mobilnummer** | **Påkrævet — ikke valgfrit** | Hele SMS-flowet falder hvis det mangler eller er forkert |
+| **Samme bil, flere ture / flere ordrer** | Aftalt repræsentation | Jf. spørgsmål 5 ovenfor |
+
+**Format:** CSV i **UTF-8** (danske tegn), header-række, fast separator. **Deadline:** filen skal ligge senest et aftalt tidspunkt dagen før (fx kl. 18) — ellers får formanden besked om at en vognmand ikke har leveret.
+
+### Sikkerhed
+
+- **SFTP** (krypteret) — ikke almindelig FTP. Filen indeholder persondata (chaufførnavn + mobil).
+- Drop-endpoint i **EU**.
+- **Databehandleraftale** med vognmanden.
+- Renest: **Colas** stiller en drop-mappe til rådighed pr. vognmand, så placering, kryptering og jurisdiktion er under Colas' kontrol.
+
+### Én kontrakt, to døre
+
+Samme felter og samme validering uanset indleveringsvej:
+
+- **Store vognmænd med system:** CSV-fil via SFTP (modellen ovenfor).
+- **Små vognmænd uden system:** taster ind i en enkel Colas web-formular.
+
+Begge ender i samme `confirmed_vehicles[]` i Colas' DB. Der bygges aldrig to datamodeller — kun to indgange til den samme.
+
+### Parkeret til senere — edge-cases
+
+> Bevidst udskudt 2026-06-10. Den daglige fil løser den planlagte disponering; følgende sker i realtid på dagen og håndteres senere (foreløbig via telefon + manuel opdatering i portalen → ny SMS til ny chauffør):
+
+- **Sygdom / nedbrud** — chaufførskift på dagen.
+- **Ekstra bil sat på undervejs** — flere biler end disponeret dagen før.
+
+Disse skal **ikke** presses ind i den daglige fil — de designes som et separat, mindre flow når hovedmodellen står.

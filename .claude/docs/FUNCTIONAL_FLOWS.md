@@ -6,6 +6,27 @@ Opdateres manuelt når forretningsregler beskrives der ikke fremgår af kode.
 
 ---
 
+## 🟡 Mellemnote: Backend- og integrations-arkitektur (foreløbig, 2026-06-12)
+
+> **Interim** — afventer kickoff **mandag 15.6.2026** hvor detaljeret dataindhold defineres. Kilde: Abraham (DB-ansvarlig, Colas France). Kanonisk uddybning: memory `project_plan_integration_architecture` + `.claude/docs/MEETING_PLAN_ORACLE_FR.md`.
+
+**Systemlandskab (Colas France, Oracle):**
+- **APPS** — Oracle DB-instans der hoster skemaer: **PLAN** (system of record: ordrer, hold, materiel, recepter, forundersøgelser) + **DataHub** (integrations-spine; materialiserer jævnligt data lokalt i APPS så andre systemer kan læse via db-connectivity uden eget REST; bygger bro til Zephyr via REST). Vores nye **app-skema** lægges i APPS med GRANT til PLAN/DataHub-objekter, tilgået read-only (views).
+- **Zephyr** — centralt system (REST) der modtager transaktioner fra DataHub/PLAN/MAUS.
+- **MAUS** — **veje-/fabrikssystemet** (SQL-server hos leverandør, db-link over gateway til DataHub). Danner **vejninger** → DataHub → Zephyr. ⇒ **MAUS er kilden til vejedata i France-arkitekturen** (chauffør-webappens vejnings-flow, Flow 3, afhænger af dette lag).
+
+**Vores lag:** egen database (operationelt lag) + backend. Læser PLAN read-only; opsamler feltdata (timer, vejning, billeder, bil-disponering); sender behandlede resultater retur til PLAN via **én service-konto**. Offline write-queue (kø + afvikl senere + log) bekræftet af Abraham.
+
+**To backend-modeller (åbent — afgøres ~15.6):**
+1. **Egen SQL-server** bygget af app-udvikler, db-link over gateway, udstiller web-interface ("MAUS-modellen") → vores kontrol + hurtig iteration *(foretrukket)*.
+2. **PLAN_APP i APPS** bygget af Cegal, ORDS/REST, delt i INT_PLAN_APP + EXT_PLAN_APP af sikkerhedshensyn.
+
+Begge kræver: France åbner firewall App→backend; bruger-auth via AD/Azure (France vil måske selv eje auth = "sikrest"). NB: chauffør + vognmand er **ikke** brugere i PLAN/AD → deres auth er et separat spor.
+
+**⚠️ Afstemnings-punkt (vejedata-kilde):** France = **MAUS/DataHub**, men DK-flowet (Flow 3, Thomas) refererer **Danvægt** ved fabrikkens vægt. Forholdet MAUS ↔ Danvægt skal afklares (er Danvægt den fysiske vægt/terminal og MAUS det system der registrerer/fordeler — eller parallelle?). Vores `DATA_FIELDS`/Excel siger pt. "Danvægt".
+
+---
+
 ## Flow 1: Bilbestilling — Formand → Vognmand → Chauffør
 
 **Trigger:** Formand planlægger asfalt-kørsel på en dag
@@ -21,9 +42,27 @@ Opdateres manuelt når forretningsregler beskrives der ikke fremgår af kode.
 
 **Mødetid på fabrik (LÅST 2026-06-10):** **Hver bil** får ét opstarts-ankomsttidspunkt på pladsen under indfasningen → og dermed én mødetid på fabrik: `moedetid_fabrik = ankomst_plads − køretid`, hvor køretid = Google Maps + 10%. De pinnede biler bruger formandens eksplicitte plads-tider; de øvrige biler får deres opstarts-ankomst beregnet af intervallet fra sidste pinnede læs (08:20, 08:40 …) og indgår i flowet, **indtil ALLE biler er i rotation.** Når hele flåden er fyldt ind, kører de i loop uden flere planlagte tider. Eksempel: pinned ankomst plads 07:15, køretid 36 min → mødetid fabrik 06:39.
 
+**Bilbestilling er en ØNSKELISTE til vognmanden (LÅST 2026-06-13):** Alt formanden bestiller — antal, biltyper OG tidspunkter — er **ønsker**, ikke en bindende ordre. Vognmanden kan ikke nødvendigvis opfylde dem 1:1, og den endelige aftale forhandles **over telefonen** mellem formand og vognmand. Platformen skal derfor regne med at modtage **andre data retur** (bekræftet ≠ ønske) — andet antal, andre typer, andre tidspunkter. Konsekvenser:
+- **Hver eneste bil i ønskelisten sendes med et tidspunkt** — også bil 4, 5, 6 … De pinnede biler bærer formandens eksplicitte plads-tider; de øvrige får en plads-tid fremskrevet af intervallet (jf. "Mødetid på fabrik" ovenfor). Vognmanden modtager altså en **komplet** ønskeliste hvor *hver* bil har en plads-tid — ikke kun de 3 første.
+- **Unikt bil-ordrenummer pr. bil pr. dag (LÅST 2026-06-13):** Hvert bil-ønske sendes med sit eget unikke nummer i formatet `<ordrenr>-DDMMYY-NN` (fx `1212343-170326-01`). Løbenummeret **NN** nulstilles pr. dag og tæller på tværs af alle biltyper i bestillingens rækkefølge. Begrundelse: **vognmændene behandler hver bil som en separat ordre** og opretter nye ordrer pr. dag — så ét fælles ordrenummer pr. dag er ikke nok; hver bil skal kunne identificeres entydigt. Nummeret genereres når formanden sender bestillingen (backend-side i produktion) og følger bilen videre til `confirmed_vehicles[]`, fabrik (Trin 5b) og chauffør (Trin 8). I prototypen: `buildBilOrdreNumre()` i `OrdrePlanScreen.tsx`, vist som pille pr. bil-række i "Planlæg kørsel"-panelet.
+- **Bekræftet data (`confirmed_vehicles[]`) er sandheden downstream** og kan afvige fra ønsket. Den vises på Udførsel-siden (se Trin 0 + Trin 7) og bruges af fabrik (Trin 5b) og chauffør (Trin 8).
+- Samme princip gælder **materiel-transport** (Flow 2): formandens materiel-bestilling er et ønske; vognmandens bekræftede materiel-disponering kan afvige og vises tilsvarende.
+
 **Kommentar til chauffør (LÅST 2026-05-22):** Feltet i bunden af bilbestillingen er omdøbt fra "Kommentar til formanden" → **"Kommentar til chauffør"**. Indholdet skal sendes sammen med ordren TIL CHAUFFØREN (synlig i chauffeur-appen — se Trin 8 / Flow 3). Formand bruger feltet til at give kørselsspecifikke instruktioner: "Brug bagvejen", "Lav støj-restriktion efter 22", "Aflæsningssted er flyttet 50m mod vest" osv.
 
-**Skriver til:** `orders.asfalt_koersel[].planlagt = true`, `orders.asfalt_koersel[].kommentar_til_chauffoer`, `orders.asfalt_koersel[].foerste_laes_udlaegning_tid`, `orders.asfalt_koersel[].interval_minutter_mellem_laes`, `orders.asfalt_koersel[].biler[]` (ordnet array — index 0 = første læs)
+**Skriver til:** `orders.asfalt_koersel[].planlagt = true`, `orders.asfalt_koersel[].kommentar_til_chauffoer`, `orders.asfalt_koersel[].foerste_laes_udlaegning_tid`, `orders.asfalt_koersel[].interval_minutter_mellem_laes`, `orders.asfalt_koersel[].biler[]` (ordnet array — index 0 = første læs).
+
+**`biler[]`-ønske-objekt (LÅST 2026-06-13):** Hver bil i ønskelisten er ét objekt — `antal`-stepperen i UI'en udfoldes til individuelle biler ved send:
+```
+{
+  bil_ordre_nr: string,          // <ordrenr>-DDMMYY-NN — unikt pr. bil pr. dag, løbenr NN nulstilles pr. dag
+  bil_type: string,              // fx "6 Aks" | "7 Aks" | "Egen bil"
+  ankomst_plads_tid: string,     // HH:MM — pinned (eksplicit) eller interval-fremskrevet (se Mødetid på fabrik)
+  moedetid_fabrik: string,       // HH:MM — ankomst_plads − køretid
+  egen_bil: boolean,             // true → springer vognmand over (jf. Variant: Egen bil-flow)
+}
+```
+Vognmanden modtager dette array (én ønske-bil pr. objekt, hver med sit `bil_ordre_nr`) og svarer med `confirmed_vehicles[]` (Trin 4), der bærer samme `bil_ordre_nr` retur.
 
 **Bilbehov-dashboard (LÅST 2026-06-10):** I "Planlæg kørsel"-panelet vises en read-only **Bilbehov**-dashboard (beregningsoverblik der hjælper formanden disponere antal biler). Tiles og deres beregninger:
 
@@ -71,6 +110,7 @@ Når vognmanden trækker biler ind i drop-zonen, får hver placeret bil automati
 **Skriver til:** `orders.asfalt_koersel[].confirmed_vehicles[]` med per-bil objekt:
 ```
 {
+  bil_ordre_nr: string,          // <ordrenr>-DDMMYY-NN — matcher ønske-bilen (biler[].bil_ordre_nr)
   reg_nr: string,
   chauffoer_navn: string,
   chauffoer_tlf: string,
@@ -80,7 +120,7 @@ Når vognmanden trækker biler ind i drop-zonen, får hver placeret bil automati
   moedetid_fabrik: string,       // HH:MM — tilbageregnet fra ankomst_plads − driveTimeMinutes
 }
 ```
-Disse felter sendes retur til formand (Trin 7) og til chauffør (Trin 8) — hver chauffør får KUN sin egen mødetid_fabrik.
+Disse felter sendes retur til formand (Trin 7) og til chauffør (Trin 8) — hver chauffør får KUN sin egen mødetid_fabrik. **`bil_ordre_nr` bærer ønske-bilens nummer videre**, så formand/fabrik/chauffør kan matche bekræftet bil mod den oprindelige ønske-bil (og opdage afvigelser i antal/type/tid).
 
 ### Trin 5 — Vognmand bekræfter
 **App:** vognmand
@@ -188,9 +228,13 @@ For `undervejs`-biler beregnes live ETA fra faktisk timestamps. `planlagt`-biler
 
 | Felt | Kilde | Notes |
 |---|---|---|
+| `bil_ordre_nr[]` | `orders.asfalt_koersel[].biler[].bil_ordre_nr` | Unikt nr. pr. bil pr. dag (`<ordrenr>-DDMMYY-NN`). Hver bil = separat ordre i vognmandens optik |
 | `antal_biler` | `orders.asfalt_koersel[].biler.length` (eller `confirmed_vehicles.length`) | Total antal biler bestilt for dagen |
 | `starttid` | `orders.asfalt_koersel[].foerste_laes_udlaegning_tid` | Første læs på plads (HH:MM) |
 | `interval_minutter_mellem_laes` | `orders.asfalt_koersel[].interval_minutter_mellem_laes` | Forskydning mellem efterfølgende læs |
+| `moedetid_foerste_bil` | Beregnet: `foerste_laes_udlaegning_tid − factory.driveTimeMinutes` | **Mødetid på fabrik for FØRSTE bil** (HH:MM) |
+
+**🟢 LÅST 2026-06-12 (Carsten):** Når formand har bestilt **antal biler** og angivet **første tidspunkt på fabrik**, SKAL som minimum `antal_biler` + `moedetid_foerste_bil` (mødetid på fabrik for første bil) overføres til PLAN/Asfalttavlen. Dette er minimums-udvekslingen for bilbestilling; per-bil-mødetider for de øvrige biler er fortsat under afklaring (se nedenfor).
 
 🟡 **ÅBENT (LÅST 2026-06-10): konkret payload-format aftales med PLAN-team.** Formatet skal kunne håndtere "Egen bil"-flag (jf. Variant nedenfor), "Samles på en bil"-markeringer (jf. Flow 12), og evt. per-bil-beregnede mødetider på fabrik (jf. Trin 5b-formlen). Det er endnu uafklaret om Asfalttavlen pull'er data fra Colas via API/webhook, eller om Colas push'er ved hver send/bekræftelse.
 
@@ -285,7 +329,7 @@ orders.asfalt_koersel[].egen_bil: boolean (default false)
 
 **Flow:**
 1. Chauffør indtaster mobilnummer (DK-format, +45 auto-prefix)
-2. App sender 6-cifret SMS-kode via Supabase Auth (eller anden leverandør — se INFRA-AUTH-001)
+2. App sender 6-cifret SMS-kode via **LINK Mobility** (SMS-leverandør besluttet 2026-06-10 — se #5 [INFRA-AUTH-001] + EPIC #2). Kaldes fra eget backend-endpoint (sandsynligvis ikke Supabase Auth, da DB-valg er åbent)
 3. Chauffør indtaster koden
 4. Ved succes: token gemmes i `localStorage` med expiration-timestamp. Token gyldig 30 dage (webapp-fase 1) / 6 måneder (native-fase 2).
 5. App refresher → direkte til forside (dashboard). Ingen mellem-skærm.
@@ -1255,6 +1299,40 @@ Formål: vognmanden får tilstrækkelig kontekst til at disponere korrekt blokvo
 - Backend API-kontrakt mellem chauffør-app og vejesystem (REST/webhook/event)
 - Offline-fallback: hvad sker når vejesystem er nede?
 
+**🟡 Vejnings-broker (bonus-info 2026-06-12, Carsten):** Når chauffør-appen scanner QR på fabrikkens vægt, benytter **Danvægt en broker** (integrations-/message-broker) til at få vejnings-transaktionen hurtigere igennem — dvs. transaktionen kvitteres straks og videresendes/behandles **asynkront** mod de øvrige systemer (typisk via kø) i stedet for et synkront round-trip mens chaufføren venter ved vægten. Præcist indhold uafklaret — afklar med Thomas/Danvægt: hvilken broker, hvad kvitteres tilbage til app'en, latency, og forholdet til MAUS/DataHub (se Mellemnote øverst i dette dok).
+
+**🔵 Vejnings-integration — design & udviklings-organisering (arbejdsgrundlag, 2026-06-12)**
+
+> **GitHub Epic:** [#57 — EPIC: Vejnings-integration (QR + broker + Danvægt/MAUS)](https://github.com/carsten-cmyk/Colas_app/issues/57) — kort overblik + kunde-sign-off-anker; dette afsnit er den kanoniske detalje Epic'en henviser til.
+>
+> Dokumenteret her for at sikre at QR-scan + vejnings-binding **bliver bygget** — enten som del af chauffør-app-udviklingen eller som et separat integrationsspor der kobles ind når kontrakten er låst. **Anbefaling: separat spor bag en defineret seam** (se nederst).
+
+**Kerneproblem:** Vægten måler vægt — den ved ikke hvem/hvilken ordre der står på den. QR-scanningen er **bindingen** mellem den fysiske vejning og den digitale identitet (chauffør → ordre → produkt). Alt nedenfor handler om at gøre den binding pålidelig, hurtig og robust mod fejl.
+
+**Koreografi (ende-til-ende):**
+1. Bil kører på vejebro / hen til QR-punkt
+2. Chauffør (logget ind) trykker "scan QR"
+3. App læser QR → `terminal_id`; validerer terminalens fabrik == ordrens fabrik
+4. App sender til vejesystem via broker: `{ scan_id, chauffoer_tlf, order_id, aktivt_produkt, terminal_id, tidspunkt }`
+5. Broker kvitterer straks → app: "vægt klar / venter"
+6. Vejesystem binder: næste vejning på `terminal_id` → dette `scan_id`; svarer med produkt-instruktion (silo, produkt) ← **vægten er gatekeeper** (jf. Flow 1 multi-produkt)
+7. Indvejning (tara) → lastning → udvejning (lastet) → netto tons
+8. Vejesystem danner vejeseddel → broker → vores system; vi kobler via `scan_id`/`order_id` → opdaterer vejeseddel + status
+9. App viser bekræftelse (tons, tid) → chauffør kører til plads
+
+**Designhensyn der SKAL adresseres:**
+- **Broker:** kvitterings-semantik (modtaget vs. vejning-færdig), latency (chauffør venter ved vægten), **idempotens** (`scan_id` → ingen dobbelt-vejning ved retry), leveringsgaranti (vejning må aldrig tabes/dubleres — afregning afhænger af den), fejl-fallback (broker/vægt/app nede).
+- **QR:** auth kommer fra **app-sessionen**, ikke fra QR'en (statisk pr. terminal = ikke en hemmelighed). QR siger kun *hvilken vægt*. Validér terminal mod ordre.
+- **🔴 Kritisk princip — vejning må ALDRIG blokeres af appen:** vægtområdet har ofte dårligt signal. Den fysiske vejning skal kunne ske uanset app-forbindelse; bindingen er best-effort + **afstembar** bagefter. Afkobl "vej altid" fra "bind til chauffør/ordre".
+- **Edge-cases:** to biler scanner samtidig (kø/ordering); bil på vægt uden scan (forældreløs vejning → afstemning); scan uden bil / forkert bil (tids-vindue-mismatch); to vejninger pr. besøg (kombineret last — FF åbent punkt #36); netværk falder midt i sekvens (idempotens + status-polling).
+
+**Udviklings-organisering (Carstens spørgsmål, 2026-06-12):** Vejnings-integrationen afhænger af eksterne parter (Danvægt/Thomas + MAUS/DataHub) hvis kontrakt **endnu ikke er låst**. Derfor:
+- Chauffør-appen bygges mod en **defineret vejnings-adapter (seam/interface)** — fx `useVejning()` / `scanQr()` med **mock-implementering først**.
+- Den **reelle integration (QR → broker → Danvægt/MAUS)** er et **separat udviklingsspor** der kobles ind bag samme interface når kontrakten er låst.
+- Konsekvens: app-udviklingen blokeres ikke af integrationen, og integrationen kan modnes parallelt. **🟡 Beslutning at bekræfte:** separat spor + seam (anbefalet) vs. integreret i app-build.
+
+**Asks til Danvægt/Thomas (før implementation):** broker-kontrakt (send/retur + ack + latency); korrelations-mekanisme (`scan_id`-echo vs. terminal+tids-vindue); leveringsgaranti + dedup; offline-adfærd ved vægt; gatekeeper-svar (produkt-instruktion + format); test-miljø. **+ afstemning MAUS ↔ Danvægt** (vejedata-sti: vægt → Danvægt → broker → MAUS/DataHub → vores DB).
+
 ### Trin 4 — Bekræftelse + lastning
 **App:** chauffeur
 **Komponent:** `AnkommetFabrikScreen` (sub-screen: `bekraeft`)
@@ -1376,12 +1454,23 @@ Produkt-QR (på silo) scannes ÉN gang mellem de to vej-scans for at bekræfte r
 - Tæller: `N biler`
 - **State:** `vognmandBekraeftelse` (truthy = bekræftet)
 
+**Bekræftet detalje i Biler-boksen (LÅST 2026-06-13):** Når vognmanden har bekræftet, viser boksen **vognmandens bekræftede data** — ikke formandens ønske. Da bekræftet kan afvige fra ønsket (jf. ønskeliste-princippet i Flow 1 Trin 1), udvides boksen til:
+- **Antal bekræftet pr. biltype** som overskrift — fx `2× 6-aks · 2× kærre bekræftet` (udledt af `confirmed_vehicles[]` grupperet på `bil_type`).
+- **De biler der har bekræftet tidspunkt**, listet eksplicit med reg.nr + ankomst — fx `XE 32816 · ankomst 06:30` — **maks. de 3 første** (`confirmed_vehicles[]` sorteret på `ankomst_plads_tid`/`moedetid_fabrik`, `.slice(0, 3)`). Er der flere end 3, vises diskret `+N flere`.
+- Boksen skal **udvides** (bredere/højere end de øvrige) for at rumme dette — de øvrige bokse beholder kompakt 4-linjers format.
+- **Datakilde:** `orders.asfalt_koersel[].confirmed_vehicles[]` (Trin 4). Falder tilbage til ønske-tal (`biler[]`) i Planlægning / før bekræftelse.
+
 **Boks 2 — Materiel transport** (placeret UNDER/ved siden af Biler — relateret koncept):
 - Label "MATERIEL TRANSPORT"
 - Status: `Bekræftet` (grøn) eller `Afventer` (neutral)
 - Tæller: `N enheder`
 - **State:** `vognmandMaterielBekraeftelse.items.length > 0`
 - **Note:** Selvom materiel-transport-biler nu vises i samme "Biler & afregning"-sektion som asfalt-biler, har materiel-transport sin egen vognmand-bekræftelses-status og derfor sin egen boks.
+
+**Bekræftet detalje i Materiel transport-boksen (LÅST 2026-06-13):** Samme princip som Biler-boksen — materiel-bestillingen er et ønske, vognmandens bekræftede transport kan afvige. Når bekræftet, viser boksen:
+- **Antal bekræftet pr. transport-type** (fx blokvogn/trailer) som overskrift.
+- **De bekræftede transport-biler med tidspunkt**, reg.nr + ankomst, **maks. de 3 første** (`+N flere` ved overskydende).
+- **Datakilde:** vognmandens bekræftede materiel-disponering (Flow 2 Trin 3-4). Falder tilbage til ønske-tal før bekræftelse.
 
 **Boks 3 — Forundersøgelse:**
 - Label "FORUNDERSØGELSE"
@@ -2316,6 +2405,8 @@ Når en chauffør på en almindelig single-produkt-ordre når sidste-læs (rest 
 **Trigger:** Formand klikker "Send til fabrik" i `SendBekraeftelsesModal` for en `(orderId, selectedPlanDate)` — samme moment hvor `transport_orders`-rows oprettes (jf. ABE-1).
 
 **Payload:** Som udgangspunkt samme felter som ABE-1/ABE-2 (`transport_orders`-row + joins på `recipe_code`, `recipe_name`, `factory_code`, `kommentar`, `samles_paa_en_bil`, `weather_active`), så Asfalttavlen kan vise dagens samlede bestillinger pr. fabrik/ordre. Felterne er allerede listet i ABE-1-tabellen og ABE-2 join-tabellen — duplikeres ikke her.
+
+**🟢 LÅST 2026-06-12 (Carsten):** Asfalttavle-repræsentationen SKAL inkludere **ekstra-bestillinger pr. produkt** (hver i sin egen celle), ikke kun morgen-bestillingen. ⚠️ **Retnings-afstemning til kickoff 15.6:** ekstra tons modelleres pt. som PLAN→Colas push (Flow 9b, `EkstraBestillingBox` read-only). Afklar om ekstra-data allerede ligger i PLAN (så Asfalttavlen blot konsoliderer dem pr. celle) eller om Colas også skal sende dem op. Uanset retning: de skal fremgå **pr. produkt i egen celle** på Asfalttavlen.
 
 🟡 **ÅBENT (LÅST 2026-06-10): konkret payload-format aftales med PLAN-team.** Format-spørgsmål der skal afklares:
 - Pull vs. push: hænter Asfalttavlen data via API fra Colas (`GET /asfaltbestillinger?date=...`), eller pusher Colas ved hver send?

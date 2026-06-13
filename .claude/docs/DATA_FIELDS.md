@@ -170,6 +170,7 @@ ekstra_bestillinger (
 | `orderId` | `string` | ✅ | parent | FK → order | System | — |
 | `date` | `string` (ISO) | ✅ | — | Lovligt ISO | Formand | → vognmand, → fabrik, → chauffør |
 | `bestilte_biler` | `number` | ✅ | 0 | ≥ 0, heltal | Formand | → vognmand |
+| `biler` | `BilOenske[]` | ✅ | `[]` | Ønske-liste — `bestilte_biler`-stepperen udfoldes til individuelle biler ved send, hver med unikt `bil_ordre_nr` (`<ordrenr>-DDMMYY-NN`). Vognmand behandler hver bil som separat ordre | Formand (genereret ved send) | → vognmand, → fabrik |
 | `foerste_laes_udlaegning_tid` | `string` (HH:MM) | ✅ | — | Lovligt HH:MM | Formand | → vognmand, → fabrik (Trin 5b), → chauffør |
 | `interval_minutter_mellem_laes` | `number` | ✅ | — | > 0, heltal, typisk 12-20 | Formand | → vognmand (per-bil ankomst-tid), → fabrik (per-bil pickup), → chauffør (per-læs mødetid) |
 | `kommentar_til_chauffoer` | `string \| null` | ❌ | `null` | Max 500 tegn | Formand | → chauffør (Flow 1 Trin 8) |
@@ -184,6 +185,7 @@ ekstra_bestillinger (
 
 | Felt | Type | Required | Default | Validation | Kilde | Cross-app |
 |---|---|---|---|---|---|---|
+| `bil_ordre_nr` | `string` | ✅ | — | `<ordrenr>-DDMMYY-NN` — matcher ønske-bilen (`AsfaltKoerselDag.biler[].bil_ordre_nr`) så bekræftet bil kan kobles til oprindeligt ønske | Genereret ved send (formand-backend), bæres retur af vognmand | → formand, → chauffør, → fabrik |
 | `reg_nr` | `string` | ✅ | — | Gyldig nummerplade (DK-format) | Vognmand | → formand, → chauffør, → fabrik |
 | `chauffoer_navn` | `string` | ✅ | — | Fulde navn | Vognmand | → formand, → fabrik |
 | `chauffoer_tlf` | `string` | ✅ | — | DK mobil (8 cifre, +45 valgfri) | Vognmand | → formand (ring direkte) |
@@ -210,9 +212,23 @@ asfalt_koersel (
   unique (order_id, date)
 );
 
+-- Ønske-liste: én row pr. bestilt bil (bestilte_biler-stepperen udfoldet)
+bil_oenske (
+  id uuid pk,
+  asfalt_koersel_id uuid fk,
+  bil_ordre_nr text not null,   -- <ordrenr>-DDMMYY-NN, unikt pr. bil pr. dag
+  bil_type text not null,
+  ankomst_plads_tid time not null,
+  moedetid_fabrik time not null,
+  egen_bil boolean not null default false,
+  created_at timestamptz default now(),
+  unique (asfalt_koersel_id, bil_ordre_nr)
+);
+
 confirmed_vehicles (
   id uuid pk,
   asfalt_koersel_id uuid fk,
+  bil_ordre_nr text not null,   -- matcher bil_oenske.bil_ordre_nr (ønske ↔ bekræftet)
   reg_nr text not null,
   chauffoer_navn text not null,
   chauffoer_tlf text not null,
