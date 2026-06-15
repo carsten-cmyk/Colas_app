@@ -8,6 +8,7 @@ import { RefreshCw, X } from 'lucide-react'
 import { SAFE_AREA, FS } from '@/styles/spacing'
 import { BottomTabBar } from '../components/BottomTabBar'
 import type { TabName } from '../components/BottomTabBar'
+import type { MaterielTask } from '@/types/materielTask'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type TaskState = 'idle' | 'active' | 'paused' | 'completed'
@@ -81,9 +82,13 @@ export interface TaskListScreenProps {
   onTaskPress?: (taskId: string) => void
   /** Callback når bruger trykker "Se timeregistrering" på et afsluttet kort i timeregMode */
   onViewTimereg?: (taskId: string) => void
+  /** Materiel-opgaver (separat ID-rum fra asfalt) */
+  materielTasks?: MaterielTask[]
+  /** Callback når bruger trykker på en materiel-række */
+  onSelectMaterielTask?: (id: string) => void
 }
 
-export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false, onTaskPress, onViewTimereg }: TaskListScreenProps) {
+export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false, onTaskPress, onViewTimereg, materielTasks = [], onSelectMaterielTask }: TaskListScreenProps) {
   const [groups, setGroups] = useState<DayGroup[]>(INITIAL_GROUPS)
   const [activeTab] = useState<TabName>('prototyper')
   // ID på den opgave brugeren ønsker at åbne/genoptage — bruges til pause-warning
@@ -259,6 +264,31 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
             </div>
           )
         })}
+
+        {/* Materiel-opgaver — vises under en separat dato-gruppe */}
+        {materielTasks.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <span
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                fontWeight: 600,
+                fontSize: FS.xxs,
+                color: C.textMuted,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase' as const,
+              }}
+            >
+              Materiel
+            </span>
+            {materielTasks.map(mt => (
+              <MaterielEntry
+                key={mt.id}
+                task={mt}
+                onPress={onSelectMaterielTask ? () => onSelectMaterielTask(mt.id) : undefined}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Bottom tab bar */}
@@ -376,6 +406,98 @@ export function TaskListScreen({ onClose, messageCount = 0, timeregMode = false,
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── MaterielEntry ────────────────────────────────────────────────────────────
+interface MaterielEntryProps {
+  task: MaterielTask
+  /** Callback når kortet klikkes — åbner MaterielTaskDetailScreen */
+  onPress?: () => void
+}
+
+function MaterielEntry({ task, onPress }: MaterielEntryProps) {
+  const isIgang = task.state === 'i-gang'
+  const isAfsluttet = task.state === 'afsluttet'
+  const firstPickup = task.pickups[0]
+  const firstDropoff = task.dropoffs[0]
+  const unitSummary = task.units.length === 1
+    ? task.units[0].beskrivelse
+    : `${task.units.length} enheder`
+
+  return (
+    <div
+      onClick={onPress}
+      style={{
+        borderRadius: 12,
+        overflow: 'hidden',
+        position: 'relative',
+        border: `1px solid ${C.border}`,
+        opacity: isAfsluttet ? 0.65 : 1,
+        cursor: onPress ? 'pointer' : 'default',
+        minHeight: 44,
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: C.white,
+          padding: '16px 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        {/* Top-række: ordrenummer + state-badge */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+          <span
+            style={{
+              fontFamily: 'Inter, sans-serif',
+              fontSize: FS.xs,
+              color: C.textMuted,
+            }}
+          >
+            Ordrenummer {task.orderNumber}
+          </span>
+          {/* State-badges — matcher asfalt-badge-stil */}
+          {isIgang && (
+            <div style={{ backgroundColor: C.green, borderRadius: 12, padding: '4px 10px', flexShrink: 0 }}>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: FS.xs, color: C.white }}>I gang</span>
+            </div>
+          )}
+          {isAfsluttet && (
+            <div style={{ backgroundColor: C.error, borderRadius: 12, padding: '4px 10px', flexShrink: 0 }}>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: FS.xs, color: C.white }}>Afsluttet</span>
+            </div>
+          )}
+          {!isIgang && !isAfsluttet && (
+            /* idle — "Materiel"-badge som type-indikator */
+            <div style={{ backgroundColor: '#FFF3CD', borderRadius: 8, padding: '3px 10px', flexShrink: 0 }}>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: FS.xs, color: '#7A5200' }}>Materiel</span>
+            </div>
+          )}
+        </div>
+
+        {/* Enhedsbeskrivelse */}
+        <span
+          style={{
+            fontFamily: 'Poppins, sans-serif',
+            fontWeight: 600,
+            fontSize: FS.md,
+            color: C.deepTeal,
+            lineHeight: 1.2,
+          }}
+        >
+          {unitSummary}
+        </span>
+
+        {/* Afhentning + aflæsning */}
+        {firstPickup && (
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.sm, color: C.textMuted, margin: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+            {firstPickup.sted} → {firstDropoff?.sted ?? '…'} kl. {firstPickup.tid}
+          </p>
+        )}
+      </div>
     </div>
   )
 }

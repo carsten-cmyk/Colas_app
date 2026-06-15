@@ -6,12 +6,15 @@
 import { useState } from 'react'
 import type { TaskState } from '@/types/task'
 import type { Conversation } from '@/types/messages'
+import type { MaterielTask } from '@/types/materielTask'
 import { mockTasks } from '@/mocks/tasks'
 import { mockConversations } from '@/mocks/messages'
+import { MATERIEL_TASKS } from '@/mocks/materielTasks'
 import { SAFE_AREA, FS } from '@/styles/spacing'
 import { SplashScreen } from './screens/SplashScreen'
 import { DashboardScreen } from './screens/DashboardScreen'
 import { TaskDetailScreen } from './screens/TaskDetailScreen'
+import { MaterielTaskDetailScreen } from './screens/MaterielTaskDetailScreen'
 import { ConversationScreen } from './screens/ConversationScreen'
 import { AnkommetFabrikScreen } from './screens/AnkommetFabrikScreen'
 import { SamlesPaaEnBilScreen } from './screens/SamlesPaaEnBilScreen'
@@ -40,6 +43,10 @@ export function ChauffoerPrototype() {
   const [arrivalScreen, setArrivalScreen] = useState<'fabrik' | 'plads' | null>(null)
   const [viewingTimeregFor, setViewingTimeregFor] = useState<string | null>(null)
 
+  // ── Materiel-state (parallelt ID-rum — rører ikke asfalt-logik) ─────────────
+  const [materielTasks, setMaterielTasks] = useState<MaterielTask[]>(MATERIEL_TASKS)
+  const [selectedMaterielTaskId, setSelectedMaterielTaskId] = useState<string | null>(null)
+
   const selectedTask = selectedTaskId ? (mockTasks.find(t => t.id === selectedTaskId) ?? null) : null
   const currentTaskState: TaskState = selectedTask
     ? (taskStates[selectedTask.id] ?? selectedTask.state)
@@ -52,11 +59,45 @@ export function ChauffoerPrototype() {
     ? mockTasks.find(t => t.id === otherActiveTaskId) ?? null
     : null
 
+  // ── Materiel-handlers ────────────────────────────────────────────────────────
+  const handleSelectMaterielTask = (id: string) => setSelectedMaterielTaskId(id)
+
+  function handleCloseMaterielTask() {
+    setSelectedMaterielTaskId(null)
+  }
+
+  function handleMaterielStart(taskId: string) {
+    setMaterielTasks(prev =>
+      prev.map(t => t.id === taskId ? { ...t, state: 'i-gang' } : t)
+    )
+  }
+
+  function handleMaterielDeliver(taskId: string, dropoffId: string) {
+    setMaterielTasks(prev =>
+      prev.map(t => {
+        if (t.id !== taskId) return t
+        const updatedDropoffs = t.dropoffs.map(d =>
+          d.id === dropoffId ? { ...d, leveret: true } : d
+        )
+        // Auto-afslut fjernet — afslutning sker KUN via "Afslut opgave"-knappen
+        return { ...t, dropoffs: updatedDropoffs }
+      })
+    )
+  }
+
+  function handleMaterielComplete(taskId: string) {
+    setMaterielTasks(prev =>
+      prev.map(t => t.id === taskId ? { ...t, state: 'afsluttet' } : t)
+    )
+    setSelectedMaterielTaskId(null)
+  }
+
   function handleTabPress(tab: TabName) {
     setActiveTab(tab)
     setSelectedTaskId(null)
     setSelectedConversation(null)
     setPrototypeSubScreen(null)
+    setSelectedMaterielTaskId(null)
   }
 
   function handleTaskStart() {
@@ -96,6 +137,8 @@ export function ChauffoerPrototype() {
           onTaskPress={id => setSelectedTaskId(id)}
           // Bibeholdes — peger nu på vejning-tab, beskeder er fjernet i Fase 1
           onMessagesPress={() => handleTabPress('vejning')}
+          materielTasks={materielTasks}
+          onSelectMaterielTask={handleSelectMaterielTask}
         />
       )}
 
@@ -105,6 +148,8 @@ export function ChauffoerPrototype() {
           onClose={() => setActiveTab('start')}
           messageCount={MESSAGE_COUNT}
           onTaskPress={(id) => setSelectedTaskId(id)}
+          materielTasks={materielTasks}
+          onSelectMaterielTask={handleSelectMaterielTask}
         />
       )}
 
@@ -321,6 +366,21 @@ export function ChauffoerPrototype() {
           onBack={() => setSelectedConversation(null)}
         />
       )}
+
+      {/* Materiel task detail overlay — parallelt med asfalt-overlay */}
+      {(() => {
+        const materielTask = materielTasks.find(t => t.id === selectedMaterielTaskId)
+        return materielTask ? (
+          <MaterielTaskDetailScreen
+            task={materielTask}
+            taskState={materielTask.state}
+            onClose={handleCloseMaterielTask}
+            onStart={() => handleMaterielStart(materielTask.id)}
+            onDeliver={(dropoffId) => handleMaterielDeliver(materielTask.id, dropoffId)}
+            onComplete={() => handleMaterielComplete(materielTask.id)}
+          />
+        ) : null
+      })()}
     </div>
   )
 }

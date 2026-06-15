@@ -6,6 +6,7 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FS } from '@/styles/spacing'
+import { isAuthed, clearAuth } from '@/utils/storage'
 import { IPhoneFrame } from './IPhoneFrame'
 import { ChauffoerPrototype } from './ChauffoerPrototype'
 
@@ -14,11 +15,8 @@ export function DemoPage() {
 
   useEffect(() => {
     // Auth-token gemmes i localStorage af LoginScreen med 30-dages udløb.
-    const authed = localStorage.getItem('chauffeur_auth') === '1'
-    const expires = Number(localStorage.getItem('chauffeur_auth_expires') ?? 0)
-    if (!authed || Date.now() > expires) {
-      localStorage.removeItem('chauffeur_auth')
-      localStorage.removeItem('chauffeur_auth_expires')
+    if (!isAuthed()) {
+      clearAuth()
       navigate('/', { replace: true })
     }
   }, [navigate])

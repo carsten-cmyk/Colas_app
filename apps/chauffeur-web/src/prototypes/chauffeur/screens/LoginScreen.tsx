@@ -13,6 +13,7 @@ import { useRef, useState, useEffect } from 'react'
 import type { KeyboardEvent, ClipboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FS } from '@/styles/spacing'
+import { setAuth } from '@/utils/storage'
 
 const CORRECT_OTP = import.meta.env.VITE_DEMO_PIN ?? '123456'
 const OTP_LENGTH = 6
@@ -62,8 +63,7 @@ export function LoginScreen() {
 
   function submitOtp(otp: string) {
     if (otp === CORRECT_OTP) {
-      localStorage.setItem('chauffeur_auth', '1')
-      localStorage.setItem('chauffeur_auth_expires', `${Date.now() + 30 * 24 * 60 * 60 * 1000}`)
+      setAuth()
       setStep('permissions')
     } else {
       setShake(true)

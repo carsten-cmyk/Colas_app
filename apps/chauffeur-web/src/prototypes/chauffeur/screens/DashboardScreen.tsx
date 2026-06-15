@@ -3,6 +3,7 @@
  * Start-fanen: Colas logo, billedgitter, opgaver-swiper.
  */
 import type { Task } from '@/types/task'
+import type { MaterielTask } from '@/types/materielTask'
 import { SAFE_AREA, FS } from '@/styles/spacing'
 import type { TabName } from '../components/BottomTabBar'
 import { BottomTabBar } from '../components/BottomTabBar'
@@ -14,6 +15,10 @@ export interface DashboardScreenProps {
   onTabPress: (tab: TabName) => void
   onTaskPress: (taskId: string) => void
   onMessagesPress?: () => void
+  /** Materiel-opgaver (separat ID-rum fra asfalt) */
+  materielTasks?: MaterielTask[]
+  /** Callback når bruger trykker på et materiel-kort */
+  onSelectMaterielTask?: (id: string) => void
 }
 
 export function DashboardScreen({
@@ -22,6 +27,8 @@ export function DashboardScreen({
   activeTab,
   onTabPress,
   onTaskPress,
+  materielTasks = [],
+  onSelectMaterielTask,
 }: DashboardScreenProps) {
   return (
     <div
@@ -157,7 +164,7 @@ export function DashboardScreen({
                   textAlign: 'center',
                 }}
               >
-                {tasks.length}
+                {tasks.length + materielTasks.length}
               </span>
               <span
                 style={{
@@ -222,7 +229,7 @@ export function DashboardScreen({
             const isCompleted = task.state === 'completed'
             return (
               <button
-                key={task.id}
+                key={`asfalt-${task.id}`}
                 onClick={() => onTaskPress(task.id)}
                 aria-label={`Opgave: ${delivery?.name ?? task.orderNumber}`}
                 style={{
@@ -402,6 +409,140 @@ export function DashboardScreen({
                       </p>
                     </div>
                   </>
+                )}
+              </button>
+            )
+          })}
+
+          {/* Materiel-opgave-kort — forenklede (ingen ton/produkt-tal) */}
+          {materielTasks.map((mt) => {
+            const firstPickup = mt.pickups[0]
+            const unitSummary = mt.units.length === 1
+              ? mt.units[0].beskrivelse
+              : `${mt.units.length} enheder`
+            const isIgang = mt.state === 'i-gang'
+            const isAfsluttet = mt.state === 'afsluttet'
+            return (
+              <button
+                key={`materiel-${mt.id}`}
+                onClick={() => onSelectMaterielTask?.(mt.id)}
+                aria-label={`Materiel-opgave: ${mt.orderNumber}`}
+                style={{
+                  width: 349,
+                  minHeight: 220,
+                  height: 'auto',
+                  flexShrink: 0,
+                  scrollSnapAlign: 'start',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 12,
+                  paddingTop: 20,
+                  paddingLeft: 20,
+                  paddingRight: 20,
+                  paddingBottom: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                  border: '1px solid #EDEDED',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  position: 'relative',
+                  opacity: isAfsluttet ? 0.65 : 1,
+                }}
+              >
+                {/* State-badge top-højre */}
+                {isIgang && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 12,
+                      right: 12,
+                      backgroundColor: '#FEEE32',
+                      borderRadius: 12,
+                      padding: '4px 10px',
+                    }}
+                  >
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: FS.xs, color: '#0E4764' }}>
+                      I gang
+                    </span>
+                  </div>
+                )}
+                {isAfsluttet && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 12,
+                      right: 12,
+                      backgroundColor: '#EDEDED',
+                      borderRadius: 12,
+                      padding: '4px 10px',
+                    }}
+                  >
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: FS.xs, color: '#717182' }}>
+                      Afsluttet
+                    </span>
+                  </div>
+                )}
+
+                {/* Ordrenummer */}
+                <span
+                  style={{
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: FS.xs,
+                    color: '#717182',
+                    margin: 0,
+                    marginBottom: 4,
+                  }}
+                >
+                  Ordrenummer {mt.orderNumber}
+                </span>
+
+                {/* Materiel-badge + enhedsbeskrivelse */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: -6, width: '100%' }}>
+                  {/* "Materiel"-badge — lys orange baggrund (warnBg-agtig) */}
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      alignSelf: 'flex-start',
+                      backgroundColor: '#FFF3CD',
+                      borderRadius: 8,
+                      padding: '3px 10px',
+                    }}
+                  >
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: FS.xs, color: '#7A5200' }}>
+                      Materiel
+                    </span>
+                  </div>
+                  <p
+                    style={{
+                      fontFamily: 'Poppins, sans-serif',
+                      fontWeight: 600,
+                      fontSize: FS.md,
+                      color: '#0E4764',
+                      margin: 0,
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {unitSummary}
+                  </p>
+                </div>
+
+                {/* Første afhentning */}
+                {firstPickup && (
+                  <p
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: FS.sm,
+                      color: '#717182',
+                      margin: 0,
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                      textOverflow: 'ellipsis',
+                      width: '100%',
+                    }}
+                  >
+                    Afhentning: {firstPickup.sted} kl. {firstPickup.tid}
+                  </p>
                 )}
               </button>
             )
