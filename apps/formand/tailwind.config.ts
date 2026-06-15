@@ -65,6 +65,7 @@ const config: Config = {
         sm: '16px',
         md: '24px',
         lg: '32px',
+        touch: '44px', // minimum touch target — jf. CLAUDE.md (min-h-touch / min-w-touch)
       },
       borderRadius: {
         sm: '4px',
