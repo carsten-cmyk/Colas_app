@@ -11,8 +11,11 @@ cross_app: [formand, vognmand, chauffeur]
 
 # Section Manifest — "Sidste læs"-frigivelse af overflødige chauffører
 
-> Cross-app feature: når formand allokerer sidste-læs, frigives overflødige biler automatisk efter vognmand-bekræftelse.
-> Design LÅST 2026-05-27. Implementering AFVENTER.
+> Cross-app feature: når formand allokerer sidste-læs, frigives overflødige biler.
+> **Fase 1 (LÅST 2026-06-15): VERBAL model** — formand ringer chaufføren ("du behøver ikke køre mere i dag, vi er dækket"), chauffør afslutter opgaven i chauffør-app, formand ser `dag_afsluttet` i Vejesedler (Udførsel). INGEN digital kanal (push/modal/forslag-tabel).
+> **Fase 2 (udskudt):** Digital automatisering (system foreslår → vognmand bekræfter → push). Bevaret som retning, ikke i scope nu.
+> Vognmand-notifikation = 🟡 ÅBENT, afklares med vognmands-app-definitionen.
+> Design LÅST 2026-05-27 (revideret til verbal model 2026-06-15). Implementering AFVENTER.
 
 ---
 
@@ -44,14 +47,23 @@ cross_app: [formand, vognmand, chauffeur]
 
 ## Komponent-scope
 
+**Fase 1 (verbal — i scope):**
+
 | Komponent | App | Rolle | Status | SPEC | Handoff |
 |---|---|---|---|---|---|
-| `useSidsteLaesDetection` | formand | Hook | not-started | TBD | TBD |
-| `FrigivelsesModal` | vognmand | Presenter | not-started | TBD | TBD |
-| `useFrigivelsesForslag` | vognmand | Hook | not-started | TBD | TBD |
+| "Afslut dag"-handling | chauffeur | Action | not-started | TBD | TBD |
 | `DagAfsluttetBanner` | chauffeur | Presenter | not-started | TBD | TBD |
-| Push-notifikation | chauffeur | Infrastruktur | not-started | — | — |
-| `frigivelses_forslag` (Supabase) | shared | DB | not-started | — | — |
+| Vejesedler-row `dag_afsluttet`-badge | formand | Presenter | findes (genbrug) | — | — |
+
+**Fase 2 (digital automatisering — UDSKUDT, ikke i scope):**
+
+| Komponent | App | Rolle | Status |
+|---|---|---|---|
+| `useSidsteLaesDetection` | formand | Hook | udskudt |
+| `FrigivelsesModal` | vognmand | Presenter | udskudt |
+| `useFrigivelsesForslag` | vognmand | Hook | udskudt |
+| Push-notifikation | chauffeur | Infrastruktur | udskudt |
+| `frigivelses_forslag` (Supabase) | shared | DB | udskudt |
 
 ---
 

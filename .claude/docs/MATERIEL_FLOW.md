@@ -2,7 +2,7 @@
 
 > Dokumenterer det komplette cross-app flow for materiel-transport.
 > Opdateres når nye dele bygges.
-> **Sidst opdateret:** 2026-05-13
+> **Sidst opdateret:** 2026-06-15
 
 ---
 
@@ -22,9 +22,17 @@ PLAN-system
         │
         ▼
 Formand — Planlægning → Materiellevering
-  - Formand udfylder: afhentningsadresse, aflæsningsadresse,
-    klar til afhentning (dato/tid), skal være på lokation (dato/tid),
-    kommentar til vognmand
+  - "Tilføj materiel"-knap åbner katalog over fælles standard Colas-materiel (hentet fra PLAN);
+    valgt enhed tilføjes nederst i listen (ikke-planlagt) og udfyldes som de øvrige
+  - Afhentningssted (vejnavn, nummer, postnummer) — materiellet kommer fra en anden
+    lokation; prefyldes fra seneste aflæsning i PLAN (via unikt varenummer),
+    ellers BLANK (ingen fallback til udførselssted)
+  - Aflæsningsadresse (udførselssted). Ved 2+ materiel spørges hver efterfølgende
+    enhed "Samme aflæsningssted som 1. materiel?" → Ja = arver fra 1. materiel, Nej = manuelt
+  - Klar til afhentning: to felter (dato + tid)
+  - Skal være på lokation: to felter (dato + tid)
+  - Kommentar til chauffør (tidl. "kommentar til vognmand" — rettet 2026-06-15)
+  - To kort: afhentnings-kort zoomer på seneste kendte adresse; aflæsnings-kort zoomer på udførselssted
   - Trykker "Gem transport" → sender linje til vognmand
         │
         ▼

@@ -80,11 +80,23 @@ Vognmanden modtager dette array (én ønske-bil pr. objekt, hver med sit `bil_or
 
 **Bilbehov er read-only** — ren beregning fra tonnage, fabrik (+10% køretid), rundtid og vejesedler-prognose. Formanden redigerer ikke felterne; de opdateres når han ændrer biler/tons.
 
-### Trin 2 — Formand ser afventende status
+**Bilbehov — beregnings-præciseringer (2026-06-15):**
+
+- **Multi-produkt rotation (samme biler):** Samme biler kører alle dagens produkter **sekventielt**. Produkt 2+ kører **så tæt på sit opstartstidspunkt som muligt**. Et eksplicit opstartstidspunkt (`foersteLaesPaaPlads`) på et produkt kan dække en **pause hvor maskinerne flyttes** mellem produkter. "Forventet sidste bil" pr. produkt SKAL derfor beregnes fra produktets **eget** opstartstidspunkt når det er sat — og sekventielt (lige efter forrige produkts sidste bil) når `foersteLaesPaaPlads = null`. *(Nuværende kode antager fejlagtigt back-to-back via én cursor og ignorerer per-produkt-start — rettes.)*
+- **avgTons fra de kørende biler:** Når biler er valgt, beregnes gns. tons/bil fra de **faktisk valgte biler** (kapaciteten er kendt). Ingen biler valgt → vis et **synligt fallback "antaget gns. 30 tons"** (ikke en skjult magisk værdi).
+- **Forventet sidste bil — tom uden input:** Står tom indtil der er **mindst én bil med opstartstidspunkt + interval** (minimumsinput for rotations-beregningen).
+- **Kapacitet-dækket-indikator (grøn/rød) — genindført:** En pille viser **grøn "Kapacitet dækket"** når de valgte bilers kapacitet (kapacitet/runde × runder) dækker forventet tons, ellers **rød "[X] Tons mangler"**. Det er formandens live-feedback på "har jeg valgt nok biler". *(Fandtes i v1 `KoerselPanel`, forsvandt i 5-boks-dashboardet — genindføres.)* **Anbefalet antal biler er et stabilt mål** — det er IKKE Anbefalet der skifter farve, det er dækningen.
+
+### Trin 2 — Formand ser afventende status (badge-lifecycle, LÅST 2026-06-15)
 **App:** formand
-**Komponent:** `VognmandBekraeftelseBadge`
-**Viser:** Gult "Afventer vognmand" badge når kørsel er planlagt men ikke bekræftet
-**Læser:** `orders.asfalt_koersel[].confirmed_vehicles` (tom = afventer)
+**Komponent:** `VognmandBekraeftelseBadge` (pille pr. dag på Asfalt kørsel)
+**Forretningsregel:** Pillen sættes til gult **"Afventer vognmand"** så snart formanden trykker **Gem/Send** på bilbestillingen (dvs. `planlagt = true`) — IKKE først når vognmanden har set/åbnet den. Den forbliver gul indtil vi får data RETUR fra vognmanden.
+**Bekræftet-flip:** Når vognmandens retur-data ankommer (`confirmed_vehicles[]` populeres → `bekraeftet_af_vognmand = true`), skifter pillen til grønt **"Bekræftet af vognmand"** (Trin 6) — **samtidig** med at **Bilbestilling-tabellen under Udførsel** udfyldes med de bekræftede biler (Trin 7). Pille og Udførsel-tabel hænger sammen: samme retur-data driver begge på én gang.
+**Tilstande:**
+- `planlagt = true` + `bekraeftet_af_vognmand = false` → 🟡 "Afventer vognmand"
+- `bekraeftet_af_vognmand = true` → 🟢 "Bekræftet af vognmand" + Udførsel-Bilbestilling-tabel udfyldt
+- Egen bil → ingen vognmand-pille (auto-bekræftet ved send — se Variant: Egen bil-flow)
+**Læser:** `orders.asfalt_koersel[].planlagt` + `.bekraeftet_af_vognmand`
 
 ### Trin 3 — Vognmand ser bestilling med første-læs + interval
 **App:** vognmand
@@ -244,12 +256,41 @@ For `undervejs`-biler beregnes live ETA fra faktisk timestamps. `planlagt`-biler
 **Viser:** Grønt "Bekræftet af vognmand" badge
 **Læser:** `orders.asfalt_koersel[].bekraeftet_af_vognmand`
 
-### Trin 7 — Formand ser bildetaljer i Udførelse
+### Trin 7 — Formand ser bildetaljer i Udførelse (Bilbestilling-tabel)
 **App:** formand
-**Komponent:** `BekraeftetBilKort` (Udførelse → Forundersøgelse sektion)
-**Viser per bil:** reg.nr, chauffør-navn, chauffør-tlf, biltype, **læs-nummer** ("1. læs", "2. læs"…), **ankomst på plads** (HH:MM), **mødetid fabrik** (HH:MM)
+**Komponent:** `OrdrePlanScreen` → Udførsel-mode → **Bilbestilling**-sektion (tabel, erstatter tidligere `BekraeftetBilKort`-mini-preview)
+**Viser per bil (tabel med kolonne-overskrifter — ikke "ankomst"-prefix per række):** reg.nr · biltype · chauffør-navn · chauffør-tlf · **ankomst på plads** (HH:MM) · **mødetid fabrik** (HH:MM). Grupperet per biltype. **Expanderbar** når der er flere end 3 biler.
 **Læser:** `orders.asfalt_koersel[].confirmed_vehicles[]` — alle felter inkl. læs-nummer + per-bil tider (se Trin 4)
-**Note:** Formanden kan ringe direkte til chaufføren via tlf og se hvilken læs-rolle bilen har, så han kan koordinere ved afvigelser.
+**Note:** Formanden kan ringe direkte til chaufføren via tlf. Materiel-transport vises i tilsvarende tabel (Anlæg · Beskrivelse · Transport (reg+type) · Chauffør · Tlf · ankomst — jf. `MATERIEL_FLOW.md`).
+
+### Trin 7b — Formand sender ordre-SMS til chauffør (LÅST 2026-06-15)
+**App:** formand
+**Komponent:** `OrdrePlanScreen` → Bilbestilling-tabel → "Send opgave som SMS"-knap per bil-række
+**Handling:** Sender et **konsolideret dags-link pr. chauffør** (deep-link til chauffør-webapp på dagens ordre(r)). Se Trin 8 for distribution.
+**State + labels (opdateret 2026-06-15):** `ChauffoerSmsStatus` (STATUS_VOKABULAR #13). Da første SMS sendes AUTOMATISK (debounce nedenfor), er den manuelle knap reelt en gensend:
+- `ikke_sendt` (debounce-vindue, endnu ikke auto-sendt): pille "Afventer afsendelse" + knap **"Send nu"** (manuel straks-send/override).
+- `sendt` (auto-sendt): markering **"Sendt ✓"** + aktiv **"Gensend"**-knap (manuel gensend — fremrykket fra fase 2).
+- `aendret_siden_afsendelse` (fase 2): "Gensend" + "Ordre opdateret"-signal.
+**Granularitet:** ÉN SMS pr. chauffør pr. dag (nøgle: chauffør-tlf) for **asfalt-kørsel**, uanset antal ordrer/læs — respekterer at en chauffør har flere ordrer/dag. Knappen vises per bil-række, men tilstanden er per chauffør (cross-ordre-konsolidering sker i backend). **Materiel-transport har en separat regel: én SMS pr. chauffør pr. ordre** (konsoliderer flere materiel-enheder på samme bil) — se Flow 2 Trin 4b.
+**Trigger:** Auto-send styret af debounce-timing (se nedenfor) + manuel straks-/gensend fra tabellen.
+
+**Afsendelses-timing / debounce (LÅST 2026-06-15):** SMS sendes IKKE straks ved disponering — vognmanden ændrer ofte chauffør-sættet kort efter. Reglerne:
+- **Initial batch — 2 timer (FAST):** Send-tidspunktet er **første disponering + 2 timer** og er fast. Ændrer vognmanden chauffør-sættet i vinduet, flytter send-tidspunktet sig IKKE — ved send-tidspunktet får de chauffører der ER disponeret netop da deres SMS ("første SMS-batch").
+- **Sen erstatning — 10 minutter:** EFTER at første SMS-batch er sendt (ordren er i "notificeret"-fase), får enhver chauffør der tilføjes/skiftes (typisk nedbrud, sygdom) sin SMS efter kun **10 minutter** — så en akut indsat chauffør får besked hurtigt.
+- **Ingen fast klokkeslæts-cutoff:** Fordi nogle chauffører kører aften/nat, kan vi ikke vente til fx midnat. Debouncen er altid relativ til disponering, aldrig et fast ur-tidspunkt.
+- **Manuel straks-send:** Formandens "Send opgave som SMS"-knap pr. række kan altid override debouncen og sende med det samme.
+- **Granularitet:** Send-tidspunktet følger den konsoliderede dags-SMS pr. chauffør (jf. ovenfor). T0 = chaufførens første disponering på dagen.
+
+🟡 **ÅBENT (implementering):**
+- **Konsolidering vs. debounce:** Chauffør med ordrer disponeret på forskellige tidspunkter — én fast send (T0+2t) der samler alle ordrer disponeret indtil da, og sen-tilføjede ordrer trigger 10-min-gensend? Bekræft model.
+- **Aften/nat lead-time:** Hvis første disponering sker <2 timer før chaufførens planlagte start, risikerer fast T0+2t at sende for sent. Skal send-tid være `min(T0 + 2t, planlagt_start − lead)`?
+
+**Bekræftelses-pille — formand + vognmand (LÅST 2026-06-15):** Når SMS er afsendt, skal BÅDE formand og vognmand kunne se at opgaven er sendt til chaufføren:
+- **Formand:** Pille på **Bilbestilling**-tabellen (Udførsel-mode) pr. chauffør/række, fx "Sendt til chauffør ✓" (drevet af `confirmed_vehicles[].sms_status = 'sendt'`). I debounce-vinduet kan pillen vise afventende tilstand (fx "Sendes om ~1t 40m"). *(Pending-tilstand kræver evt. ny `ChauffoerSmsStatus`-værdi, fx `planlagt` — afklares; enum ligger i STATUS_VOKABULAR #13.)*
+- **Vognmand:** Tilsvarende pille SKAL findes i vognmand-app'en ("Sendt til chauffør"), så vognmanden ved at hans disponering er kommunikeret videre til chaufføren. 🟡 **Vognmand-app er ikke designet færdig endnu — pillen NOTERES her men bygges ikke nu.**
+
+**Reassign (nedbrud):** Ny vognmand-disponering (anden chauffør) → ny `confirmed_vehicles[]`-row ankommer → auto-SMS til den nye chauffør efter **10-min-reglen** (sen erstatning, se debounce ovenfor); den afløste af-disponeres.
+**Skriver til:** `confirmed_vehicles[].sms_status: ChauffoerSmsStatus` (per chauffør-aggregeret i backend) + et scheduling-/send-tidspunkt-felt (TBD-navn) der bærer debounce-deadline.
 
 ### Trin 8 — Chauffør modtager ordre
 **App:** chauffeur (React Native)
@@ -258,7 +299,11 @@ For `undervejs`-biler beregnes live ETA fra faktisk timestamps. `planlagt`-biler
 **Læser:** `assigned_tasks` WHERE `driver_phone = auth.user.phone` OR `truck_plate = chauffeur.plate`, henter KUN denne chaufførs `confirmed_vehicles[]`-row (filtreret på reg_nr/tlf) — sin `moedetid_fabrik` vises prominent.
 **Vigtigt:** Hver bil har en mødetid på fabrik for sin opstarts-ankomst (pinnede = formandens tider, øvrige = interval-trin) indtil alle biler er i rotation. Derefter kører chaufføren i loop uden flere planlagte tider. Chaufføren ser KUN sin egen — ikke de andre biler.
 **Note:** Chauffør har et minimalt login-system (LÅST 2026-06-09) — se [[chauffeur-login]] sektion nedenfor. SMS-OTP ved ny enhed eller token-fornyelse, derefter altid direkte til forside. **Bil + konfiguration administreres dynamisk af vognmand** og opdateres on-the-fly i chauffør-app, formand-app og fabrik-app — chauffør foretager INGEN bil-valg i appen.
-**TBD:** Distributions-mekanisme — push-notifikation, polling, eller event på reg.nr? Skal afklares før prod.
+**Distribution (LÅST 2026-06-15):** Konsolideret **dags-SMS pr. chauffør** (LINK Mobility) med **deep-link til chauffør-webapp** på dagens ordre(r). Linket åbner appen direkte på ordren; mangler chaufføren et gyldigt 30-dages-token, kicker SMS-OTP-login ind først (login-sporet er adskilt — se [[chauffeur-login]]). Sendes auto når plan er klar + formand kan gensende fra Bilbestilling-tabellen (Trin 7b). Granularitet = én SMS pr. chauffør pr. dag (ikke per-ordre) — se [[project_chauffeur_sms_login]].
+**Ordre-ændring efter afsendelse:**
+- **Fase 1 (nu):** Ordre-ændringer opdateres **lydløst** i chauffør-app (linket peger på live-data — appen viser altid aktuel sandhed).
+- **Fase 2 (senere):** "Ordre opdateret"-banner i chauffør-app ved væsentlige felter (mødetid, fabrik, produkt, mængde) + formand ser `aendret_siden_afsendelse` og kan gensende. `ChauffoerSmsStatus`-enum er allerede defineret med fase-2-værdien for at undgå migration.
+**Aflysning:** dagsaflysning notificeres separat via vejr-/aflysnings-retur-flow — IKKE via denne SMS-knap (uden for scope).
 
 ### Variant: "Egen bil"-flow (LÅST 2026-05-22) — Formand → Chauffør (uden vognmand)
 
@@ -701,9 +746,19 @@ Næste-læs-kortet i appen får visuelt update: ny farve på produkt-pille, nyt 
 
 ---
 
-### Variant: Chauffør-afslutning af opgave (LÅST 2026-06-03)
+### Variant: Chauffør-afslutning af opgave — "Dag afsluttet" (LÅST 2026-06-03, generaliseret 2026-06-15)
 
-**Forretningsregel (Fase 1):** Formand styrer afslutning af opgave manuelt via telefonopkald. Ingen automatisk frigivelse i Fase 1 — eventuel app-driven push-bekræftelse udskydes til Fase 2.
+**Forretningsregel (Fase 1):** Formand styrer afslutning af opgave manuelt via telefonopkald — der er INGEN digital frigivelses-kanal (ingen push, ingen system-drevet frigivelse). Formanden ringer chaufføren, chaufføren **afslutter opgaven i chauffør-app'en** ("Afslut dag"), og formanden får bekræftelsen ved at vejesedlen skifter til `dag_afsluttet` i **"Kørsel"-sektionen under Udførsel-tab** (tidl. "Vejesedler" — "Dag afsluttet"-badge, gråtonet). Eventuel app-driven push-bekræftelse udskydes til Fase 2.
+
+**"Dag afsluttet" er den generelle stop-for-dagen-mekanisme** — samme `dag_afsluttet`-flow bruges uanset ÅRSAG til at en chauffør stopper for dagen:
+- **Sidste-læs-frigivelse** — formand er dækket ift. transport, overflødige biler frigives (se variant nedenfor)
+- **Formand aflyser dagen** (fx regn) — chaufføren afslutter i app
+- **Bil bryder ned**
+- **Chauffør bliver syg**
+
+I alle tilfælde: formand + chauffør taler sammen → chauffør afslutter opgaven i app → formand ser "Dag afsluttet" i "Kørsel"-sektionen (Udførsel).
+
+**Vognmand-notifikation:** 🟡 ÅBENT — vognmanden skal også vide at hans bil er færdig for dagen, men kanalen er ikke fastlagt. **Afklares når vognmands-app'en defineres.** Indtil da sker den koordinering fysisk/telefonisk.
 
 **Flow:**
 
@@ -875,58 +930,36 @@ Gælder: TaskListScreen-kort, TaskDetailScreen-info, DashboardScreen-aktiv-opgav
 - 1 bil holdes **i reserve-buffer** indtil sidste-læs er aflæsset (`status = udlagt`)
 - De øvrige `N - 2` biler kan frigives med det samme
 
-**Trin SL-1 — System foreslår frigivelse**
-**App:** formand (computation) → vognmand (notifikation)
-**Trigger:** `er_sidste_laes: true` er sat på en vejeseddel (`paa_vej_til_fabrik`-status)
-**Beregning:**
-- `overfloedige_biler = N_allokerede - 1 (sidste-læs) - 1 (reserve)`
-- Reserve-bil = den bil hvis næste-tur normalt ville være LIGE EFTER sidste-læs (sidste i køen)
-**Skriver til:** `frigivelses_forslag` (Supabase-tabel):
-  - `ordre_id`, `dato`, `foreslaaede_reg_nr: string[]` (de overflødige), `reserve_reg_nr: string`, `status: 'afventer_vognmand'`
+**Mekanisme (Fase 1 — verbal, LÅST 2026-06-15):**
 
-**Trin SL-2 — Vognmand modtager notifikation + bekræfter**
-**App:** vognmand
-**Komponent:** `FrigivelsesModal` (NY) — modal eller toast i `VognmandShell`
-**Viser:** Liste over biler der kan frigives + reserve-bil markeret. CTA: "Frigiv X biler" + "Behold for nu" (afvis).
-**Handling:** Vognmand klikker "Frigiv X biler"
-**Skriver til:**
-- `frigivelses_forslag.status = 'bekraeftet'`
-- For hver frigivet bil: `confirmed_vehicles[].dag_afsluttet_kl = now()`
-- Vejeseddel for hver frigivet bil opdateres: `status = 'dag_afsluttet'`
+Frigivelsen sker IKKE via en digital kanal. Den følger den kanoniske **"Chauffør-afslutning af opgave"-variant** (se ovenfor):
 
-**Trin SL-3 — Chauffør modtager besked**
-**App:** chauffeur (React Native)
-**Komponent:** Push-notifikation + `DagAfsluttetScreen` (NY) eller banner på TaskDetailScreen
-**Distribution:** Push til chauffør-tlf (samme mekanisme som task-distribution)
-**Indhold:** "Dagens kørsel afsluttet — du kan køre hjem. Tak for indsatsen."
-**Læser:** `assigned_tasks` WHERE `truck_plate = chauffeur.plate` AND `status = 'dag_afsluttet'`
+```
+1. Sidste-læs identificeres (sum_allokeret >= bestilt − bil_kapacitet)
+   → Formand beslutter SELV hvilke biler der er overflødige
+     (reserve-buffer: hold 1 bil tilbage til sidste-læs er udlagt)
+2. Formand RINGER hver overflødig chauffør:
+   "Du behøver ikke køre mere i dag — vi er dækket ift. transport."
+3. Chauffør AFSLUTTER opgaven i chauffør-app'en ("Afslut dag")
+4. Vejesedlen skifter til `dag_afsluttet` og vises automatisk i
+   formandens "Kørsel"-sektion (Udførsel-tab) med "Dag afsluttet"-badge
+```
 
-**Trin SL-4 — Reserve-bil frigives når sidste-læs er aflæsset**
-**App:** formand (computation) → vognmand → chauffør (automatisk via Trin SL-2 + SL-3)
-**Trigger:** Sidste-læs-vejeseddel skifter status til `udlagt`
-**Handling:** System sender automatisk frigivelses-besked til reserve-bilen (uden vognmand-bekræftelse — reserve-perioden er afsluttet, ingen risiko tilbage)
-**Skriver til:** Reserve-bilens `confirmed_vehicles[].dag_afsluttet_kl = now()` + vejeseddel `status = 'dag_afsluttet'`
+Formanden får altså bekræftelsen via `dag_afsluttet` i "Kørsel"-sektionen — ikke via push og ikke via en vognmand-bekræftelse. Reserve-bilen frigives på samme måde (formand ringer) når sidste-læs er udlagt.
 
-**Visuelle effekter (cross-app):**
-- **Formand**: Frigivne biler skifter til `dag_afsluttet`-status i Vejesedler-tabellen (gråtonet styling)
-- **Vognmand**: Bil-disponering viser "Dag afsluttet"-badge på frigivne biler
-- **Chauffør**: Push + status-skift fra `paa_vej_til_fabrik` → `dag_afsluttet`. Bilen kan parkeres, ingen flere ture.
+**Vognmand-notifikation:** 🟡 ÅBENT — vognmanden skal også vide at bilen er færdig for dagen, men kanalen er ikke fastlagt. **Afklares når vognmands-app'en defineres.** Indtil da koordineres det fysisk/telefonisk.
 
 **Tidsregistrering / afregning:**
-- Chauffør får løn for tid frem til **afmelding modtaget** (ikke frem til vognmands bekræftelse — vognmand kan være sløv)
+- Chauffør får løn for tid frem til **opgaven afsluttes i app** ("Afslut dag"-tidspunktet)
 - For akkord-biler: ingen ekstra betaling for resten af dagen — bilen er ikke længere i loop
-- For time-biler: timeregistreringen lukkes ved afmelding (chauffør får besked om at registrere "Afsluttet")
+- For time-biler: timeregistreringen lukkes ved afslutning (chauffør registrerer "Afsluttet")
 
-**Afvisnings-flow (vognmand siger nej):**
-- Hvis vognmand klikker "Behold for nu" i Trin SL-2, sker INGEN afmelding
-- Biler fortsætter i loop indtil sidste-læs er aflæsset
-- Når `udlagt` triggers, viser systemet ny notifikation: "Dagens mål nået — vil du afmelde resterende biler?"
+**🟡 Fase 2 (fremtidig automatisering — udskudt):** App-driven frigivelse hvor systemet computer-foreslår de overflødige biler (`frigivelses_forslag`-tabel), vognmand bekræfter i en `FrigivelsesModal`, og chauffør får push + auto reserve-frigivelse når sidste-læs er udlagt. Hele dette digitale apparat (push, FrigivelsesModal, frigivelses_forslag, auto-frigivelse) er IKKE Fase 1 — det er erstattet af den verbale model ovenfor. Bevaret her som retning for senere automatisering.
 
 **🟡 ÅBNE SPØRGSMÅL (ved implementering):**
-- **Allerede-på-vej-til-fabrik chauffører:** Hvad hvis chauffør modtager afmelding mens han ER på vej til fabrik? Skal han vende om, parkere, eller fortsætte til fabrik og blive afmeldt der? Default: chauffør beslutter selv om han har lyst at vende om (giver mening for kort afstand) eller fortsætte (lang afstand). UX-detalje besluttes ved implementering.
-- **Push fejler:** Hvad sker hvis push-notifikation ikke når frem (telefonen er offline)? Fallback: chauffør får besked ved næste app-åbning + SMS hvis kritisk.
-- **Reserve-bil-valg:** Skal reserve-bilen vælges baseret på position (tættest på fabrik), læs-nummer (sidste i køen), eller chauffør-præference? Default: sidste i køen (mindst forstyrrelse).
-- **Afvisnings-konsekvens:** Hvis vognmand AFVISER frigivelse første gang og sidste-læs senere fejler, har vi tabt tid på automatik vs. manuel. Skal afvisning logges + advare hvis sidste-læs fejler bagefter?
+- **Vognmand-notifikation:** Hvordan/hvornår får vognmanden besked om at bilen er frigivet? Afklares med vognmands-app-definitionen.
+- **Reserve-bil-valg:** Hvilken bil holdes i reserve-buffer — sidste i køen (default), tættest på fabrik, eller chauffør-præference?
+- **Allerede-på-vej-til-fabrik chauffør:** Hvis en frigivet chauffør allerede har taget næste læs på fabrik → retur-flow trigges (se "Retur-flow for biler i transit ved aflysning").
 
 ### Variant: Formand aflyser en dag pga. regn (LÅST 2026-06-03)
 
@@ -991,6 +1024,17 @@ i `font-inter text-xxs text-bad font-medium`. Sikrer at aflysningen ses uanset o
 **Tokens:** `bg-bad/10`, `text-bad`, `font-inter text-xs font-semibold`, `px-xs py-xxs rounded-md`. Default celle-struktur (`p-sm flex flex-col h-full min-h-[96px]`) matcher de andre celler.
 
 **Fjernet samme dato:** Den gamle X-knap (lille kryds øverst-til-højre på hver dags `ProductBoxV2`) er fjernet — aflysning sker nu udelukkende via aflys-cellen. Gammel kode bevares i `apps/formand/src/prototypes/ordre-plan/v1/ProductBoxV2.v1.tsx`.
+
+#### Aflysnings-markeringer i formand-app (retning LÅST 2026-06-15)
+
+En aflysning rammer flere skærme. Konsistent markering med kanonisk `StatusPill kind='aflyst'` (rød) anvendes:
+
+1. **Dagsoversigt + Gantt** — rød "Aflyst"-badge på dagen/ordren. Gantt UDEN årsag (kun "Aflyst"); Dagsoversigt må vise "Aflyst pga. [årsag]".
+2. **Bilbestilling-tabel (Udførsel)** — er den viste dag aflyst: rækker markeres "Aflyst" + "Send opgave som SMS"-knap **disabled** (ingen opgave-udsendelse for en aflyst dag).
+3. **Dato-piller ("Udføres i perioden")** — aflyste dage får rød aflyst-styling (matcher passeret-dag-mønsteret).
+4. **Status-bokse (Udførsel)** — afspejler at dagen er aflyst.
+
+Status: retning låst, implementering udestår.
 
 #### Data-bevarelse ved dag-aflysning (LÅST 2026-06-03)
 
@@ -1153,24 +1197,45 @@ Ordren er en **append-only log** af dage. Hver dag har sin egen sektion med:
 **App:** formand
 **Datakilde:** PLAN
 **Indhold:** Holdpakken indeholder de mennesker der skal bemande opgaven OG det materiel der skal benyttes.
-**Forretningsregel:** Formand kan tilføje yderligere mennesker og materiel — disse tilføjelser skal skrives RETUR til PLAN.
+**Forretningsregel:** Formand kan tilføje yderligere mennesker og materiel ud over holdpakken. Materiel tilføjes via en **"Tilføj materiel"-knap** der åbner et katalog over **fælles standard Colas-materiel hentet fra PLAN** (varenummer + beskrivelse + default transport-type). Det valgte materiel tilføjes nederst i materiel-listen (`status: ikke-planlagt`) og skal udfyldes med samme transport-felter som de øvrige enheder (afhentning, klar/lokation-tider, aflæsning, kommentar til chauffør — jf. Trin 1). Disse tilføjelser skal skrives RETUR til PLAN.
 **Note:** Under "Materiel"-sektionen vises KUN materiel (ikke mennesker — de håndteres i en separat sektion).
 
 ### Trin 1 — Formand planlægger transport per materiel-enhed
 **App:** formand
 **Komponent:** Materiel-sektion på ordre (ikke bygget) — én linje per materiel-enhed fra holdpakken
 **Handling:** For hver materiel-enhed udfylder formanden:
-- **Ordrenummer (valgfrit):** Hvis materiellet er udlånt fra en anden afdeling, indtastes ordrenummer på dén ordre — det er den ordre der betaler for transporten til denne ordres lokation. (Info-felt — ingen valideringsblokering.)
-- **Afhentningssted + postnummer:** Adresse hvor materiellet hentes
+- **Afhentningssted** — felter: **vejnavn**, **nummer** og **postnummer**. Materiellet kommer fra en ANDEN lokation end udførselsstedet. **Prefyldes automatisk (LÅST 2026-06-15):** da hvert materiel har et **unikt varenummer** (= `anlaegsnr`), slås materiellets **seneste aflæsning** op i PLAN, og felterne prefyldes med dén adresse (materiellet står hvor det sidst blev afleveret). **Findes ingen seneste aflæsning i PLAN → felterne er BLANKE** — ingen fallback til udførselsstedet. Formand kan altid udfylde/overskrive.
+- **Klar til afhentning** — opdelt i **to felter: dato + tid** (LÅST 2026-06-15). Hvornår materiellet er klar til at blive hentet.
+- **Skal være på lokation** — opdelt i **to felter: dato + tid** (LÅST 2026-06-15). Hvornår materiellet skal være ankommet på udførselsstedet.
 - **Aflæsningssted + postnummer:** Adresse på udførselssted (kan også sættes som pin på kort — fremtidig feature)
-**Auto-udfyld:** Hvis det indtastede ordrenummer er kendt i systemet, præudfyldes afhentningsadresse + postnummer automatisk fra dén ordres lokation. Formand kan altid overskrive.
+- **Kommentar til chauffør:** Fri-tekst med transport-/håndteringsinstruktioner (samme felt-koncept som asfalt-flow, jf. Flow 1 Trin 1). *(Tidligere "Kommentar til vognmand" — rettet 2026-06-15.)*
+
+**Flere materiel — arv af aflæsningssted (LÅST 2026-06-15):** Er der 2+ materiel-enheder, spørges hver **efterfølgende** enhed: *"Samme aflæsningssted som [1. materiel]?"* (Ja/Nej):
+- **Ja** → enheden **arver aflæsningssted fra det FØRSTE materiel** (vises som "Arver aflæsningssted fra [1. materiel]" + nulstil-link).
+- **Nej** (samt det første materiel selv) → manuelt aflæsningssted-felt.
+Referencen er **altid det 1. materiel** (`firstResource`) — ikke det umiddelbart foregående. (Gælder kun aflæsningssted; afhentning prefyldes individuelt pr. enhed fra PLAN.)
+
+**Google-kortudsnit (LÅST 2026-06-15):** To separate kort:
+- **Afhentnings-kort:** zoomer ind på materiellets **seneste kendte adresse** (fra PLAN, samme som afhentningsfelterne er prefyldt med). Er adressen blank/ukendt → intet zoom/markør endnu.
+- **Aflæsnings-kort:** zoomer ind på **udførselsstedets adresse**.
+
 **Handling:** Formand trykker "Gem transport" per materiel-enhed.
-**Skriver til:** `orders.materiel[]` med `{ ordrenummer_betaler?, afhentningssted, postnummer, aflæsningssted, aflæsningspostnummer }`
+**Skriver til:** `orders.materiel[]` med `{ afhentning_vejnavn, afhentning_nummer, afhentning_postnummer, klar_dato, klar_tid, lokation_dato, lokation_tid, aflæsningssted, aflæsningspostnummer, kommentar_til_chauffoer }`
+
+**Badge-lifecycle (materiel) — afventer → bekræftet (LÅST 2026-06-15):** Parallelt med asfalt-kørsel (Flow 1 Trin 2) har **hver materiel-enhed** sin egen vognmand-pille i formandens Planlægning → Materiel-sektion (`VognmandBekraeftelseBadge`, samme stil som Asfalt kørsel):
+- Pillen sættes til gult **"Afventer vognmand"** så snart formanden trykker **"Gem transport"** på materiel-enheden (`orders.materiel[].gemt = true`) — så snart formanden gemmer/sender, ikke først når vognmanden har åbnet den.
+- Når vognmandens retur-data ankommer (`orders.materiel[].confirmed_transport` populeres → `bekraeftet_af_vognmand = true`, jf. Trin 3-4), skifter pillen til grønt **"Bekræftet af vognmand"** — **samtidig** med at materiel-bilen vises i Udførsel under **"Biler & afregning"** med "Kørt materiel"-badge (Trin 5). Samme retur-data driver pille + Udførsel-visning på én gang.
+
+**Tilstande pr. materiel-enhed:**
+- `gemt = true` + `bekraeftet_af_vognmand = false` → 🟡 "Afventer vognmand"
+- `bekraeftet_af_vognmand = true` → 🟢 "Bekræftet af vognmand" + materiel-bil i Udførsel "Biler & afregning"
+
+**Granularitets-forskel fra asfalt:** Materiel-pillen er **pr. materiel-enhed** (én pille pr. linje), modsat asfalt hvor pillen er **pr. dag**. En ordre kan derfor have flere materiel-enheder i forskellige tilstande samtidig (nogle afventer, andre bekræftet).
 
 ### Trin 2 — Bestilling bliver synlig hos vognmand
 **App:** vognmand
 **Komponent:** Materiel-sektion under `DisponeringsView` (ikke bygget) — vises som ekstra sektion UNDER asfalt-disponeringen på samme ordre
-**Viser:** Alle gemte transport-data fra Trin 1 (anlæg, beskrivelse, afhentning, aflæsning, betaler-ordrenummer hvis sat)
+**Viser:** Alle gemte transport-data fra Trin 1 (anlæg, beskrivelse, afhentning, aflæsning)
 **Læser:** `orders.materiel[]` WHERE `gemt = true`
 
 **Per-materiel expandable + arvet info (LÅST 2026-06-04):** Materiel der køres på blokvogn skal hos vognmanden vise den FULDE transport-info per enhed — **arvet 1:1 fra formandens materiellevering-planlægning** (Trin 1's expandable). Hver materiel-enhed kan **foldes ud individuelt** (samme expand-mønster som formand/planlægning) og viser:
@@ -1193,18 +1258,40 @@ Formål: vognmanden får tilstrækkelig kontekst til at disponere korrekt blokvo
 **Handling:** Når en bil er sat på materiel-linjen, betragtes den som **bekræftet** (samme model som asfalt-kørsel).
 **Skriver til:** `orders.materiel[].bekraeftet_af_vognmand = true`
 
-### Trin 4b — Chauffør modtager materiel-opgave (egen udførsels-variant) (LÅST 2026-06-04)
-**App:** chauffeur / chauffeur-web
-**Komponent:** Materiel-/blokvogns-variant af udførselssiden (ikke bygget) — **visuelt adskilt** fra den normale asfalt-udførsel (`AnkommetUdfoerselsstedScreen`)
-**Forretningsforståelse:** En materiel-opgave er en **transport-opgave**, ikke en læsse-opgave. Chaufføren henter materiel ét sted og afleverer det et andet — han kører IKKE asfalt fra fabrik til plads. Derfor intet indvejning/udvejning/asfalt-flow.
-**Viser:**
-- **Afhentningssted** + adresse og **Aflæsningssted** + adresse — prominent
-- **Google-kort/navigation** til begge adresser
-- Materiel-enhed(er) der skal transporteres (anlæg + beskrivelse)
-- Evt. **kommentar til chauffør** (samme felt som asfalt-flow, se Flow 1 Trin 1)
-**Læser:** `orders.materiel[]` (afhentningssted, aflæsningssted, postnumre, beskrivelse, anlæg, kommentar), `confirmed_transport`
+### Trin 4b — Chauffør modtager + udfører materiel-opgave (LÅST 2026-06-04, flow-design 2026-06-15)
+**App:** chauffeur-web (aktiv prototype) / chauffeur (RN senere)
+**Komponent:** Materiel-variant af ordre-detalje-siden — **kopi/tilpasning af `TaskDetailScreen`**, visuelt adskilt fra asfalt-udførsel. Genbruger samme skærm-arkitektur (overlay, scroll-indhold, fast action bar) + design-tokens.
+**Forretningsforståelse:** En materiel-opgave er en **transport-opgave**, ikke en læsse-opgave — intet indvejning/udvejning/asfalt-flow.
+
+**Én kørsel = én chauffør med 1..n materiel-enheder (LÅST 2026-06-15):** Vognmanden afgør selv hvor meget der kan pakkes på en bil og kan sætte **samme chauffør på flere materiel** — det er ÉN kørsel. **Antagelse: optræder en chauffør flere gange på ordrens materiel, er det én samlet kørsel.** Chaufføren ser dermed ÉN opgave der rummer alle hans materiel-enheder for ordren.
+
+**Afhentnings-rækkefølge (LÅST 2026-06-15):** Skal materiel hentes flere steder, ordnes afhentningerne efter **tidspunkt på dagen** (klar-tid) — tidligste først.
+
+**Skærmen viser:**
+- **Materiel-liste** — de enhed(er) kørslen rummer (beskrivelse + anlægsnr/varenummer). Erstatter asfalt-flowets ton/produkt-metrics.
+- **Afhentninger (1..n, ordnet efter tidspunkt):** pr. stop — **afhentningssted** (adresse) + **tidspunkt**. Har formanden sat en **prik/adresse** → vis et **Google Maps-link** til den (IKKE et indlejret kort i appen). Er der ingen → vis intet kort/link.
+- **Aflæsningssted(er):** udførselssted(er) — adresse.
+- **Kommentar til chauffør** (samme felt som asfalt, Flow 1 Trin 1).
+- **Kontakt:** formand (navn + tlf).
+**Læser:** `orders.materiel[]` (afhentning vejnavn/nummer/postnr + klar-tid, aflæsning, beskrivelse, anlægsnr, kommentar_til_chauffoer, evt. pin-koordinater) + `confirmed_transport`, grupperet pr. chauffør-tlf.
+
+**Udførsels-state (forenklet — LÅST 2026-06-15):** `idle → i gang → afsluttet`. INGEN pause/hviletid (modsat asfalt):
+1. **"Start opgave"** (som asfalt) → opgaven går `i gang`.
+2. Chaufføren henter materiellet (rækkefølge styret af tidspunkt) — **ingen afhentnings-bekræftelse undervejs**.
+3. **"Materiel leveret"-knap pr. aflæsningssted (LÅST 2026-06-15):** chaufføren bekræfter levering når et aflæsningssted er klaret (markerer leveret → driver "Afleveret"-pillen hos formand, Trin 5). Går alt til samme udførselssted = én knap; er det delt = én knap pr. sted. Bekræftet levering vises som centreret **"Afleveret"-pille** (uden flueben).
+4. **"Afslut opgave"-knap (LÅST 2026-06-15):** opgaven afsluttes EKSPLICIT via en "Afslut opgave"-knap i bunden (som de øvrige flows, med bekræftelses-modal) → `afsluttet`. Ikke auto-afslut når alle leverancer er bekræftet — chaufføren afslutter selv.
+
+**Cross-app effekt:** Hver "Materiel leveret"-bekræftelse → formandens Udførsel får en **"Afleveret"-pille** pr. aflæsningssted (se Trin 5). *(Prototype: mock-state pr. app; produktion: cross-app via PLAN/backend.)*
+
 **Krav:** Touch targets ≥ 44×44px (udendørs brug i bil).
 **Issue:** #16 (chauffør-prototype)
+
+**SMS-afsendelse — ÉN SMS pr. chauffør pr. ordre (LÅST 2026-06-15):** Flere materiel-enheder kan placeres på samme bil, og samme chauffør kan stå på FLERE materiel-linjer (jf. Trin 3: "samme bil kan dække flere materiel-linjer"). Der må kun sendes **ÉN SMS til chaufføren** — den konsoliderer alle de materiel-enheder han transporterer for ordren (én besked der lister alle enheder), ikke én SMS pr. enhed.
+- **Konsolideringsnøgle:** `confirmed_transport.chauffoer_tlf` inden for ordrens `materiel[]`. Flere materiel-linjer med samme chauffør-tlf → én SMS.
+- **Granularitet adskiller sig fra asfalt:** Asfalt-kørsel = én SMS pr. chauffør pr. **dag** (loop-kørsel, mange læs — Flow 1 Trin 7b). Materiel = én SMS pr. chauffør pr. **ordre** (diskret transport-opgave med fast afhentning/aflæsning).
+- **Debounce + bekræftelses-pille:** Samme afsendelses-timing (2 timer initial / 10 min sen erstatning) og "Sendt til chauffør"-pille (formand på materiel-bil-rækken, Trin 5 + vognmand — noteret, ikke bygget) som Flow 1 Trin 7b. Genbrug mekanikken.
+
+**Asfalt + materiel samme dag = TO adskilte SMS (LÅST 2026-06-15):** Hvis samme chauffør har BÅDE asfalt-loop-kørsel OG en materiel-transport samme dag, sendes **to adskilte SMS** — én asfalt-dags-SMS (Flow 1 Trin 7b) + én materiel-ordre-SMS (denne regel). De konsolideres IKKE, fordi det er to forskellige opgavetyper med hvert sit deep-link/kontekst.
 
 ### Trin 5 — Formand ser bekræftelse + transport-detaljer
 **App:** formand
@@ -1216,7 +1303,8 @@ Formål: vognmanden får tilstrækkelig kontekst til at disponere korrekt blokvo
 - Biltype (fx "Blokvogn", "Kran-bånd")
 - Badge: **"Kørt materiel"** (skiller den visuelt fra asfalt-biler — `bg-warn-bg`)
 - Materiel-info under rækken: `+ HAMM HD10 VT, VÖGELE 1900-3I` (`text-xs text-text-muted`)
-**Læser:** `orders.materiel[].bekraeftet_af_vognmand`, `orders.materiel[].confirmed_transport`, grupperer på `chauffoer_navn + reg_nr`
+- **"Afleveret"-pille pr. aflæsningssted (LÅST 2026-06-15):** Når chaufføren trykker "Materiel leveret" på et aflæsningssted (Trin 4b), får den tilsvarende levering en grøn **"Afleveret"-pille** i formandens Udførsel. Er kørslen delt på flere aflæsningssteder, vises en pille pr. sted, og rækken er først fuldt afleveret når alle steder er bekræftet. *(Prototype: mock-state; produktion: cross-app via PLAN/backend.)*
+**Læser:** `orders.materiel[].bekraeftet_af_vognmand`, `orders.materiel[].confirmed_transport`, `orders.materiel[].leveret` (pr. aflæsningssted), grupperer på `chauffoer_navn + reg_nr`
 
 ### Trin 6 — Formand afregner materiel-bil (samme flow som asfalt-bil)
 **App:** formand
@@ -2479,23 +2567,34 @@ Når en chauffør på en almindelig single-produkt-ordre når sidste-læs (rest 
 **To:** Vognmand → Disponerings-sektion
 **Trigger:** Formand vælger en aflysnings-årsag i `ProductBoxV2` reason-picker.
 
-**Payload:**
+**Payload (aflysnings-notifikation — udvidet 2026-06-15):**
 
 | Felt | Format | Notes |
 |---|---|---|
 | `day_plan_id` | uuid | Identificerer hvilken bestilling |
+| `order_id` | uuid | Stabil ordre-ID (kontekst) |
+| `adresse` | string | Udførselssted — kontekst for vognmand |
+| `dato` | date | Hvilken dag aflyses (i dag / i morgen / fremtidig) |
+| `gaelder_fra` | `'hele_dagen'` \| HH:MM | **Omfang:** `'hele_dagen'` = hele dagen aflyst; HH:MM = resten af dagen fra dette tidspunkt |
 | `cancelled` | boolean | true |
 | `cancel_reason` | `AflysningsAarsag` | `'regn' \| 'frost' \| 'underlag' \| 'andet'` |
 | `cancel_reason_note` | string \| null | Kun ved `'andet'` (afhænger af C-spg C5) |
+| `beroerte_biler[]` | array | De af vognmandens disponerede biler aflysningen omfatter. Per bil: `bil_ordre_nr · reg_nr · chauffoer_navn · chauffoer_tlf · frigjort_fra` (HH:MM eller dagsstart) |
 | `cancelled_at` | ISO 8601 + TZ | server-genereret |
+
+**Omfang — `gaelder_fra` dækker alle aflysnings-states:**
+- **Hele dagen / fremtidig dag aflyst** → `gaelder_fra='hele_dagen'` → alle dagens biler i `beroerte_biler[]` frigjort fra dagsstart
+- **Resten af dagen** (mid-day) → `gaelder_fra=HH:MM` → kun biler med resterende arbejde efter HH:MM medtages; biler der allerede har leveret beholder deres udførte del (jf. data-bevarelse, linje 1021-1034)
 
 **Receiver-handling (vognmand):**
 1. **Hvis `transport_order` allerede eksisterer for dayId** (allerede sendt):
    - Modtagne `transport_order.status` skal cascade-aflyses (afventer beslutning i C-spg C2 — soft-delete eller separat `cancelled`-flag på row)
-   - Notification til vognmand: "Dagens bestilling for [adresse] er aflyst (årsag: [reason])"
-   - Hvis vognmand allerede har disponeret bil → bil markeres som "Frigjort" i vognmand-UI; vognmand kan re-allokere bilen til andre opgaver
+   - Notification til vognmand: "Bestilling for [adresse] [dato] er aflyst (årsag: [reason]) — [N] bil(er) frigjort"
+   - Hver bil i `beroerte_biler[]` markeres "Frigjort fra [frigjort_fra]" i vognmand-UI → vognmand kan re-allokere bilen til andre opgaver
 2. **Hvis `transport_order` IKKE eksisterer endnu** (cancelDay før send):
    - Ingen cross-app effekt — kun lokal opdatering i formand-app
+
+**Bevarelse:** Aflysning sletter ALDRIG allerede registreret timeforbrug/leverede tons — kun fremtidigt planlagt arbejde annulleres. Se data-bevarelse-reglen (linje 1021-1034) + AflysningCell-teksten i formand-UI.
 
 **Race / konflikt:**
 - Hvis vognmand er midt i at bekræfte bilen samtidig med formand aflyser → server håndterer optimistic locking. Den der vinder, vinder. Formand får refetch + advarsel.
@@ -2736,13 +2835,18 @@ orders
   │           ├── tlf: string
   │           └── bil_type: string
   ├── materiel[]
-  │     ├── anlaegsnr: string                   // fra PLAN holdpakke
+  │     ├── anlaegsnr: string                   // unikt varenummer — fra PLAN holdpakke
   │     ├── beskrivelse: string                 // fra PLAN holdpakke
-  │     ├── ordrenummer_betaler: string | null  // hvis udlånt fra anden afd. — betaler for transport
-  │     ├── afhentningssted: string             // auto-udfyldt hvis ordrenummer_betaler er kendt
-  │     ├── postnummer: string
-  │     ├── aflaesningssted: string
+  │     ├── afhentning_vejnavn: string          // prefyldt: seneste aflæsning i PLAN (via varenummer), ellers BLANK (ingen fallback)
+  │     ├── afhentning_nummer: string
+  │     ├── afhentning_postnummer: string
+  │     ├── klar_dato: string                   // YYYY-MM-DD — klar til afhentning
+  │     ├── klar_tid: string                    // HH:MM
+  │     ├── lokation_dato: string               // YYYY-MM-DD — skal være på lokation
+  │     ├── lokation_tid: string                // HH:MM
+  │     ├── aflaesningssted: string             // udførselssted
   │     ├── aflaesningspostnummer: string
+  │     ├── kommentar_til_chauffoer: string
   │     ├── gemt: boolean                       // formand har trykket "Gem transport"
   │     ├── bekraeftet_af_vognmand: boolean     // true når vognmand har sat en bil på
   │     └── confirmed_transport
@@ -2914,13 +3018,12 @@ afregninger                                   // fra Colas til vognmand
 - **Afregningstype styrer felter i formand-UI** — `afregning_type` på `confirmed_vehicles[]` afgør om afregnings-formen viser køretimer/pause (time) eller tons kørt (akkord). Hvis vognmand-systemet ikke leverer typen: fallback til `time` med warning + manuel override (manuel override ikke bygget i første iteration)
 - **Materiel afregnes per chauffør, ikke per materiel-enhed** — kører én chauffør 3 materiel-enheder på samme transport-bil, oprettes 1 afregningsrække der dækker alle 3. Materiel er ALTID time-afregning (aldrig akkord)
 - **Vognmand ser kun godkendte afregninger** — vognmand-portal viser KUN `time_registreringer` hvor `godkendt_af_formand = true`. Afventende afregninger er usynlige for vognmand
-- **Distributions-mekanisme til chauffør er ikke afklaret** — Flow 1 trin 8 har TBD. Push, polling eller event på reg.nr skal besluttes inden prod
+- **Distributions-mekanisme til chauffør — LØST 2026-06-15:** Konsolideret dags-SMS pr. chauffør (LINK Mobility) med deep-link til chauffør-webapp. Se Flow 1 Trin 7b + Trin 8. (Erstatter tidligere TBD om push/polling/event.)
 - **Holdpakke kommer fra PLAN, men kan udvides af formand** — Tilføjelser (mennesker eller materiel) SKAL skrives retur til PLAN. PLAN er sandhedskilde for ressourceallokering på tværs af afdelinger
 - **Holdpakke håndteres under Udførelse via to forskellige registreringer:**
   - **Mennesker (holdet):** Hver person i holdpakken får en **timeregistrering** under Udførelse (start/slut eller antal timer per dato). Bruges til løn/akkord-afregning.
   - **Materiel:** Hvert materiel registreres med **antal timer brugt** under Udførelse. Bruges til materiel-afregning/intern fakturering mellem afdelinger
   - Begge registreringer skrives retur til PLAN ved afslutning af ordren
-- **Udlånt materiel betaler-ordrenummer** — Hvis et materiel er lånt fra en anden afdeling, kan formanden indtaste den ordres ordrenummer. Det er den ordre der dækker transportomkostningen. Feltet er valgfrit og rent informativt — det blokerer ikke gem-flowet, men hvis ordrenummeret er kendt i systemet, præudfyldes afhentningsadresse + postnummer automatisk
 - **Bekræftet-boks pr. materiel** — Når vognmand har sat bil på en materiel-linje, oprettes en bekræftet-boks i formand-appen med: anlæg, beskrivelse, transport (biltype), chauffør (navn), chauffør-tlf. Samme indhold vises i Udførelse-sektionen
 - **Forundersøgelse-felter kommer fra PLAN** — Underlag-typer, årsager og ekstraarbejde-typer er IKKE fri-tekst; de er prædefinerede lister fra PLAN. Kun "Aftalt med", "Forbehold" og kommentar-felterne på ekstraarbejde er fri-tekst
 - **Forundersøgelse-billeder synker til Dokumentation** — Billeder uploadet i Forundersøgelse vises også automatisk under Dokumentation (Planlægning) med badge/tag "Forundersøgelse" så kilden er tydelig

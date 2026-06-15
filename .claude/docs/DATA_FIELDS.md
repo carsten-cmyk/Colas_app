@@ -193,6 +193,7 @@ ekstra_bestillinger (
 | `laes_nummer` | `number` | ✅ | — | ≥ 1, heltal. Bestemt af drop-rækkefølge i vognmand's disponering. Omberegnes hvis en bil fjernes | Vognmand (derived: array-index + 1) | → formand, → chauffør ("Du er 2. læs"), → fabrik |
 | `ankomst_plads_tid` | `string` (HH:MM) | ✅ | — | Beregnet: `foerste_laes_udlaegning_tid + (laes_nummer−1) × interval_minutter_mellem_laes` | Derived | → formand, → fabrik |
 | `moedetid_fabrik` | `string` (HH:MM) | ✅ | — | Beregnet: `ankomst_plads_tid − orders.factory.driveTimeMinutes` | Derived | → formand, → chauffør (HOVED-INFO), → fabrik |
+| `sms_status` | `ChauffoerSmsStatus` | ✅ | `'ikke_sendt'` | Enum (STATUS_VOKABULAR #13): `ikke_sendt`/`sendt`/`aendret_siden_afsendelse`. Per chauffør-aggregeret i backend (nøgle: `chauffoer_tlf`) — én dags-SMS pr. chauffør | Formand (send-handling) eller auto når plan klar | → chauffør (deep-link distribution, FF Trin 7b/8) |
 
 **Supabase mapping (TODO):**
 ```sql
@@ -236,6 +237,8 @@ confirmed_vehicles (
   laes_nummer int not null check (laes_nummer >= 1),
   ankomst_plads_tid time not null,
   moedetid_fabrik time not null,
+  sms_status text not null default 'ikke_sendt'
+    check (sms_status in ('ikke_sendt','sendt','aendret_siden_afsendelse')),
   created_at timestamptz default now(),
   unique (asfalt_koersel_id, laes_nummer)
 );

@@ -227,6 +227,30 @@ type OrderStatus = 'afventer' | 'planlagt' | 'aktiv'
 
 ---
 
+### 13. `ChauffoerSmsStatus` — Ordre-SMS til chauffør (LÅST 2026-06-15)
+
+```ts
+type ChauffoerSmsStatus = 'ikke_sendt' | 'sendt' | 'aendret_siden_afsendelse'
+```
+
+| Værdi | Label (knap) | Betyder |
+|---|---|---|
+| `ikke_sendt` | "Send" | Ordre-link-SMS endnu ikke sendt til chaufføren |
+| `sendt` | "Sendt ✓" | Konsolideret dags-SMS med ordre-link er sendt til chaufføren |
+| `aendret_siden_afsendelse` | "Gensend" | Chaufførens dag har ændret sig efter afsendelse (ny/ændret ordre, reassign ved nedbrud) — formanden kan gensende |
+
+**Granularitet:** Statussen lever **per chauffør per dag** (nøgle: chauffør-telefon), ikke per bil-række. Én konsolideret dags-SMS dækker alle den chaufførs ordrer/læs den dag. I UI vises knappen per bil-række, men tilstanden afspejler chaufførens samlede dags-SMS (cross-ordre-konsolidering er en backend-detalje — se FF Flow 1 Trin 8).
+
+**Faseopdeling:**
+- **Fase 1:** Kun `ikke_sendt` → `sendt`. Auto-send når plan er klar + manuel gensend. Chauffør-app opdaterer ordre-data **lydløst** (intet ændrings-banner).
+- **Fase 2:** `aendret_siden_afsendelse` aktiveres + "Ordre opdateret"-banner i chauffør-app ved væsentlige felter (mødetid, fabrik, produkt, mængde). Enum-værdien defineres allerede nu for at undgå senere migration.
+
+**Aflysning** er IKKE dækket af denne enum — dagsaflysning notificeres via det eksisterende vejr-/aflysnings-retur-flow.
+
+**Gælder:** formand Udførsel-dashboard (Bilbestilling-tabel) + chauffør-distribution (FF Flow 1 Trin 8).
+
+---
+
 ## Hvor håndhæves dette?
 
 - **Supabase:** Postgres `CHECK`-constraints eller `enum`-types per tabel
@@ -254,3 +278,4 @@ Refactor af eksisterende kode sker **inkrementelt per sektion** i dev-fasen — 
 |---|---|---|
 | 2026-05-26 | Initial låsning af alle 11 enums | Carsten |
 | 2026-05-27 | `VejeseddelStatus` udvidet med `dag_afsluttet` (sidegren fra `paa_vej_til_fabrik`) | builder |
+| 2026-06-15 | `ChauffoerSmsStatus` tilføjet (#13) — ordre-SMS-distribution til chauffør, faseopdelt (fase 1 = lydløs in-app, fase 2 = gensend + banner) | Claude |
