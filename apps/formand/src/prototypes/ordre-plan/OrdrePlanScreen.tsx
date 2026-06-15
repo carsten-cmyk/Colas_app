@@ -28,7 +28,6 @@ import {
 import { TopBar } from '@/components/layout/TopBar'
 import { BottomTabBar } from '@/components/layout/BottomTabBar'
 import type { TabName } from '@/types/navigation'
-import { OrdreInfoCard } from '@/components/ui/OrdreInfoCard'
 import { FremdriftCard } from '@/components/ui/FremdriftCard'
 import { FremdriftInputRow } from '@/components/ui/FremdriftInputRow'
 import { VejesedlerTable } from '@/components/ui/VejesedlerTable'
@@ -132,32 +131,25 @@ interface VehicleOrder {
   antal: number
 }
 
-/** Ordrenummer for den aktive demo-ordre (matcher adresse-feltet). */
-// TODO: Erstat med Supabase når klar — kommer fra orders-rækken.
-const DEMO_ORDRE_NR = '1212343'
+// TODO: Erstat med PLAN/Supabase standard-materiel-katalog når klar
+const STANDARD_MATERIEL_KATALOG: Array<{ plantNumber: string; description: string; transportTag: MockResource['transportTag'] }> = [
+  { plantNumber: 'A-3042', description: 'HAMM HD+ 140i Tromle (vibrations)', transportTag: 'blokvogn' },
+  { plantNumber: 'A-1187', description: 'VÖGELE SUPER 1900-3i Asfaltudlægger', transportTag: 'blokvogn' },
+  { plantNumber: 'A-2205', description: 'WIRTGEN W 100 CFi Fræser', transportTag: 'blokvogn' },
+  { plantNumber: 'A-3081', description: 'HAMM HD 12 VV Tandemtromle', transportTag: 'blokvogn' },
+  { plantNumber: 'A-4412', description: 'DYNAPAC CC1200 Gummitromle', transportTag: 'blokvogn' },
+  { plantNumber: 'A-2019', description: 'WIRTGEN W 220 CFi Stor fræser', transportTag: 'blokvogn' },
+  { plantNumber: 'A-5503', description: 'VÖGELE SUPER 700-3i Lille udlægger', transportTag: 'kran-baand' },
+  { plantNumber: 'A-6110', description: 'Broddpacker / Stamper BOMAG BT 65', transportTag: 'egen-korsel' },
+  { plantNumber: 'A-7021', description: 'Fejemaskine Johnston VS651', transportTag: 'egen-korsel' },
+  { plantNumber: 'A-7305', description: 'Skæremaskine Husqvarna K 6500', transportTag: 'egen-korsel' },
+  { plantNumber: 'A-8801', description: 'BOMAG BW 120 AD-5 Tandemtromle', transportTag: 'blokvogn' },
+  { plantNumber: 'A-9044', description: 'Vandvogn 8.000 l (kørende vandforsyning)', transportTag: 'kran-baand' },
+]
 
-/**
- * Bygger unikke bil-ordrenumre for ÉN dags bestilling (LÅST 2026-06-13).
- * Format: `<ordrenr>-DDMMYY-NN` — løbenummeret (NN) nulstilles pr. dag og
- * tæller på tværs af alle biltyper i bestillingens rækkefølge. Hvert bil-ønske
- * sendes til vognmanden med sit eget nummer, fordi vognmændene behandler hver
- * bil som en separat ordre og opretter nye ordrer pr. dag.
- * Returnerer ét nummer pr. bestilt bil (antal udfoldes til individuelle biler).
- * TODO: Erstat med Supabase — nummeret genereres backend-side ved send til vognmand.
- */
-function buildBilOrdreNumre(ordreNr: string, isoDate: string, orders: VehicleOrder[]): string[][] {
-  const [y, m, d] = isoDate.split('-')
-  const ddmmyy = `${d}${m}${y.slice(2)}`
-  let lobenr = 0
-  return orders.map(o => {
-    const numre: string[] = []
-    for (let i = 0; i < o.antal; i++) {
-      lobenr++
-      numre.push(`${ordreNr}-${ddmmyy}-${String(lobenr).padStart(2, '0')}`)
-    }
-    return numre
-  })
-}
+// Bil-ordrenumre (<ordrenr>-DDMMYY-NN) genereres backend-side ved send til vognmand
+// (LÅST 2026-06-13, se DATA_FIELDS.md confirmed_vehicles[].bil_ordre_nr). Vises ikke i
+// asfaltkørsel-UI'en, men er fortsat væsentlig for vognmandens bestilling.
 
 interface KørselPause {
   id: string
@@ -602,6 +594,9 @@ interface Vejeseddel {
 
 // ─── Afregning types (inline prototype) ──────────────────────────────────────
 
+/** STATUS_VOKABULAR #13 — LÅST 2026-06-15. Fase 2: aendret_siden_afsendelse bruges ikke endnu. */
+type ChauffoerSmsStatus = 'ikke_sendt' | 'sendt' | 'aendret_siden_afsendelse'
+
 type AfregningType = 'time' | 'akkord'
 
 interface ChauffoerAfregning {
@@ -625,8 +620,14 @@ interface ConfirmedTruck {
   chauffoer: string
   tlf: string
   biltype: string
-  /** HH:MM — bekræftet ankomst på plads fra vognmand (jf. FF Flow 1 Trin 4). Maks. de 3 første vises i Udførsel-dashboardet. */
+  /** HH:MM — bekræftet ankomst på plads fra vognmand (jf. FF Flow 1 Trin 4). */
   ankomst_plads_tid?: string
+  /** Læs-nummer 1, 2, 3… — bestemt af drop-rækkefølge i vognmands disponering (jf. FF Trin 4). */
+  laes_nummer?: number
+  /** HH:MM — tilbageregnet mødetid på fabrik (jf. FF Trin 4: ankomst_plads − driveTimeMinutes). */
+  moedetid_fabrik?: string
+  /** SMS-status til chauffør (STATUS_VOKABULAR #13). Default: 'ikke_sendt'. */
+  sms_status?: ChauffoerSmsStatus
   afregning?: Omit<ChauffoerAfregning, 'chauffoer_navn' | 'reg_nr'>
   /** Sat til true for biler der kører materiel (blokvogn, kran-bånd etc.) */
   er_materiel_bil?: boolean
@@ -738,6 +739,9 @@ const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
         tlf: '22 33 44 55',
         biltype: '6 Aks',
         ankomst_plads_tid: '06:30',
+        laes_nummer: 1,
+        moedetid_fabrik: '05:54',
+        sms_status: 'ikke_sendt',
         // time-afregning med prædufyldte værdier fra chauffør-app
         afregning: {
           afregning_type: 'time',
@@ -769,6 +773,9 @@ const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
         tlf: '26 77 88 99',
         biltype: '6 Aks',
         ankomst_plads_tid: '06:50',
+        laes_nummer: 2,
+        moedetid_fabrik: '06:14',
+        sms_status: 'ikke_sendt',
         // akkord-afregning — tons arves fra vejesedler (49.2t multilæs)
         afregning: {
           afregning_type: 'akkord',
@@ -801,6 +808,9 @@ const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
         tlf: '40 12 56 78',
         biltype: '7 Aks',
         ankomst_plads_tid: '07:10',
+        laes_nummer: 3,
+        moedetid_fabrik: '06:34',
+        sms_status: 'ikke_sendt',
         // INGEN afregning_type → trigger fallback-banner + default time
         afregning: {
           afregning_type: undefined,
@@ -819,6 +829,9 @@ const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
         tlf: '51 62 73 84',
         biltype: '7 Aks',
         ankomst_plads_tid: '07:30',
+        laes_nummer: 4,
+        moedetid_fabrik: '06:54',
+        sms_status: 'ikke_sendt',
         afregning: {
           afregning_type: 'akkord',
           tons_koert: 35.0,
@@ -840,6 +853,42 @@ const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
             ],
           },
         ],
+      },
+      // Bil 5 — interval-fremskrevet (ikke pinned), sms_status: ikke_sendt
+      // TODO: Erstat med Supabase når klar
+      {
+        regnr: 'JK 55 678',
+        chauffoer: 'Peter Hansen',
+        tlf: '60 71 82 93',
+        biltype: '6 Aks',
+        ankomst_plads_tid: '07:50',
+        laes_nummer: 5,
+        moedetid_fabrik: '07:14',
+        sms_status: 'ikke_sendt',
+        afregning: {
+          afregning_type: 'akkord',
+          tons_koert: 32.4,
+          ventetid: 0,
+          godkendt_af_formand: false,
+        },
+      },
+      // Bil 6 — interval-fremskrevet, sms allerede sendt (demo af sendt-tilstand)
+      // TODO: Erstat med Supabase når klar
+      {
+        regnr: 'LM 88 901',
+        chauffoer: 'Thomas Nielsen',
+        tlf: '42 53 64 75',
+        biltype: '7 Aks',
+        ankomst_plads_tid: '08:10',
+        laes_nummer: 6,
+        moedetid_fabrik: '07:34',
+        sms_status: 'sendt',
+        afregning: {
+          afregning_type: 'akkord',
+          tons_koert: 38.0,
+          ventetid: 0,
+          godkendt_af_formand: false,
+        },
       },
       // TODO: Erstat med Supabase når klar — materiel-biler fra vognmand.aftaler.materiel[]
       {
@@ -992,6 +1041,8 @@ export function OrdrePlanScreen() {
   // TODO: Erstat med Supabase når klar — kommentarer gemmes på ordren/dagen
   const [sentKommentarer, setSentKommentarer] = useState<Record<string, string>>({})
   const [resources, setResources] = useState<MockResource[]>(INITIAL_RESOURCES)
+  const [tilfoejMaterielOpen, setTilfoejMaterielOpen] = useState(false)
+  const [materielSoeg, setMaterielSoeg] = useState('')
   const [fjernModalId, setFjernModalId] = useState<string | null>(null)
   const [cancellingDayId, setCancellingDayId] = useState<string | null>(null)
   // Aflys-celle (i ordredetalje-grid): inline picker-state — uafhængig pr. produkt
@@ -1006,12 +1057,12 @@ export function OrdrePlanScreen() {
   const [noteComments, setNoteComments] = useState<NoteComment[]>(INITIAL_COMMENTS)
   const [sentDayIds, setSentDayIds] = useState<Set<string>>(new Set())
   const [expandedResourceId, setExpandedResourceId] = useState<string | null>(null)
-  const [udlaantIds, setUdlaantIds] = useState<Set<string>>(new Set())
-  const [fakturaOrdre, setFakturaOrdre] = useState<Record<string, string>>({})
   const [afhentningAdresse, setAfhentningAdresse] = useState<Record<string, string>>({})
   const [afhentningPostnr, setAfhentningPostnr] = useState<Record<string, string>>({})
-  const [afhentningKlar, setAfhentningKlar] = useState<Record<string, string>>({})
-  const [afhentningLevering, setAfhentningLevering] = useState<Record<string, string>>({})
+  const [afhentningKlarDato, setAfhentningKlarDato] = useState<Record<string, string>>({})
+  const [afhentningKlarTid, setAfhentningKlarTid] = useState<Record<string, string>>({})
+  const [afhentningLeveringDato, setAfhentningLeveringDato] = useState<Record<string, string>>({})
+  const [afhentningLeveringTid, setAfhentningLeveringTid] = useState<Record<string, string>>({})
   // null = ikke besvaret endnu, true = samme som første, false = nyt sted
   const [sammeAflæsning, setSammeAflæsning] = useState<Record<string, boolean | null>>({})
   const [kørselExpandedId, setKørselExpandedId] = useState<string | null>(null)
@@ -1114,10 +1165,6 @@ export function OrdrePlanScreen() {
     recept
   )
   const [visUdlaegningInput, setVisUdlaegningInput] = useState(false)
-
-  // Valgt dato i Udførsel- + Afregning-mode (hejst til root så de to modes deler state).
-  // Default: dagens dato (TODAY). TODO: Erstat med Supabase når klar — gemmes på user-state per ordre.
-  const [udfoerselSelectedDate, setUdfoerselSelectedDate] = useState<string>(() => TODAY.toISOString().split('T')[0])
 
   const activeProduct = products.find(p => p.id === activeProductId)!
   const days = activeProduct.days
@@ -1241,11 +1288,8 @@ export function OrdrePlanScreen() {
   // Genbrugbar Ordredetaljer-visning: samleordre split-view med tabs ELLER fuld bredde Spec-grid.
   // Bruges både på Planlægning-mode (direkte synlig) og Udførsel-mode (i collapsed-expander).
   // hideTabs=true skjuler tab-rækken — bruges i Udførsel-mode hvor tabs er på selve Ordredetaljer-rækken.
-  // mode='udfoersel' viser AFLYSNING-cellen i kontekst af den valgte dato (selectedDate).
   const makeOrdredetaljerCard = (
     hideTabs?: boolean,
-    cardMode: 'planlaegning' | 'udfoersel' = 'planlaegning',
-    udfoerselSelectedDate?: string,
   ) => (
     isSamleordreMode && samleordreCtx ? (
       <div className="mb-lg">
@@ -1360,8 +1404,7 @@ export function OrdrePlanScreen() {
                     {tabProduct ? (
                       <AflysningCell
                         product={tabProduct}
-                        cardMode={cardMode}
-                        udfoerselSelectedDate={udfoerselSelectedDate}
+                        udfoerselSelectedDate={selectedPlanDate}
                         pickerOpenForDayId={aflysPickerProductId === tabProduct.id ? aflysPickerDayId : null}
                         onOpenPicker={(dayId) => { setAflysPickerProductId(tabProduct.id); setAflysPickerDayId(dayId) }}
                         onClosePicker={() => { setAflysPickerProductId(null); setAflysPickerDayId(null) }}
@@ -1473,8 +1516,7 @@ export function OrdrePlanScreen() {
             <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Aflysning</span>
             <AflysningCell
               product={activeProduct}
-              cardMode={cardMode}
-              udfoerselSelectedDate={udfoerselSelectedDate}
+              udfoerselSelectedDate={selectedPlanDate}
               pickerOpenForDayId={aflysPickerProductId === activeProduct.id ? aflysPickerDayId : null}
               onOpenPicker={(dayId) => { setAflysPickerProductId(activeProduct.id); setAflysPickerDayId(dayId) }}
               onClosePicker={() => { setAflysPickerProductId(null); setAflysPickerDayId(null) }}
@@ -1723,6 +1765,41 @@ export function OrdrePlanScreen() {
           {activeMode === 'planlaegning' && (
           <div className="flex flex-col gap-[48px]">
 
+          {/* ── Asfaltbestilling — unified datovælger i toppen (matcher Udførsel/Afregning) ──
+              Flyttet hertil 2026-06-15: datovælgeren placeres øverst på alle tre modes for
+              ensartethed. 1:1 samme picker som Udførsels "Udføres i perioden" — fuld ordre-
+              periode, overståede dage gennemstreget, ingen grøn afsendt-state. */}
+          {planDays.length > 0 && (
+            <section>
+              <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight mb-sm">Udføres i perioden</h2>
+              <div className="flex items-center gap-xs flex-wrap">
+                {planDays.map(ds => {
+                  const isSelected = ds === selectedPlanDate
+                  // Dato-pille-konvention (2026-06-05): passerede dage → hvid + gennemstreget
+                  const isPast = ds < dateToString(TODAY)
+                  return (
+                    <button
+                      key={ds}
+                      onClick={() => setSelectedPlanDate(ds)}
+                      aria-pressed={isSelected}
+                      aria-label={`${formatLongDate(ds)}${isPast ? ' (overstået)' : ''}`}
+                      className={[
+                        'flex items-center gap-xxxs px-sm py-xs rounded-full font-poppins font-semibold text-sm transition-colors',
+                        isSelected
+                          ? 'bg-deep-teal text-white shadow-sm'
+                          : isPast
+                            ? 'bg-white border border-hairline text-text-muted line-through hover:border-dark-teal'
+                            : 'bg-white border border-hairline text-text-muted hover:border-dark-teal hover:text-deep-teal',
+                      ].join(' ')}
+                    >
+                      {formatLongDate(ds)}
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+          )}
+
           {/* ── Sektion: Udlægning ───────────────────────────────── */}
           <div>
 
@@ -1737,6 +1814,176 @@ export function OrdrePlanScreen() {
               renderCollapsedPille={renderOrdredetaljerCollapsedPille}
             />
 
+            {planlaegningOrdredetaljerExpanded && (
+              <section>
+                <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Dokumentation</h2>
+
+                <div className="bg-white border border-hairline rounded-xl overflow-hidden">
+                  {/* Toggle-header */}
+                  <button
+                    onClick={() => setDocsOpen(o => !o)}
+                    className="w-full flex items-center justify-between px-sm py-sm hover:bg-[#F5F5F5] transition-colors"
+                  >
+                    <span className="flex items-center gap-md">
+                      <span className="font-poppins font-semibold text-sm text-text-primary">Dokumentation</span>
+                      <span className="flex items-center gap-sm font-inter text-xs text-text-muted">
+                        {[
+                          { label: 'Opmåling', ok: true },
+                          { label: 'Billeder', ok: true },
+                          { label: 'Noter', ok: false },
+                        ].map(item => (
+                          <span key={item.label} className="flex items-center gap-xxxs">
+                            <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 ${item.ok ? 'bg-[#1F8A5B]' : 'bg-[#C8372D]'}`} />
+                            <span className={item.ok ? 'text-text-muted' : 'text-[#C8372D] font-medium'}>{item.label}</span>
+                          </span>
+                        ))}
+                      </span>
+                    </span>
+                    <ChevronDown size={16} className={`text-text-muted transition-transform ${docsOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {docsOpen && (
+                    <div className="border-t border-hairline">
+
+                      {/* Opmåling */}
+                      <DocRow
+                        title="Opmåling af område"
+                        meta="PDF · 2,1 MB"
+                        status="ok"
+                        open={opmaalingOpen}
+                        onToggle={() => setOpmaalingOpen(o => !o)}
+                      >
+                        <div className="flex flex-col gap-sm">
+                          <img src="/opmaalings-kort.png" alt="Opmåling af område" className="w-full rounded-lg border border-hairline grayscale-[30%]" />
+                          <label className="flex items-center justify-center gap-xs border border-dashed border-hairline-2 rounded-lg py-sm cursor-pointer hover:border-dark-teal hover:bg-[#F5F9FA] transition-colors group">
+                            <input type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden"
+                              onChange={e => { if (e.target.files?.length) { /* TODO: håndter upload */ } }}
+                            />
+                            <Plus size={14} className="text-text-muted group-hover:text-dark-teal transition-colors" />
+                            <span className="font-inter text-xs text-text-muted group-hover:text-dark-teal transition-colors">Upload fil (PDF eller billede)</span>
+                          </label>
+                        </div>
+                      </DocRow>
+
+                      {/* Billeder */}
+                      <DocRow
+                        title="Billedmateriale"
+                        meta={`${photos.length} billeder`}
+                        status="ok"
+                        open={photosOpen}
+                        onToggle={() => setPhotosOpen(o => !o)}
+                      >
+                        <div className="grid grid-cols-4 gap-xs">
+                          {photos.map(photo => (
+                            <div key={photo.id} className={`aspect-square rounded-lg ${photo.color} flex flex-col items-center justify-center relative group border border-hairline overflow-hidden`}>
+                              <span className="font-inter text-xxs text-text-muted text-center px-xxxs leading-tight">{photo.label}</span>
+                              {photo.source === 'forundersoegelse' && (
+                                <span className="absolute bottom-0 left-0 right-0 bg-dark-teal/80 font-inter text-[9px] font-semibold text-white text-center py-[2px] leading-none">
+                                  Forundersøgelse
+                                </span>
+                              )}
+                              <button
+                                onClick={() => setPhotos(prev => prev.filter(p => p.id !== photo.id))}
+                                className="absolute top-[4px] right-[4px] w-[16px] h-[16px] bg-white/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X size={8} className="text-bad" />
+                              </button>
+                            </div>
+                          ))}
+                          <label className="aspect-square rounded-lg border border-dashed border-hairline-2 flex flex-col items-center justify-center cursor-pointer hover:border-text-muted hover:bg-[#F5F5F5] transition-colors">
+                            <input type="file" accept="image/*" capture="environment" className="hidden"
+                              onChange={e => {
+                                if (e.target.files?.length) {
+                                  setPhotos(prev => [...prev, { id: `ph${Date.now()}`, color: 'bg-yellow/20', label: `Foto ${prev.length + 1}` }])
+                                }
+                              }}
+                            />
+                            <Camera size={16} className="text-text-muted" />
+                            <span className="font-inter text-xxs text-text-muted mt-xxxs">Kamera</span>
+                          </label>
+                          <label className="aspect-square rounded-lg border border-dashed border-hairline-2 flex flex-col items-center justify-center cursor-pointer hover:border-text-muted hover:bg-[#F5F5F5] transition-colors">
+                            <input type="file" accept="image/*" className="hidden"
+                              onChange={e => {
+                                if (e.target.files?.length) {
+                                  setPhotos(prev => [...prev, { id: `ph${Date.now()}`, color: 'bg-light-aqua/30', label: `Foto ${prev.length + 1}` }])
+                                }
+                              }}
+                            />
+                            <Plus size={16} className="text-text-muted" />
+                            <span className="font-inter text-xxs text-text-muted mt-xxxs">Upload</span>
+                          </label>
+                        </div>
+                      </DocRow>
+
+                      {/* Noter */}
+                      <DocRow
+                        title="Noter til opgave"
+                        meta={`${noteComments.length} noter`}
+                        status="bad"
+                        open={notesOpen}
+                        onToggle={() => setNotesOpen(o => !o)}
+                        isLast
+                      >
+                        <div className="flex flex-col gap-sm">
+                          {noteComments.map(c => (
+                            <div key={c.id} className="flex gap-xs">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${c.initials === 'OJ' ? 'bg-deep-teal' : 'bg-[#F5F5F5]'}`}>
+                                <span className={`font-inter font-bold text-[9px] ${c.initials === 'OJ' ? 'text-white' : 'text-deep-teal'}`}>{c.initials}</span>
+                              </div>
+                              <div className="flex-1 bg-[#F5F5F5] rounded-xl px-xs py-xs">
+                                <div className="flex items-baseline gap-xs mb-xxxs">
+                                  <b className="font-inter font-semibold text-xs text-text-primary">{c.name}</b>
+                                  <time className="font-inter text-xxs text-text-muted">{c.timestamp}</time>
+                                </div>
+                                <p className="font-inter text-xs text-text-secondary leading-relaxed">{c.text}</p>
+                              </div>
+                            </div>
+                          ))}
+                          <div className="flex gap-xs">
+                            <div className="w-7 h-7 rounded-full bg-deep-teal flex items-center justify-center flex-shrink-0">
+                              <span className="font-inter font-bold text-[9px] text-white">OJ</span>
+                            </div>
+                            <div className="flex-1">
+                              <div className="relative">
+                                <textarea
+                                  value={besigtigelseComment}
+                                  onChange={e => setBesigtigelseComment(e.target.value)}
+                                  placeholder="Tilføj bemærkning..."
+                                  rows={2}
+                                  className="w-full rounded-xl border border-hairline bg-white px-xs py-xs pr-[40px]
+                                             font-inter text-xs text-text-primary placeholder:text-text-muted
+                                             focus:outline-none focus:border-dark-teal resize-none"
+                                />
+                                <button
+                                  className="absolute bottom-[10px] right-[10px] w-7 h-7 rounded-full bg-dark-teal
+                                             flex items-center justify-center hover:bg-deep-teal transition-colors"
+                                  aria-label="Dikter bemærkning"
+                                >
+                                  <Mic size={12} className="text-white" />
+                                </button>
+                              </div>
+                              {besigtigelseComment.trim().length > 0 && (
+                                <button
+                                  onClick={() => {
+                                    setNoteComments(prev => [...prev, { id: `nc${Date.now()}`, initials: 'OJ', name: 'Ole Jensen', timestamp: 'Nu', text: besigtigelseComment.trim() }])
+                                    setBesigtigelseComment('')
+                                  }}
+                                  className="mt-xxxs self-end float-right bg-dark-teal text-white font-inter font-semibold text-xxs px-sm py-xxxs rounded-lg hover:bg-deep-teal transition-colors"
+                                >
+                                  Gem
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </DocRow>
+
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
             <hr className="my-lg border-t border-hairline" />
 
             {/* ── Bestillings-række for valgt dag ──────────────────────── */}
@@ -1744,52 +1991,12 @@ export function OrdrePlanScreen() {
             {/* Samleordre: produkter samles per recipeCode på tværs af ordrer */}
             {/* TODO: Erstat med Supabase når klar — produktdata fra samleordre-join */}
             <div className="flex flex-col gap-sm">
-              {/* Overskrift + tydelige dato-piller i samme kontekst.
-                  Pillen er den primære dato-indikator nu (datoen er fjernet fra overskriften). */}
-              <div>
-                <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight mb-sm">Asfaltbestilling</h2>
-                {planDays.length > 0 && (
-                  <div className="flex items-center gap-xs flex-wrap">
-                    {planDays
-                      .filter(ds => products.some(p => p.days.some(d => d.date === ds && !d.cancelled)))
-                      .map(ds => {
-                        const isSelected = ds === selectedPlanDate
-                        // Grøn farve når ALLE produkters dage for denne dato er afsendt til fabrik.
-                        // Bekræfter visuelt at dagens bestilling er ude af døren.
-                        const dayIdsForDate = products.flatMap(p => p.days.filter(d => d.date === ds && !d.cancelled).map(d => d.id))
-                        const isAllSent = dayIdsForDate.length > 0 && dayIdsForDate.every(id => sentDayIds.has(id))
-                        // Dato-pille-konvention (2026-06-05): passerede dage → hvid + gennemstreget
-                        const isPast = ds < dateToString(TODAY)
-                        return (
-                          <button
-                            key={ds}
-                            onClick={() => setSelectedPlanDate(ds)}
-                            aria-pressed={isSelected}
-                            aria-label={isAllSent ? `${formatLongDate(ds)} (afsendt)` : isPast ? `${formatLongDate(ds)} (overstået)` : formatLongDate(ds)}
-                            className={[
-                              'flex items-center gap-xxxs px-sm py-xs rounded-full font-poppins font-semibold text-sm transition-colors',
-                              isAllSent
-                                ? 'bg-good text-white shadow-sm'
-                                : isSelected
-                                  ? 'bg-deep-teal text-white shadow-sm'
-                                  : isPast
-                                    ? 'bg-white border border-hairline text-text-muted line-through hover:border-dark-teal'
-                                    : 'bg-white border border-hairline text-text-muted hover:border-dark-teal hover:text-deep-teal',
-                            ].join(' ')}
-                          >
-                            {isAllSent && (
-                              <CheckCircle2 size={13} className="text-white flex-shrink-0" strokeWidth={2.5} />
-                            )}
-                            {formatLongDate(ds)}
-                          </button>
-                        )
-                      })}
-                  </div>
-                )}
-                {productsForSelectedDate.length === 0 && (
-                  <span className="font-inter text-xs text-text-muted ml-auto">Ingen produkter denne dag</span>
-                )}
-              </div>
+              <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight mb-sm">Asfaltbestilling</h2>
+              {/* Datovælgeren er flyttet til toppen af Planlægning-mode (unified picker —
+                  se sektionen øverst). Bestillings-rækken viser produkterne for den valgte dato. */}
+              {productsForSelectedDate.length === 0 && (
+                <span className="font-inter text-xs text-text-muted">Ingen produkter denne dag</span>
+              )}
 
               {/* Flow 9b (OPDATERET 2026-06-09): "Tons opdateret af Fabrik"-banner ERSTATTET
                   af synlig EkstraBestillingBox + "Bekræftet fabrik"-pille per produkt med ekstra-tons.
@@ -2056,6 +2263,120 @@ export function OrdrePlanScreen() {
                       {isExpanded && (
                         <div className="mx-sm mb-lg rounded-xl border border-dark-teal/20 bg-soft-aqua shadow-sm flex flex-col gap-md p-md">
 
+                          {/* Bilbehov — read-only beregningsoverblik (FLYTTET ØVERST 2026-06-15). FUNCTIONAL_FLOWS Flow 1, Trin 1 — LÅST 2026-06-10 */}
+                          {orders.length > 0 && (() => {
+                            const harBiler = totalTrucks > 0 && singleLoadCapacity > 0
+                            // avgTons fra de faktisk valgte biler; 30 = synligt fallback (FF Flow 1 Trin 1, præcisering 2026-06-15)
+                            const avgTons = harBiler ? Math.round(singleLoadCapacity / totalTrucks) : 30
+                            const recommended = roundsPerTruck > 0 ? Math.ceil(dayTons / (avgTons * roundsPerTruck)) : 0
+                            // Kapacitet-dækket: valgte bilers kapacitet over dagen = kapacitet/runde × runder pr. bil
+                            const totalCapacity = singleLoadCapacity * roundsPerTruck
+                            const capacityOk = harBiler && totalCapacity >= dayTons
+                            const tonsMangler = Math.max(0, dayTons - totalCapacity)
+                            const dagProdukter = products
+                              .map(p => ({ product: p, dayEntry: p.days.find(d => d.date === day.date) }))
+                              .filter((x): x is { product: MockProduct; dayEntry: DayPlan } => !!x.dayEntry)
+                            // Forventet sidste bil pr. produkt — KRÆVER kendt starttid + interval (FF Flow 1 Trin 1, 2026-06-15).
+                            // Samme biler kører alle produkter sekventielt. P1: starttid = første bils starttid (startTider[0])
+                            // + dag-interval (params.intervalMinutes). P2+: egen starttid (fx pause til maskinflytning) + eget
+                            // interval — tidligst når forrige produkts biler er fri (max); 'direkte i forlængelse' → forrige slut.
+                            // startMin = null når input mangler → slut = null → boksen udfyldes ikke for det produkt.
+                            let cursorMin: number | null = null
+                            const slutPerProdukt = dagProdukter.map(({ product, dayEntry }, pi) => {
+                              const tons = getEffectiveTons(dayEntry)
+                              const runder = harBiler ? Math.ceil(tons / singleLoadCapacity) : 0
+                              let startMin: number | null = null
+                              if (pi === 0) {
+                                // Produkt 1: kræver første bils starttid + dag-interval
+                                const t0 = (startTider[day.id] ?? [null, null, null])[0]
+                                if (t0 && params.intervalMinutes != null) {
+                                  const [h, m] = t0.split(':').map(Number)
+                                  startMin = h * 60 + m
+                                }
+                              } else {
+                                const pp = produktKørselParams[`${product.id}__${day.id}`]
+                                if (pp?.foersteLaesPaaPlads) {
+                                  // Egen starttid — kræver eget interval; tidligst når forrige biler er fri
+                                  if (pp.intervalMin != null) {
+                                    const [h, m] = pp.foersteLaesPaaPlads.split(':').map(Number)
+                                    const egen = h * 60 + m
+                                    startMin = cursorMin != null ? Math.max(egen, cursorMin) : egen
+                                  }
+                                } else {
+                                  // 'Direkte i forlængelse' — kendt hvis forrige produkt er kendt
+                                  startMin = cursorMin
+                                }
+                              }
+                              const slut = (harBiler && startMin != null) ? startMin + runder * roundTime : null
+                              cursorMin = slut
+                              return { product, slut }
+                            })
+                            const nogenKendt = slutPerProdukt.some(s => s.slut != null)
+                            const fmtTime = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}.${String(m % 60).padStart(2, '0')}`
+                            return (
+                              <div>
+                                <div className="flex items-center gap-sm mb-xs flex-wrap">
+                                  <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest">Bilbehov</p>
+                                  <span className="inline-flex items-center gap-xxxs font-inter text-xxs text-text-muted">
+                                    <Info size={13} className="text-light-aqua" />
+                                    Beregnet ud fra tonnage, fabrik og rundtid
+                                  </span>
+                                  {/* Kapacitet-dækket-indikator — grøn når valgte biler dækker forventet tons (genindført 2026-06-15) */}
+                                  <span className={`inline-flex items-center gap-xxxs px-xs py-xxxs rounded-md border font-inter text-xxs font-semibold ${capacityOk ? 'bg-good-bg border-good/30 text-good' : 'bg-bad-bg border-bad/30 text-bad'}`}>
+                                    <span className={`w-xxxs h-xxxs rounded-full flex-shrink-0 ${capacityOk ? 'bg-good' : 'bg-bad'}`} />
+                                    {capacityOk ? 'Kapacitet dækket' : `${tonsMangler} Tons mangler`}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-xs">
+                                  {/* Forventet tons (inkl. ekstra-bestilling fra PLAN) */}
+                                  <div className="bg-white border border-hairline rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
+                                    <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Forventet tons</span>
+                                    <span className="font-poppins text-xl font-bold text-deep-teal tabular-nums leading-none mt-auto">{dayTons}<span className="font-inter text-xs font-medium text-text-muted ml-xxxs">Tons</span></span>
+                                    <span className="font-inter text-xxs text-text-muted">incl. ekstra bestilling</span>
+                                  </div>
+                                  {/* Anbefalet */}
+                                  <div className="bg-white border border-hairline rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
+                                    <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Anbefalet</span>
+                                    <span className="font-poppins text-xl font-bold text-deep-teal tabular-nums leading-none mt-auto">{recommended}<span className="font-inter text-xs font-medium text-text-muted ml-xxxs">biler</span></span>
+                                    <span className="font-inter text-xxs text-text-muted">{harBiler ? `á gns. ${avgTons} Tons` : `antaget gns. ${avgTons} Tons`}</span>
+                                  </div>
+                                  {/* Runder */}
+                                  <div className="bg-white border border-hairline rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
+                                    <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Runder</span>
+                                    <span className="font-poppins text-xl font-bold text-deep-teal tabular-nums leading-none mt-auto">{roundsPerTruck}<span className="font-inter text-xs font-medium text-text-muted ml-xxxs">pr. bil</span></span>
+                                    <span className="font-inter text-xxs text-text-muted">{roundTime} Minutter pr. runde</span>
+                                  </div>
+                                  {/* Afstand til fabrik (Google Maps + 10%) */}
+                                  <div className="bg-white border border-hairline rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
+                                    <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Afstand til fabrik</span>
+                                    <span className="font-poppins text-xl font-bold text-deep-teal tabular-nums leading-none mt-auto">{factoryKm}<span className="font-inter text-xs font-medium text-text-muted ml-xxxs">km</span></span>
+                                    <span className="font-inter text-xxs text-text-muted">{koeretidMin} Minutter køretur</span>
+                                  </div>
+                                  {/* Forventet sidste bil (genbrug af vejesedler-prognose) */}
+                                  <div className="bg-white border border-hairline rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
+                                    <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Forventet sidste bil</span>
+                                    {!harBiler ? (
+                                      <span className="font-inter text-xs text-text-muted mt-auto">Vælg biler først</span>
+                                    ) : !nogenKendt ? (
+                                      <span className="font-inter text-xs text-text-muted mt-auto leading-snug">Afventer starttider og interval</span>
+                                    ) : (
+                                      <div className="flex flex-col gap-xxs mt-auto">
+                                        {slutPerProdukt.map((s, i) => (
+                                          <div key={s.product.id} className="flex items-center gap-xs">
+                                            <span className="font-inter text-xxs font-bold text-white bg-deep-teal rounded-sm px-xxxs tracking-wide">P{i + 1}</span>
+                                            <span className="font-poppins text-md font-bold text-deep-teal tabular-nums leading-none">{s.slut != null ? fmtTime(s.slut) : '–'}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })()}
+
+                          <hr className="border-hairline" />
+
                           {/* Vognmand + Afregning — på én række */}
                           <div className="flex items-end gap-sm">
                             {/* Vognmand */}
@@ -2106,13 +2427,10 @@ export function OrdrePlanScreen() {
                             {/* Hver bestilt bil får et unikt bil-ordrenummer (ordrenr-DDMMYY-NN, løbenr pr. dag) der
                                 sendes til vognmanden — som behandler hver bil som en separat ordre. LÅST 2026-06-13. */}
                             <p className="font-inter text-xxs text-text-muted mb-xs">Hver bil sendes som separat ordre med eget nummer til vognmanden.</p>
-                            {orders.length > 0 && (() => {
-                              const bilOrdreNumre = buildBilOrdreNumre(DEMO_ORDRE_NR, day.date, orders)
-                              return (
+                            {orders.length > 0 && (
                               <div className="rounded-lg border border-hairline overflow-hidden bg-white">
                                 {orders.map((o, idx) => {
                                   const vt = VEHICLE_TYPES.find(v => v.label === o.type)
-                                  const numre = bilOrdreNumre[idx] ?? []
                                   return (
                                     <div
                                       key={o.id}
@@ -2148,21 +2466,11 @@ export function OrdrePlanScreen() {
                                           <X size={15} />
                                         </button>
                                       </div>
-                                      {/* Bil-ordrenumre — ét pr. bestilt bil i rækken (sendes til vognmand) */}
-                                      {numre.length > 0 && (
-                                        <div className="flex flex-wrap items-center gap-xxs px-xs pb-xs">
-                                          <span className="font-inter text-xxs font-medium text-text-muted">Bil-nr.:</span>
-                                          {numre.map(nr => (
-                                            <span key={nr} className="font-inter text-xxs text-deep-teal bg-soft-aqua rounded-md px-xs py-xxxs tabular-nums">{nr}</span>
-                                          ))}
-                                        </div>
-                                      )}
                                     </div>
                                   )
                                 })}
                               </div>
-                              )
-                            })()}
+                            )}
                             <button
                               onClick={addOrder}
                               className="inline-flex items-center gap-xs font-inter text-xs font-semibold text-dark-teal bg-white border border-dashed border-light-aqua rounded-full px-sm py-xs hover:bg-soft-aqua hover:border-dark-teal transition-colors mt-xs"
@@ -2171,78 +2479,6 @@ export function OrdrePlanScreen() {
                               Tilføj biltype
                             </button>
                           </div>
-
-                          {/* Bilbehov — read-only beregningsoverblik (FUNCTIONAL_FLOWS Flow 1, Trin 1 — LÅST 2026-06-10) */}
-                          {orders.length > 0 && (() => {
-                            const avgTons = (totalTrucks > 0 && singleLoadCapacity > 0) ? Math.round(singleLoadCapacity / totalTrucks) : 30
-                            const recommended = roundsPerTruck > 0 ? Math.ceil(dayTons / (avgTons * roundsPerTruck)) : 0
-                            const dagProdukter = products
-                              .map(p => ({ product: p, dayEntry: p.days.find(d => d.date === day.date) }))
-                              .filter((x): x is { product: MockProduct; dayEntry: DayPlan } => !!x.dayEntry)
-                            // Forventet afslut pr. produkt — genbrug af vejesedler-prognose (forventet sidste bil).
-                            // TODO: Erstat med vejesedler-prognose-hook når klar — her simpel sekventiel estimering.
-                            const [sbh, sbm] = (params.firstLoadTime || '07:00').split(':').map(Number)
-                            let cursorMin = sbh * 60 + sbm
-                            const slutPerProdukt = dagProdukter.map(({ product, dayEntry }) => {
-                              const tons = getEffectiveTons(dayEntry)
-                              const runder = singleLoadCapacity > 0 ? Math.ceil(tons / singleLoadCapacity) : 0
-                              cursorMin += runder * roundTime
-                              return { product, slut: cursorMin }
-                            })
-                            const fmtTime = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}.${String(m % 60).padStart(2, '0')}`
-                            return (
-                              <>
-                                <hr className="border-hairline" />
-                                <div>
-                                  <div className="flex items-center gap-sm mb-xs flex-wrap">
-                                    <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest">Bilbehov</p>
-                                    <span className="inline-flex items-center gap-xxxs font-inter text-xxs text-text-muted">
-                                      <Info size={13} className="text-light-aqua" />
-                                      Beregnet ud fra tonnage, fabrik og rundtid
-                                    </span>
-                                  </div>
-                                  <div className="grid grid-cols-2 md:grid-cols-5 gap-xs">
-                                    {/* Forventet tons (inkl. ekstra-bestilling fra PLAN) */}
-                                    <div className="bg-white border border-hairline rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
-                                      <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Forventet tons</span>
-                                      <span className="font-poppins text-xl font-bold text-deep-teal tabular-nums leading-none mt-auto">{dayTons}<span className="font-inter text-xs font-medium text-text-muted ml-xxxs">Tons</span></span>
-                                      <span className="font-inter text-xxs text-text-muted">incl. ekstra bestilling</span>
-                                    </div>
-                                    {/* Anbefalet */}
-                                    <div className="bg-white border border-hairline rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
-                                      <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Anbefalet</span>
-                                      <span className="font-poppins text-xl font-bold text-deep-teal tabular-nums leading-none mt-auto">{recommended}<span className="font-inter text-xs font-medium text-text-muted ml-xxxs">biler</span></span>
-                                      <span className="font-inter text-xxs text-text-muted">á gns. {avgTons} Tons</span>
-                                    </div>
-                                    {/* Runder */}
-                                    <div className="bg-white border border-hairline rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
-                                      <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Runder</span>
-                                      <span className="font-poppins text-xl font-bold text-deep-teal tabular-nums leading-none mt-auto">{roundsPerTruck}<span className="font-inter text-xs font-medium text-text-muted ml-xxxs">pr. bil</span></span>
-                                      <span className="font-inter text-xxs text-text-muted">{roundTime} Minutter pr. runde</span>
-                                    </div>
-                                    {/* Afstand til fabrik (Google Maps + 10%) */}
-                                    <div className="bg-white border border-hairline rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
-                                      <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Afstand til fabrik</span>
-                                      <span className="font-poppins text-xl font-bold text-deep-teal tabular-nums leading-none mt-auto">{factoryKm}<span className="font-inter text-xs font-medium text-text-muted ml-xxxs">km</span></span>
-                                      <span className="font-inter text-xxs text-text-muted">{koeretidMin} Minutter køretur</span>
-                                    </div>
-                                    {/* Forventet sidste bil (genbrug af vejesedler-prognose) */}
-                                    <div className="bg-white border border-hairline rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
-                                      <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Forventet sidste bil</span>
-                                      <div className="flex flex-col gap-xxs mt-auto">
-                                        {slutPerProdukt.map((s, i) => (
-                                          <div key={s.product.id} className="flex items-center gap-xs">
-                                            <span className="font-inter text-xxs font-bold text-white bg-deep-teal rounded-sm px-xxxs tracking-wide">P{i + 1}</span>
-                                            <span className="font-poppins text-md font-bold text-deep-teal tabular-nums leading-none">{fmtTime(s.slut)}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </>
-                            )
-                          })()}
 
                           {/* Starttider og intervaller — produkter stablet LODRET med connector (skalerer til 3+) */}
                           {orders.length > 0 && (() => {
@@ -2305,7 +2541,7 @@ export function OrdrePlanScreen() {
                                                         </select>
                                                       </div>
                                                       <div>
-                                                        <p className="font-inter text-xxs text-text-muted mb-xxxs">Startid</p>
+                                                        <p className="font-inter text-xxs text-text-muted mb-xxxs">Starttid plads</p>
                                                         <input
                                                           type="time"
                                                           value={currentTid ?? ''}
@@ -2317,19 +2553,17 @@ export function OrdrePlanScreen() {
                                                   )
                                                 })}
                                                 <div className="grid gap-xs items-end" style={{ gridTemplateColumns: '1fr 130px' }}>
-                                                  <div className="min-w-0">
-                                                    <p className="font-inter text-xxs text-text-muted mb-xxxs">Herefter — interval</p>
-                                                    <label className="flex items-center w-fit bg-white border border-hairline rounded-lg px-xs py-xs cursor-text focus-within:border-dark-teal">
-                                                      <input
-                                                        type="number"
-                                                        value={params.intervalMinutes ?? ''}
-                                                        onChange={e => updateParam('intervalMinutes', e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value) || 1))}
-                                                        className="w-[44px] font-inter text-xs text-text-primary bg-transparent border-none outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                                                      />
-                                                      <span className="font-inter text-xxs text-text-muted ml-xs">Minutter</span>
-                                                    </label>
+                                                  <p className="font-inter text-xxs font-semibold text-text-secondary text-right pb-xs">Herefter — interval</p>
+                                                  <div>
+                                                    <p className="font-inter text-xxs text-text-muted mb-xxxs">Minutter</p>
+                                                    <input
+                                                      type="number"
+                                                      min={1}
+                                                      value={params.intervalMinutes ?? ''}
+                                                      onChange={e => updateParam('intervalMinutes', e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value) || 1))}
+                                                      className="w-full font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs tabular-nums focus:outline-none focus:border-dark-teal [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                                    />
                                                   </div>
-                                                  <div />
                                                 </div>
                                               </div>
                                             ) : (
@@ -2376,7 +2610,7 @@ export function OrdrePlanScreen() {
                                                     ) : (
                                                       <div className="grid grid-cols-2 gap-xs">
                                                         <div>
-                                                          <p className="font-inter text-xxs text-text-muted mb-xxxs">Startid</p>
+                                                          <p className="font-inter text-xxs text-text-muted mb-xxxs">Starttid plads</p>
                                                           <input
                                                             type="time"
                                                             value={pp.foersteLaesPaaPlads ?? ''}
@@ -2434,7 +2668,7 @@ export function OrdrePlanScreen() {
                             <button
                               onClick={() => { setKørselPlanlagtIds(prev => new Set([...prev, day.id])); setKørselExpandedId(null) }}
                               className="font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90"
-                            >Gem kørsel</button>
+                            >Gem kørsel og send til vognmand</button>
                           </div>
                         </div>
                       )}
@@ -2443,175 +2677,6 @@ export function OrdrePlanScreen() {
                 })}
               </div>
             </div>
-
-          {/* ── Dokumentation ───────────────────────────────────── */}
-          <section>
-            <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Dokumentation</h2>
-
-            <div className="bg-white border border-hairline rounded-xl overflow-hidden">
-              {/* Toggle-header */}
-              <button
-                onClick={() => setDocsOpen(o => !o)}
-                className="w-full flex items-center justify-between px-sm py-sm hover:bg-[#F5F5F5] transition-colors"
-              >
-                <span className="flex items-center gap-md">
-                  <span className="font-poppins font-semibold text-sm text-text-primary">Dokumentation</span>
-                  <span className="flex items-center gap-sm font-inter text-xs text-text-muted">
-                    {[
-                      { label: 'Opmåling', ok: true },
-                      { label: 'Billeder', ok: true },
-                      { label: 'Noter', ok: false },
-                    ].map(item => (
-                      <span key={item.label} className="flex items-center gap-xxxs">
-                        <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 ${item.ok ? 'bg-[#1F8A5B]' : 'bg-[#C8372D]'}`} />
-                        <span className={item.ok ? 'text-text-muted' : 'text-[#C8372D] font-medium'}>{item.label}</span>
-                      </span>
-                    ))}
-                  </span>
-                </span>
-                <ChevronDown size={16} className={`text-text-muted transition-transform ${docsOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {docsOpen && (
-                <div className="border-t border-hairline">
-
-                  {/* Opmåling */}
-                  <DocRow
-                    title="Opmåling af område"
-                    meta="PDF · 2,1 MB"
-                    status="ok"
-                    open={opmaalingOpen}
-                    onToggle={() => setOpmaalingOpen(o => !o)}
-                  >
-                    <div className="flex flex-col gap-sm">
-                      <img src="/opmaalings-kort.png" alt="Opmåling af område" className="w-full rounded-lg border border-hairline grayscale-[30%]" />
-                      <label className="flex items-center justify-center gap-xs border border-dashed border-hairline-2 rounded-lg py-sm cursor-pointer hover:border-dark-teal hover:bg-[#F5F9FA] transition-colors group">
-                        <input type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden"
-                          onChange={e => { if (e.target.files?.length) { /* TODO: håndter upload */ } }}
-                        />
-                        <Plus size={14} className="text-text-muted group-hover:text-dark-teal transition-colors" />
-                        <span className="font-inter text-xs text-text-muted group-hover:text-dark-teal transition-colors">Upload fil (PDF eller billede)</span>
-                      </label>
-                    </div>
-                  </DocRow>
-
-                  {/* Billeder */}
-                  <DocRow
-                    title="Billedmateriale"
-                    meta={`${photos.length} billeder`}
-                    status="ok"
-                    open={photosOpen}
-                    onToggle={() => setPhotosOpen(o => !o)}
-                  >
-                    <div className="grid grid-cols-4 gap-xs">
-                      {photos.map(photo => (
-                        <div key={photo.id} className={`aspect-square rounded-lg ${photo.color} flex flex-col items-center justify-center relative group border border-hairline overflow-hidden`}>
-                          <span className="font-inter text-xxs text-text-muted text-center px-xxxs leading-tight">{photo.label}</span>
-                          {photo.source === 'forundersoegelse' && (
-                            <span className="absolute bottom-0 left-0 right-0 bg-dark-teal/80 font-inter text-[9px] font-semibold text-white text-center py-[2px] leading-none">
-                              Forundersøgelse
-                            </span>
-                          )}
-                          <button
-                            onClick={() => setPhotos(prev => prev.filter(p => p.id !== photo.id))}
-                            className="absolute top-[4px] right-[4px] w-[16px] h-[16px] bg-white/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X size={8} className="text-bad" />
-                          </button>
-                        </div>
-                      ))}
-                      <label className="aspect-square rounded-lg border border-dashed border-hairline-2 flex flex-col items-center justify-center cursor-pointer hover:border-text-muted hover:bg-[#F5F5F5] transition-colors">
-                        <input type="file" accept="image/*" capture="environment" className="hidden"
-                          onChange={e => {
-                            if (e.target.files?.length) {
-                              setPhotos(prev => [...prev, { id: `ph${Date.now()}`, color: 'bg-yellow/20', label: `Foto ${prev.length + 1}` }])
-                            }
-                          }}
-                        />
-                        <Camera size={16} className="text-text-muted" />
-                        <span className="font-inter text-xxs text-text-muted mt-xxxs">Kamera</span>
-                      </label>
-                      <label className="aspect-square rounded-lg border border-dashed border-hairline-2 flex flex-col items-center justify-center cursor-pointer hover:border-text-muted hover:bg-[#F5F5F5] transition-colors">
-                        <input type="file" accept="image/*" className="hidden"
-                          onChange={e => {
-                            if (e.target.files?.length) {
-                              setPhotos(prev => [...prev, { id: `ph${Date.now()}`, color: 'bg-light-aqua/30', label: `Foto ${prev.length + 1}` }])
-                            }
-                          }}
-                        />
-                        <Plus size={16} className="text-text-muted" />
-                        <span className="font-inter text-xxs text-text-muted mt-xxxs">Upload</span>
-                      </label>
-                    </div>
-                  </DocRow>
-
-                  {/* Noter */}
-                  <DocRow
-                    title="Noter til opgave"
-                    meta={`${noteComments.length} noter`}
-                    status="bad"
-                    open={notesOpen}
-                    onToggle={() => setNotesOpen(o => !o)}
-                    isLast
-                  >
-                    <div className="flex flex-col gap-sm">
-                      {noteComments.map(c => (
-                        <div key={c.id} className="flex gap-xs">
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${c.initials === 'OJ' ? 'bg-deep-teal' : 'bg-[#F5F5F5]'}`}>
-                            <span className={`font-inter font-bold text-[9px] ${c.initials === 'OJ' ? 'text-white' : 'text-deep-teal'}`}>{c.initials}</span>
-                          </div>
-                          <div className="flex-1 bg-[#F5F5F5] rounded-xl px-xs py-xs">
-                            <div className="flex items-baseline gap-xs mb-xxxs">
-                              <b className="font-inter font-semibold text-xs text-text-primary">{c.name}</b>
-                              <time className="font-inter text-xxs text-text-muted">{c.timestamp}</time>
-                            </div>
-                            <p className="font-inter text-xs text-text-secondary leading-relaxed">{c.text}</p>
-                          </div>
-                        </div>
-                      ))}
-                      <div className="flex gap-xs">
-                        <div className="w-7 h-7 rounded-full bg-deep-teal flex items-center justify-center flex-shrink-0">
-                          <span className="font-inter font-bold text-[9px] text-white">OJ</span>
-                        </div>
-                        <div className="flex-1">
-                          <div className="relative">
-                            <textarea
-                              value={besigtigelseComment}
-                              onChange={e => setBesigtigelseComment(e.target.value)}
-                              placeholder="Tilføj bemærkning..."
-                              rows={2}
-                              className="w-full rounded-xl border border-hairline bg-white px-xs py-xs pr-[40px]
-                                         font-inter text-xs text-text-primary placeholder:text-text-muted
-                                         focus:outline-none focus:border-dark-teal resize-none"
-                            />
-                            <button
-                              className="absolute bottom-[10px] right-[10px] w-7 h-7 rounded-full bg-dark-teal
-                                         flex items-center justify-center hover:bg-deep-teal transition-colors"
-                              aria-label="Dikter bemærkning"
-                            >
-                              <Mic size={12} className="text-white" />
-                            </button>
-                          </div>
-                          {besigtigelseComment.trim().length > 0 && (
-                            <button
-                              onClick={() => {
-                                setNoteComments(prev => [...prev, { id: `nc${Date.now()}`, initials: 'OJ', name: 'Ole Jensen', timestamp: 'Nu', text: besigtigelseComment.trim() }])
-                                setBesigtigelseComment('')
-                              }}
-                              className="mt-xxxs self-end float-right bg-dark-teal text-white font-inter font-semibold text-xxs px-sm py-xxxs rounded-lg hover:bg-deep-teal transition-colors"
-                            >
-                              Gem
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </DocRow>
-
-                </div>
-              )}
-            </div>
-          </section>
 
           {/* ── Materiel ─────────────────────────────────────────── */}
           <section>
@@ -2653,7 +2718,6 @@ export function OrdrePlanScreen() {
                                 <p className="font-inter text-sm font-medium text-text-primary">{r.description}</p>
                                 <div className="flex items-center gap-xs mt-xxxs">
                                   <span className="font-inter text-xs text-text-muted tabular-nums">{r.plantNumber}</span>
-                                  <TransportBadge tag={r.transportTag} />
                                 </div>
                               </div>
                               <div>
@@ -2685,7 +2749,6 @@ export function OrdrePlanScreen() {
             <div className="bg-white border border-hairline rounded-xl overflow-hidden mb-sm">
               {resources.map((r, i) => {
                 const isExpanded = expandedResourceId === r.id
-                const isUdlaant = udlaantIds.has(r.id)
                 const erFørste = i === 0
                 const firstResource = resources[0]
                 const sammeAflæsningValg = sammeAflæsning[r.id] ?? null
@@ -2703,7 +2766,6 @@ export function OrdrePlanScreen() {
                         <p className="font-inter text-sm font-medium text-text-primary">{r.description}</p>
                         <div className="flex items-center gap-xs mt-xxxs">
                           <span className="font-inter text-xs text-text-muted tabular-nums">{r.plantNumber}</span>
-                          <TransportBadge tag={r.transportTag} />
                         </div>
                       </div>
                       <div className="flex items-center gap-xs">
@@ -2743,43 +2805,6 @@ export function OrdrePlanScreen() {
                     {isExpanded && (
                       <div className="mx-sm mb-lg rounded-xl border border-dark-teal/20 bg-soft-aqua shadow-sm flex flex-col gap-md p-md">
 
-                        {/* Udlånt */}
-                        <div className="flex flex-col gap-xs">
-                          <div className="flex items-center gap-xs flex-wrap">
-                            <span className="font-inter text-xs text-text-secondary">Er <span className="font-medium text-text-primary">{r.description}</span> udlånt fra anden afdeling?</span>
-                            <div className="flex bg-white border border-hairline rounded-md p-xxxs gap-xxxs">
-                              <button
-                                onClick={() => setUdlaantIds(prev => { const s = new Set(prev); s.add(r.id); return s })}
-                                className={`px-sm py-xxxs rounded-sm font-inter text-xs font-semibold transition-colors ${isUdlaant ? 'bg-deep-teal text-white' : 'text-text-muted hover:bg-soft-aqua'}`}
-                              >Ja</button>
-                              <button
-                                onClick={() => setUdlaantIds(prev => { const s = new Set(prev); s.delete(r.id); return s })}
-                                className={`px-sm py-xxxs rounded-sm font-inter text-xs font-semibold transition-colors ${!isUdlaant ? 'bg-deep-teal text-white' : 'text-text-muted hover:bg-soft-aqua'}`}
-                              >Nej</button>
-                            </div>
-                          </div>
-
-                          {isUdlaant && (
-                            <div className="flex flex-col gap-xxxs">
-                              <div className="flex items-center gap-sm bg-white border border-hairline rounded-xl px-sm py-xs">
-                                <span className="font-inter text-xs text-text-secondary whitespace-nowrap">Kender du ordrenummeret som skal faktureres?</span>
-                                <input
-                                  type="text"
-                                  value={fakturaOrdre[r.id] ?? ''}
-                                  onChange={e => setFakturaOrdre(prev => ({ ...prev, [r.id]: e.target.value }))}
-                                  placeholder="Ordrenummer"
-                                  className="flex-1 font-inter text-xs text-text-primary bg-transparent border-none outline-none placeholder:text-text-muted min-w-0"
-                                />
-                              </div>
-                              {!fakturaOrdre[r.id] && (
-                                <p className="font-inter text-xxs text-text-muted italic px-xxxs">Udfyldes af projektleder hvis ikke angivet</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        <hr className="border-hairline" />
-
                         {/* Afhentning */}
                         <div className="flex flex-col gap-xs">
                           <p className="font-inter text-xs font-semibold text-text-primary">Afhentningssted</p>
@@ -2807,24 +2832,51 @@ export function OrdrePlanScreen() {
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-xs">
-                            <div className="flex flex-col gap-xxxs">
-                              <label className="font-inter text-xxs text-text-muted">Klar til afhentning</label>
-                              <input
-                                type="datetime-local"
-                                value={afhentningKlar[r.id] ?? ''}
-                                onChange={e => setAfhentningKlar(prev => ({ ...prev, [r.id]: e.target.value }))}
-                                className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                              />
+                          <div className="flex flex-col gap-xxxs">
+                            <label className="font-inter text-xxs text-text-muted font-semibold">Klar til afhentning</label>
+                            <div className="grid grid-cols-2 gap-xs">
+                              <div className="flex flex-col gap-xxxs">
+                                <label className="font-inter text-xxs text-text-muted">Dato</label>
+                                <input
+                                  type="date"
+                                  value={afhentningKlarDato[r.id] ?? ''}
+                                  onChange={e => setAfhentningKlarDato(prev => ({ ...prev, [r.id]: e.target.value }))}
+                                  className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-xxxs">
+                                <label className="font-inter text-xxs text-text-muted">Klokkeslæt</label>
+                                <input
+                                  type="time"
+                                  value={afhentningKlarTid[r.id] ?? ''}
+                                  onChange={e => setAfhentningKlarTid(prev => ({ ...prev, [r.id]: e.target.value }))}
+                                  className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
+                                />
+                              </div>
                             </div>
-                            <div className="flex flex-col gap-xxxs">
-                              <label className="font-inter text-xxs text-text-muted">Skal være på lokation</label>
-                              <input
-                                type="datetime-local"
-                                value={afhentningLevering[r.id] ?? ''}
-                                onChange={e => setAfhentningLevering(prev => ({ ...prev, [r.id]: e.target.value }))}
-                                className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                              />
+                          </div>
+
+                          <div className="flex flex-col gap-xxxs">
+                            <label className="font-inter text-xxs text-text-muted font-semibold">Skal være på lokation</label>
+                            <div className="grid grid-cols-2 gap-xs">
+                              <div className="flex flex-col gap-xxxs">
+                                <label className="font-inter text-xxs text-text-muted">Dato</label>
+                                <input
+                                  type="date"
+                                  value={afhentningLeveringDato[r.id] ?? ''}
+                                  onChange={e => setAfhentningLeveringDato(prev => ({ ...prev, [r.id]: e.target.value }))}
+                                  className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-xxxs">
+                                <label className="font-inter text-xxs text-text-muted">Klokkeslæt</label>
+                                <input
+                                  type="time"
+                                  value={afhentningLeveringTid[r.id] ?? ''}
+                                  onChange={e => setAfhentningLeveringTid(prev => ({ ...prev, [r.id]: e.target.value }))}
+                                  className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
+                                />
+                              </div>
                             </div>
                           </div>
 
@@ -2922,7 +2974,10 @@ export function OrdrePlanScreen() {
                   </div>
                 )
               })}
-              <button className="w-full flex items-center justify-center gap-xs py-xs font-inter text-sm text-text-muted border-t border-hairline bg-[#F5F5F5] hover:bg-hairline transition-colors">
+              <button
+                onClick={() => { setTilfoejMaterielOpen(true); setMaterielSoeg('') }}
+                className="w-full flex items-center justify-center gap-xs py-xs font-inter text-sm text-text-muted border-t border-hairline bg-[#F5F5F5] hover:bg-hairline transition-colors"
+              >
                 <Plus size={14} />
                 Tilføj materiel
               </button>
@@ -2941,7 +2996,7 @@ export function OrdrePlanScreen() {
               // Bekræftelsen følger den valgte dato-pille — dashboardet hænger sammen med datoen (LÅST 2026-06-13).
               // Hver dag har sin egen vognmand-bekræftelse; matcher selectedDate ingen aktiv dag → undefined (= "Afventer").
               vognmandBekraeftelse={(() => {
-                const d = activeDays.find(day => day.date === udfoerselSelectedDate)
+                const d = activeDays.find(day => day.date === selectedPlanDate)
                 return d ? vognmandBekraeftelser[d.id] : undefined
               })()}
               vognmandMaterielBekraeftelse={vognmandMaterielBekraeftelse}
@@ -2951,8 +3006,8 @@ export function OrdrePlanScreen() {
               samleordreTabOrderNr={samleordreTabOrderNr}
               makeOrdredetaljerCard={makeOrdredetaljerCard}
               renderOrdredetaljerCollapsedPille={renderOrdredetaljerCollapsedPille}
-              selectedDate={udfoerselSelectedDate}
-              onSelectDate={setUdfoerselSelectedDate}
+              selectedDate={selectedPlanDate}
+              onSelectDate={setSelectedPlanDate}
             />
           )}
 
@@ -2977,8 +3032,8 @@ export function OrdrePlanScreen() {
               makeOrdredetaljerCard={makeOrdredetaljerCard}
               renderOrdredetaljerCollapsedPille={renderOrdredetaljerCollapsedPille}
               products={products}
-              selectedDate={udfoerselSelectedDate}
-              onSelectDate={setUdfoerselSelectedDate}
+              selectedDate={selectedPlanDate}
+              onSelectDate={setSelectedPlanDate}
             />
           )}
 
@@ -2994,6 +3049,94 @@ export function OrdrePlanScreen() {
           onCancel={() => setFjernModalId(null)}
         />
       )}
+
+      {/* ── Tilføj materiel-modal ─────────────────────────────────── */}
+      {tilfoejMaterielOpen && (() => {
+        const soegLower = materielSoeg.toLowerCase()
+        const filtered = STANDARD_MATERIEL_KATALOG.filter(m =>
+          m.description.toLowerCase().includes(soegLower) ||
+          m.plantNumber.toLowerCase().includes(soegLower)
+        )
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center px-md"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tilfoej-materiel-modal-title"
+          >
+            {/* Luk på klik udenfor */}
+            <button
+              type="button"
+              aria-label="Luk dialog"
+              onClick={() => setTilfoejMaterielOpen(false)}
+              className="absolute inset-0 bg-deep-teal/40"
+            />
+            <div className="relative bg-white rounded-2xl shadow-lg w-full max-w-md flex flex-col gap-md p-lg max-h-[80vh]">
+              {/* Header */}
+              <div className="flex items-center justify-between gap-sm">
+                <h2
+                  id="tilfoej-materiel-modal-title"
+                  className="font-poppins font-semibold text-lg text-deep-teal leading-tight"
+                >
+                  Tilføj materiel
+                </h2>
+                <button
+                  type="button"
+                  aria-label="Luk"
+                  onClick={() => setTilfoejMaterielOpen(false)}
+                  className="flex items-center justify-center w-[44px] h-[44px] rounded-xl border border-hairline text-text-muted hover:text-text-primary hover:border-hairline-2 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              {/* Søgefelt */}
+              <input
+                type="search"
+                placeholder="Søg på navn eller anlægsnr."
+                value={materielSoeg}
+                onChange={e => setMaterielSoeg(e.target.value)}
+                className="w-full font-inter text-sm text-text-primary bg-white border border-hairline rounded-lg px-sm py-xs focus:outline-none focus:border-deep-teal transition-colors"
+              />
+              {/* Katalog-liste */}
+              <div className="flex flex-col divide-y divide-hairline overflow-y-auto -mx-lg px-lg">
+                {filtered.length === 0 && (
+                  <p className="font-inter text-sm text-text-muted py-sm text-center">Ingen maskiner matcher søgningen.</p>
+                )}
+                {filtered.map(mat => (
+                  <button
+                    key={mat.plantNumber}
+                    type="button"
+                    onClick={() => {
+                      setResources(prev => [...prev, {
+                        id: `mat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                        plantNumber: mat.plantNumber,
+                        description: mat.description,
+                        transportTag: mat.transportTag,
+                        status: 'ikke-planlagt',
+                      }])
+                      setTilfoejMaterielOpen(false)
+                    }}
+                    className="flex items-center justify-between gap-sm py-xs min-h-[44px] text-left hover:bg-surface-2 transition-colors rounded-lg -mx-xs px-xs"
+                  >
+                    <div className="flex flex-col gap-xxs min-w-0">
+                      <span className="font-inter text-sm font-semibold text-text-primary truncate">{mat.description}</span>
+                      <span className="font-inter text-xxs text-text-muted">{mat.plantNumber}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {/* Annuller-knap */}
+              <button
+                type="button"
+                onClick={() => setTilfoejMaterielOpen(false)}
+                className="w-full py-xs rounded-xl border border-hairline font-inter font-semibold text-sm text-text-secondary hover:border-hairline-2 transition-colors"
+              >
+                Annuller
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Bekræftelses-modal: Send til fabrik ────────────────────── */}
       {/* Genbrug af Dagsoversigt-modal-mønster (DagsoversigtScreen linje 675-720) */}
@@ -3078,17 +3221,16 @@ export function OrdrePlanScreen() {
 }
 
 // ─── AflysningCell ────────────────────────────────────────────────────────────
-// 6. celle i ordredetalje-grid'et (Planlægning + Udførsel). Tre tilstande:
-//   A) Ingen aflyste dage      → vis næste ikke-aflyste dag + "Aflys dag"-knap
-//   B) 1+ aflyste, men flere tilbage → vis liste af aflyste + "Aflys flere"-knap
-//   C) Alle dage aflyst        → vis liste af aflyste — ingen knap
-// I Udførsel-mode (cardMode='udfoersel'):
-//   - default-valgt dag i pickeren = udfoerselSelectedDate
-//   - hvis udfoerselSelectedDate ER aflyst: vis kun den valgte dags aflysning + årsag-pille
-//     (ingen "Aflys flere"-knap — man kan kun aflyse fra Planlægning-mode)
+// 6. celle i ordredetalje-grid'et. UNIFIED — identisk adfærd i alle modes
+// (Planlægning, Udførsel, Afregning). Tre tilstande:
+//   A) Ingen aflyste dage      → "Aflys dag"-knap
+//   B) 1+ aflyste, men flere tilbage → liste af aflyste + "Aflys flere"-knap
+//   C) Alle dage aflyst        → liste af aflyste — ingen knap
+// Picker-flow: vælg dato → vælg årsag → bekræft med OK (Fortryd annullerer).
+// Pickeren defaulter til den aktuelt valgte dato (udfoerselSelectedDate) hvis
+// den ikke er aflyst, ellers første aktive dag.
 function AflysningCell({
   product,
-  cardMode,
   udfoerselSelectedDate,
   pickerOpenForDayId,
   onOpenPicker,
@@ -3096,7 +3238,7 @@ function AflysningCell({
   onCancelDay,
 }: {
   product: MockProduct
-  cardMode: 'planlaegning' | 'udfoersel'
+  /** Aktuelt valgt dato (bruges som default i pickeren — gælder alle modes) */
   udfoerselSelectedDate?: string
   /** dayId som pickeren er åben for — null hvis lukket */
   pickerOpenForDayId: string | null
@@ -3104,36 +3246,44 @@ function AflysningCell({
   onClosePicker: () => void
   onCancelDay: (dayId: string, reason: CancelReason) => void
 }) {
-  // Lokal state: hvilken dag formanden VIL aflyse via pickeren (kan ændres i select)
+  // Lokal state: valgt dag + valgt årsag i pickeren (vælg → bekræft med OK)
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null)
+  const [selectedReason, setSelectedReason] = useState<CancelReason | null>(null)
 
   const sortedDays = [...product.days].sort((a, b) => a.date.localeCompare(b.date))
   const cancelledDays = sortedDays.filter(d => d.cancelled)
   const aktiveDays = sortedDays.filter(d => !d.cancelled)
   const isOpen = pickerOpenForDayId !== null
 
-  // Udførsel-mode: find dag der matcher selectedDate
-  const udfoerselDay = cardMode === 'udfoersel' && udfoerselSelectedDate
+  // Default-valgt dag når pickeren åbnes: aktuelt valgt dato hvis aktiv, ellers første aktive
+  const selectedDateDay = udfoerselSelectedDate
     ? sortedDays.find(d => d.date === udfoerselSelectedDate)
     : null
-  const udfoerselDayIsCancelled = udfoerselDay?.cancelled ?? false
+  const defaultDayId = selectedDateDay && !selectedDateDay.cancelled
+    ? selectedDateDay.id
+    : aktiveDays[0]?.id
 
-  // ── Tilstand: Udførsel-mode, valgt dag er aflyst ────────────────────────────
-  if (cardMode === 'udfoersel' && udfoerselDay && udfoerselDayIsCancelled) {
-    const reasonLabel = CANCEL_REASONS.find(r => r.value === udfoerselDay.cancelReason)?.label
-    return (
-      <div className="mt-auto flex flex-col gap-xxxs">
-        <span className="font-inter text-xs text-bad font-semibold">
-          {formatLongDate(udfoerselDay.date)}
-        </span>
-        <span className="inline-flex items-center w-fit px-xs py-xxs rounded-md bg-bad/10 text-bad font-inter text-xxs font-semibold">
-          Aflyst{reasonLabel ? ` pga. ${reasonLabel}` : ''}
-        </span>
-      </div>
-    )
+  function closePicker() {
+    setSelectedDayId(null)
+    setSelectedReason(null)
+    onClosePicker()
   }
 
-  // ── Picker-overlay (åben) ───────────────────────────────────────────────────
+  function openPicker() {
+    if (!defaultDayId) return
+    setSelectedDayId(defaultDayId)
+    setSelectedReason(null)
+    onOpenPicker(defaultDayId)
+  }
+
+  function confirmCancel(dayId: string) {
+    if (!selectedReason) return
+    onCancelDay(dayId, selectedReason) // parent lukker pickeren
+    setSelectedDayId(null)
+    setSelectedReason(null)
+  }
+
+  // ── Picker (åben) — vælg dato → vælg årsag → OK ─────────────────────────────
   if (isOpen) {
     const pickerOptions = aktiveDays.length > 0 ? aktiveDays : sortedDays
     const currentDayId = selectedDayId ?? pickerOpenForDayId ?? pickerOptions[0]?.id ?? ''
@@ -3154,49 +3304,61 @@ function AflysningCell({
           </select>
         </div>
         <div className="flex flex-col gap-xxxs">
-          <span className="font-inter text-xxs font-medium text-text-muted">Årsag</span>
+          <span className="font-inter text-xxs font-medium text-text-muted">Vælg årsag</span>
           <div className="flex flex-wrap gap-xxxs">
-            {CANCEL_REASONS.map(r => (
-              <button
-                key={r.value}
-                type="button"
-                onClick={() => currentDayId && onCancelDay(currentDayId, r.value)}
-                className="px-xs py-xxs rounded-md bg-surface-2 hover:bg-bad/10 hover:text-bad font-inter text-xxs font-medium text-text-secondary transition-colors"
-              >
-                {r.label}
-              </button>
-            ))}
+            {CANCEL_REASONS.map(r => {
+              const aktiv = selectedReason === r.value
+              return (
+                <button
+                  key={r.value}
+                  type="button"
+                  onClick={() => setSelectedReason(r.value)}
+                  aria-pressed={aktiv}
+                  className={[
+                    'px-xs py-xxs rounded-md font-inter text-xxs font-medium transition-colors border',
+                    aktiv
+                      ? 'bg-bad/10 text-bad border-bad/40'
+                      : 'bg-surface-2 text-text-secondary border-transparent hover:bg-bad/10 hover:text-bad',
+                  ].join(' ')}
+                >
+                  {r.label}
+                </button>
+              )
+            })}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => { setSelectedDayId(null); onClosePicker() }}
-          className="font-inter text-xxs font-medium text-dark-teal hover:text-deep-teal transition-colors text-left"
-        >
-          Fortryd
-        </button>
+        <p className="font-inter text-xxs text-text-muted leading-snug">
+          Aflysning gælder fra det valgte tidspunkt og resten af dagen. Allerede registreret timeforbrug og tons gemmes.
+        </p>
+        <div className="flex items-center gap-xs">
+          <button
+            type="button"
+            disabled={!selectedReason || !currentDayId}
+            onClick={() => confirmCancel(currentDayId)}
+            className="flex-1 inline-flex items-center justify-center px-sm py-xs rounded-md bg-bad text-white font-inter text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            OK
+          </button>
+          <button
+            type="button"
+            onClick={closePicker}
+            className="flex-1 inline-flex items-center justify-center px-sm py-xs rounded-md bg-white border border-hairline text-text-secondary font-inter text-xs font-semibold hover:border-dark-teal hover:text-deep-teal transition-colors"
+          >
+            Fortryd
+          </button>
+        </div>
       </div>
     )
   }
 
   // ── Tilstand A: ingen aflyste dage ──────────────────────────────────────────
   if (cancelledDays.length === 0) {
-    // Default-valg i picker: Udførsel-mode → selectedDate; Planlægning → første ikke-aflyste
-    const defaultDayId = cardMode === 'udfoersel' && udfoerselDay && !udfoerselDay.cancelled
-      ? udfoerselDay.id
-      : aktiveDays[0]?.id
-    const headerDay = cardMode === 'udfoersel' && udfoerselDay ? udfoerselDay : aktiveDays[0]
     return (
       <div className="mt-auto flex flex-col gap-xs">
-        {headerDay && (
-          <span className="font-poppins font-semibold text-md text-text-primary tabular-nums">
-            {formatLongDate(headerDay.date)}
-          </span>
-        )}
         {defaultDayId && (
           <button
             type="button"
-            onClick={() => { setSelectedDayId(defaultDayId); onOpenPicker(defaultDayId) }}
+            onClick={openPicker}
             className="inline-flex items-center gap-xxxs w-fit px-xs py-xxs rounded-md bg-bad/10 text-bad font-inter text-xs font-semibold hover:bg-bad/20 transition-colors"
           >
             <CloudRain size={12} />
@@ -3208,11 +3370,7 @@ function AflysningCell({
   }
 
   // ── Tilstand B+C: 1+ dage aflyst (med eller uden flere tilbage) ─────────────
-  const harFlereAktiveDage = aktiveDays.length > 0
-  const visAflysFlereKnap = harFlereAktiveDage && cardMode !== 'udfoersel'
-  const defaultDayId = cardMode === 'udfoersel' && udfoerselDay && !udfoerselDay.cancelled
-    ? udfoerselDay.id
-    : aktiveDays[0]?.id
+  const visAflysFlereKnap = aktiveDays.length > 0
   return (
     <div className="mt-auto flex flex-col gap-xs">
       <div className="flex flex-col gap-xxxs">
@@ -3233,7 +3391,7 @@ function AflysningCell({
       {visAflysFlereKnap && defaultDayId && (
         <button
           type="button"
-          onClick={() => { setSelectedDayId(defaultDayId); onOpenPicker(defaultDayId) }}
+          onClick={openPicker}
           className="inline-flex items-center gap-xxxs w-fit px-xs py-xxs rounded-md bg-bad/10 text-bad font-inter text-xs font-semibold hover:bg-bad/20 transition-colors"
         >
           <CloudRain size={12} />
@@ -3627,28 +3785,6 @@ function FjernModal({ resource, onConfirm, onCancel }: {
         </div>
       </div>
     </div>
-  )
-}
-
-// ─── TransportBadge ───────────────────────────────────────────────────────────
-
-const TRANSPORT_TAG_STYLES: Record<MockResource['transportTag'], string> = {
-  'blokvogn':    'bg-[#F5F5F5] text-text-secondary',
-  'kran-baand':  'bg-warn-bg text-deep-teal',
-  'egen-korsel': 'bg-[#F5F5F5] text-text-secondary',
-}
-
-const TRANSPORT_TAG_LABEL: Record<MockResource['transportTag'], string> = {
-  'blokvogn':    'Blokvogn',
-  'kran-baand':  'Kran-Bånd',
-  'egen-korsel': 'Egen kørsel',
-}
-
-function TransportBadge({ tag }: { tag: MockResource['transportTag'] }) {
-  return (
-    <span className={`inline-block px-xs py-[2px] rounded-md font-inter text-xxs font-medium ${TRANSPORT_TAG_STYLES[tag]}`}>
-      {TRANSPORT_TAG_LABEL[tag]}
-    </span>
   )
 }
 
@@ -4230,41 +4366,11 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
   /** Setter for valgt dato — kaldes ved klik på dato-pille */
   onSelectDate: (date: string) => void
 }) {
-  // ── Produkt-selector state ──────────────────────────────────────────────────
-  // TODO (produktion): Selector-state (selectedProductId + selectedDate) skal huskes
-  //   pr. ordre i URL eller user-state. Default er dagens aktive produkt.
-  // selectedProductId bruges til getMockDataForProductDate — produkt-tabs er fjernet men
-  // intern mock-data-kobling kræver stadig en valgt produkt-id (default: dagen aktive).
-  // selectedDate er hejst til root (OrdrePlanScreen) så Udførsel + Afregning deler state.
-  const [selectedProductId] = useState<string>(() => {
-    const todayStr = TODAY.toISOString().split('T')[0]
-    const activeToday = products.find(p =>
-      p.startDate !== undefined && p.endDate !== undefined &&
-      p.startDate <= todayStr && p.endDate >= todayStr
-    )
-    return (activeToday ?? products[0]).id
-  })
   const setSelectedDate = onSelectDate
-
-  // Mock-variation per (produkt, dato) — værdier ændrer sig deterministisk med valg
-  // TODO: Erstat med Supabase når klar — hent faktiske dagtal fra plan_vejebilag og dagplan
-  function getMockDataForProductDate(productId: string, date: string) {
-    const hash = (productId + date).split('').reduce((s, c) => s + c.charCodeAt(0), 0)
-    const selectedProduct = products.find(p => p.id === productId)
-    const baseArea = selectedProduct?.m2 ?? 1000
-    return {
-      tonsAnkommet: 50 + (hash % 200),
-      areal: Math.round(baseArea * 0.3 + (hash % Math.round(baseArea * 0.5))),
-      forventetUdlagtM2: Math.round(baseArea * 0.4 + (hash % Math.round(baseArea * 0.4))),
-    }
-  }
 
   // ── Dagsdata — hardcoded for demo, TODO: hent fra ordre-objekt når Supabase klar ───
   const DEMO_ORDRE_ID = '260423891'
   const DEMO_DATO = new Date().toISOString().slice(0, 10)
-  const DEMO_TYKKELSE = 45           // mm  — TODO: hent fra ordre.planlaegning.tykkelse
-  const DEMO_ORDRE_TOTAL_AREAL = 4017 // m² — TODO: hent fra ordre
-  const DEMO_ORDRE_TOTAL_TONS = 752   // t  — TODO: hent fra ordre
 
   const { recept } = useRecept('82101H') // SMA 11S — TODO: Erstat med Supabase når klar — bruges i spec-grid
   const { vejesedler } = useVejesedler(DEMO_ORDRE_ID, DEMO_DATO)
@@ -4306,6 +4412,28 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
 
   // Mini-strip: om fuld spec-grid er åben
   const [detailsExpanded, setDetailsExpanded] = useState(true)
+
+  // ── SMS-status state — per regnr (nøgle). Initialiseres fra mock-data.
+  // TODO: Erstat med Supabase når klar — confirmed_vehicles[].sms_status pr. (ordre, dag, reg_nr)
+  const [smsStatusMap, setSmsStatusMap] = useState<Record<string, ChauffoerSmsStatus>>(() => {
+    const map: Record<string, ChauffoerSmsStatus> = {}
+    const biler = vognmandBekraeftelse?.biler ?? []
+    for (const b of biler) {
+      if (!b.er_materiel_bil) {
+        map[b.regnr] = b.sms_status ?? 'ikke_sendt'
+      }
+    }
+    return map
+  })
+
+  /** Send SMS → sætter status 'sendt' for det givne regnr. */
+  function sendSms(regnr: string) {
+    setSmsStatusMap(prev => ({ ...prev, [regnr]: 'sendt' }))
+  }
+
+  // ── Expand-state for tabeller (biler + materiel)
+  const [bilerTableExpanded, setBilerTableExpanded] = useState(false)
+  const [materielTableExpanded, setMaterielTableExpanded] = useState(false)
 
   function addEkstraLinje() {
     setEkstraLinjer(prev => [...prev, { id: `el-${Date.now()}`, type: '', beskrivelse: '', antal: 1 }])
@@ -4376,7 +4504,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
 
       {/* ── Udføres i perioden — første sektion på Udførsel-mode (flyttet 2026-06-05) ── */}
       {udfoerselDays.length > 0 && (
-        <section className="mb-lg">
+        <section>
           <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight mb-sm">Udføres i perioden</h2>
           <div className="flex items-center gap-xs flex-wrap">
             {udfoerselDays.map(ds => {
@@ -4412,22 +4540,20 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
       <OrdredetaljerSection
         expanded={detailsExpanded}
         onToggle={() => setDetailsExpanded(e => !e)}
-        renderCard={() => makeOrdredetaljerCard(false, 'udfoersel', selectedDate)}
+        renderCard={() => makeOrdredetaljerCard(false, 'udfoersel')}
         renderCollapsedPille={renderOrdredetaljerCollapsedPille}
       />
 
-      {/* ── Dagens overblik — status-bokse ─────────────────────────────
-          Conditional: kun synlig når Ordredetaljer er expanded.
-          Én toggle styrer både Ordredetaljer OG Dagens overblik. */}
+      {/* ── Status-bokse ────────────────────────────────────────────────
+          Kun synlige når Ordredetaljer er expanded.
+          Én toggle styrer både Ordredetaljer OG status-boksene. */}
       {/* TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate) */}
       {detailsExpanded && (
-      <div className="flex flex-col gap-xs">
-        <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Dagens overblik</h2>
+      <>
+      <div className="flex flex-col gap-xs -mt-[48px]">
+        <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight mb-sm">Bilbestilling</h2>
         {/* Alle 7 bokse i ét fælles grid — samme bredde og højde via auto-rows-fr */}
         {(() => {
-          const fmtTal = (n: number, max = 0) =>
-            new Intl.NumberFormat('da-DK', { maximumFractionDigits: max }).format(n)
-
           // Per-child værdier når i samleordre-mode — fallback til global state for enkelt-ordre
           const activeChild = isSamleordreMode && samleordreCtx
             ? samleordreCtx.children.find(c => c.orderNumber === samleordreTabOrderNr)
@@ -4437,17 +4563,6 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
           const displayBilerBekraeftet = activeChild !== undefined ? activeChild.vognmandBekraeftet : !!vognmandBekraeftelse
           const displayAntalMateriel = activeChild !== undefined ? activeChild.antalMateriel : (vognmandMaterielBekraeftelse?.items.length ?? 0)
           const displayMaterielBekraeftet = activeChild !== undefined ? activeChild.materielBekraeftet : !!(vognmandMaterielBekraeftelse && vognmandMaterielBekraeftelse.items.length > 0)
-          const displayForundersoegelseOK = activeChild !== undefined
-            ? activeChild.forundersoegelseOK
-            : !!(underlaegsType && tilfredsstillende !== null && tilfredsstillende !== undefined)
-          const displayForundersoegelseStatus = activeChild !== undefined
-            ? activeChild.forundersoegelseStatus
-            : (underlaegsType && tilfredsstillende !== null && tilfredsstillende !== undefined ? 'OK' : 'MANGLER') as 'OK' | 'IKKE_OK' | 'MANGLER'
-
-          // Hent mock-variation baseret på valgt produkt + dato
-          const mockData = getMockDataForProductDate(selectedProductId, selectedDate)
-          const selectedProductObj = products.find(p => p.id === selectedProductId)
-
           // ── Bekræftet detalje (LÅST 2026-06-13) ──────────────────────────
           // Bilbestillingen er en ønskeliste; vognmandens bekræftede data kan afvige.
           // Vises kun i enkelt-ordre (samleordre har ikke per-child bil-liste i mock).
@@ -4462,11 +4577,6 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
           // Biler-boks: asfalt-biler (materiel-biler hører til Materiel-boksen)
           const asfaltBiler = (vognmandBekraeftelse?.biler ?? []).filter(b => !b.er_materiel_bil)
           const bilerTypeTekst = optælTyper(asfaltBiler.map(b => b.biltype))
-          const bilerMedTid = asfaltBiler
-            .filter(b => b.ankomst_plads_tid)
-            .sort((a, b) => byTid(a.ankomst_plads_tid!, b.ankomst_plads_tid!))
-          const bilerTop3 = bilerMedTid.slice(0, 3)
-          const bilerRest = bilerMedTid.length - bilerTop3.length
           const visBilDetalje = activeChild === undefined && displayBilerBekraeftet && asfaltBiler.length > 0
 
           // Materiel-boks: unik transport-bil pr. reg.nr (én bil kan bære flere enheder)
@@ -4478,143 +4588,246 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
             seenRegnr.add(m.regnr)
             return true
           })
-          const materielMedTid = materielBilerUnik
-            .filter(m => m.ankomst_plads_tid)
-            .sort((a, b) => byTid(a.ankomst_plads_tid!, b.ankomst_plads_tid!))
-          const materielTop3 = materielMedTid.slice(0, 3)
-          const materielRest = materielMedTid.length - materielTop3.length
+          const materielSorted = [...materielBilerUnik].sort((a, b) => byTid(a.ankomst_plads_tid ?? '', b.ankomst_plads_tid ?? ''))
           const visMaterielDetalje = activeChild === undefined && displayMaterielBekraeftet && materielItems.length > 0
 
-          return (
-            <div className="flex flex-col gap-xs">
-              {/* Status-bokse — Biler/Materiel udvides med bekræftet detalje (LÅST 2026-06-13) */}
-              <div className={isSamleordreMode ? 'grid grid-cols-3 gap-xs auto-rows-fr' : 'grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-5 gap-xs auto-rows-fr'}>
-                {/* Biler — per-child i samleordre-mode, global + bekræftet detalje i enkelt-ordre */}
-                <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${!isSamleordreMode ? 'xl:col-span-2' : ''} ${displayBilerBekraeftet ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
-                  <div className="w-full flex items-center justify-between gap-xs">
-                    <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">
-                      Biler
-                    </span>
-                    {visBilDetalje && (
-                      <span className="font-inter text-xxs font-semibold text-good">Bekræftet</span>
-                    )}
-                  </div>
-                  {visBilDetalje ? (
-                    <>
-                      <span className="font-poppins font-semibold text-sm text-text-primary mt-xxxs">
-                        {bilerTypeTekst} bekræftet
-                      </span>
-                      <div className="flex flex-col w-full mt-xxs">
-                        {bilerTop3.map(b => (
-                          <span key={b.regnr} className="font-inter text-xs text-text-secondary tabular-nums leading-snug">
-                            <span className="font-medium text-text-primary">{b.regnr}</span> · ankomst {b.ankomst_plads_tid}
-                          </span>
-                        ))}
-                        {bilerRest > 0 && (
-                          <span className="font-inter text-xxs text-text-muted mt-xxxs">+{bilerRest} flere</span>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex-1 flex items-end pb-xxxs">
-                        <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
-                          {displayAntalBiler}
-                        </span>
-                      </div>
-                      <span className="font-inter text-xs text-text-muted min-h-[1em]">
-                        {displayBilerBekraeftet ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
-                      </span>
-                    </>
-                  )}
-                </div>
-                {/* Materiel transport — per-child i samleordre-mode, global + bekræftet detalje i enkelt-ordre */}
-                <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${!isSamleordreMode ? 'xl:col-span-2' : ''} ${displayMaterielBekraeftet ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
-                  <div className="w-full flex items-center justify-between gap-xs">
-                    <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">
-                      Materiel transport
-                    </span>
-                    {visMaterielDetalje && (
-                      <span className="font-inter text-xxs font-semibold text-good">Bekræftet</span>
-                    )}
-                  </div>
-                  {visMaterielDetalje ? (
-                    <>
-                      <span className="font-poppins font-semibold text-sm text-text-primary mt-xxxs">
-                        {materielTypeTekst} bekræftet
-                      </span>
-                      <div className="flex flex-col w-full mt-xxs">
-                        {materielTop3.map(m => (
-                          <span key={m.regnr} className="font-inter text-xs text-text-secondary tabular-nums leading-snug">
-                            <span className="font-medium text-text-primary">{m.regnr}</span>
-                            {m.ankomst_plads_tid ? ` · ankomst ${m.ankomst_plads_tid}` : ''}
-                          </span>
-                        ))}
-                        {materielRest > 0 && (
-                          <span className="font-inter text-xxs text-text-muted mt-xxxs">+{materielRest} flere</span>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex-1 flex items-end pb-xxxs">
-                        <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">
-                          {displayAntalMateriel}
-                        </span>
-                      </div>
-                      <span className="font-inter text-xs text-text-muted min-h-[1em]">
-                        {displayMaterielBekraeftet ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
-                      </span>
-                    </>
-                  )}
-                </div>
-                {/* Forundersøgelse — per-child i samleordre-mode, global i enkelt-ordre */}
-                <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${displayForundersoegelseOK ? 'bg-good-bg border-good/30' : 'bg-bad-bg border-bad/30'}`}>
-                  <span className={`font-inter text-xxs font-medium tracking-widest uppercase ${displayForundersoegelseOK ? 'text-text-muted' : 'text-bad/70'}`}>
-                    Forundersøgelse
-                  </span>
-                  <div className="flex-1 flex items-end pb-xxxs">
-                    <span className={`font-poppins font-semibold text-xl tabular-nums ${displayForundersoegelseOK ? 'text-text-primary' : 'text-bad'}`}>
-                      {displayForundersoegelseStatus === 'OK' ? 'OK' : '–'}
-                    </span>
-                  </div>
-                  <span className={`font-inter text-xs min-h-[1em] ${displayForundersoegelseOK ? 'text-text-muted' : 'text-bad/80'}`}>
-                    {displayForundersoegelseStatus === 'OK'
-                      ? 'Tilfredsstillende'
-                      : displayForundersoegelseStatus === 'IKKE_OK'
-                        ? 'Ikke tilfredsstillende'
-                        : 'Mangler vurdering'}
-                  </span>
-                </div>
-              </div>
+          // Tabel-slice: vis 3 default; knap folder resten ud
+          const TABEL_DEFAULT = 3
+          const bilerSorted = [...asfaltBiler].sort((a, b) => (a.laes_nummer ?? 99) - (b.laes_nummer ?? 99))
+          const bilerVis = bilerTableExpanded ? bilerSorted : bilerSorted.slice(0, TABEL_DEFAULT)
+          const materielVis = materielTableExpanded ? materielSorted : materielSorted.slice(0, TABEL_DEFAULT)
 
-              {/* 4 OrdreInfoCards — egen række. KUN for enkelt-ordre. Areal/Produkt/Tykkelse/Tons giver ikke mening
-                  for samleordre (flere ordrer, flere produkter). Brug Ordredetaljer-mini-strippen i stedet. */}
-              {/* TODO (produktion): Kortene bruger mockData koblet til (selectedProductId, selectedDate) */}
-              {recept && !isSamleordreMode && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-xs auto-rows-fr">
-                  <OrdreInfoCard
-                    label="AREAL I DAG"
-                    value={fmtTal(mockData.areal)}
-                    unit="m²"
-                    subtekst={`á ${fmtTal(selectedProductObj?.m2 ?? DEMO_ORDRE_TOTAL_AREAL)} m²`}
-                  />
-                  <OrdreInfoCard
-                    label="PRODUKT"
-                    value={selectedProductObj?.recipeCode ?? recept.navn}
-                    subtekst={selectedProductObj?.recipeName ?? recept.kode}
-                  />
-                  <OrdreInfoCard
-                    label="TYKKELSE"
-                    value={fmtTal(selectedProductObj?.thicknessMm ?? DEMO_TYKKELSE)}
-                    unit="mm"
-                  />
-                  <OrdreInfoCard
-                    label="TONS I DAG"
-                    value={fmtTal(mockData.tonsAnkommet)}
-                    // effective tons = produkt-total + evt. ekstra fra PLAN på produktets dage
-                    subtekst={`á ${fmtTal(selectedProductObj ? getEffectiveProductTotalTons(selectedProductObj) : DEMO_ORDRE_TOTAL_TONS)} Tons`}
-                  />
+          return (
+            <div className="flex flex-col gap-sm">
+              {/* Biler — tabel i enkelt-ordre bekræftet-tilstand; status-kort ellers */}
+              {visBilDetalje ? (
+                /* ── Biler-tabel (bekræftet, enkelt-ordre) — FF Trin 7 + 7b (LÅST 2026-06-15) ── */
+                <div className="overflow-hidden rounded-xl border border-good/30 bg-good-bg">
+                  {/* Tabel-header */}
+                  <div className="flex items-center justify-between px-sm py-xs border-b border-good/20">
+                    <div className="flex items-center gap-xs">
+                      <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">Biler</span>
+                      <span className="font-inter text-xxs font-semibold text-good">Bekræftet</span>
+                    </div>
+                    <span className="font-poppins font-semibold text-sm text-text-primary">{bilerTypeTekst}</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-good/15 bg-good-bg/60">
+                          <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs whitespace-nowrap">Reg.nr</th>
+                          <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs whitespace-nowrap">Biltype</th>
+                          <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs whitespace-nowrap">Chauffør</th>
+                          <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs whitespace-nowrap">Telefon</th>
+                          <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs whitespace-nowrap">Ankomst plads</th>
+                          <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs whitespace-nowrap">Mødetid fabrik</th>
+                          <th className="text-right font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs whitespace-nowrap">SMS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bilerVis.map((b, i) => {
+                          const isLast = i === bilerVis.length - 1 && !(!bilerTableExpanded && bilerSorted.length > TABEL_DEFAULT)
+                          const smsStatus = smsStatusMap[b.regnr] ?? 'ikke_sendt'
+                          const erSendt = smsStatus === 'sendt'
+                          return (
+                            <tr key={b.regnr} className={isLast ? '' : 'border-b border-good/15'}>
+                              <td className="align-middle font-inter text-xs font-semibold text-text-primary px-xs py-xs tabular-nums whitespace-nowrap">{b.regnr}</td>
+                              <td className="align-middle font-inter text-xs text-text-muted px-xs py-xs whitespace-nowrap">{b.biltype}</td>
+                              <td className="align-middle font-inter text-xs text-text-primary px-xs py-xs">{b.chauffoer}</td>
+                              <td className="align-middle px-xs py-xs">
+                                <a
+                                  href={`tel:${b.tlf.replace(/\s/g, '')}`}
+                                  className="font-inter text-xs text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors whitespace-nowrap"
+                                >
+                                  <Phone size={11} aria-hidden="true" />
+                                  {b.tlf}
+                                </a>
+                              </td>
+                              <td className="align-middle font-inter text-xs text-text-primary px-xs py-xs tabular-nums whitespace-nowrap">
+                                {b.ankomst_plads_tid ?? '—'}
+                              </td>
+                              <td className="align-middle font-inter text-xs text-text-primary px-xs py-xs tabular-nums whitespace-nowrap">
+                                {b.moedetid_fabrik ?? '—'}
+                              </td>
+                              <td className="align-middle px-xs py-xs text-right">
+                                <span className="inline-flex items-center gap-xxxs justify-end">
+                                  {erSendt ? (
+                                    <>
+                                      <span
+                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-good bg-good-bg border border-good/40 rounded-md px-xs min-h-[44px] min-w-[44px]"
+                                        aria-label={`SMS sendt til ${b.chauffoer}`}
+                                      >
+                                        Sendt ✓
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => sendSms(b.regnr)}
+                                        aria-label={`Gensend SMS til ${b.chauffoer}`}
+                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-[44px] min-w-[44px]"
+                                      >
+                                        Gensend
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span
+                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs text-text-muted border border-hairline rounded-md px-xs min-h-[44px] min-w-[44px]"
+                                        aria-label={`Afventer auto-afsendelse til ${b.chauffoer}`}
+                                      >
+                                        Afventer afsendelse
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => sendSms(b.regnr)}
+                                        aria-label={`Send SMS nu til ${b.chauffoer}`}
+                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-[44px] min-w-[44px]"
+                                      >
+                                        Send nu
+                                      </button>
+                                    </>
+                                  )}
+                                </span>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Expand-knap — kun synlig når der er >3 biler */}
+                  {bilerSorted.length > TABEL_DEFAULT && (
+                    <div className="border-t border-good/15 px-xs py-xxxs">
+                      <button
+                        type="button"
+                        onClick={() => setBilerTableExpanded(e => !e)}
+                        className="w-full flex items-center justify-center gap-xxxs font-inter text-xxs font-medium text-text-muted hover:text-deep-teal transition-colors min-h-touch"
+                        aria-expanded={bilerTableExpanded}
+                      >
+                        {bilerTableExpanded ? (
+                          <>
+                            <ChevronUp size={13} aria-hidden="true" /> Vis færre
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown size={13} aria-hidden="true" /> Vis alle ({bilerSorted.length})
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* ── Biler status-kort (ikke-bekræftet eller samleordre) — uændret ── */
+                <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${displayBilerBekraeftet ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
+                  <div className="w-full flex items-center justify-between gap-xs">
+                    <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">Biler</span>
+                    {displayBilerBekraeftet && (
+                      <span className="font-inter text-xxs font-semibold text-good">Bekræftet</span>
+                    )}
+                  </div>
+                  <div className="flex-1 flex items-end pb-xxxs">
+                    <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">{displayAntalBiler}</span>
+                  </div>
+                  <span className="font-inter text-xs text-text-muted min-h-[1em]">
+                    {displayBilerBekraeftet ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
+                  </span>
+                </div>
+              )}
+
+              {/* Materiel transport — tabel i enkelt-ordre bekræftet-tilstand; status-kort ellers */}
+              {visMaterielDetalje ? (
+                /* ── Materiel-tabel (bekræftet, enkelt-ordre) — FF Trin 7 (LÅST 2026-06-15) ── */
+                <div className="overflow-hidden rounded-xl border border-good/30 bg-good-bg">
+                  <div className="flex items-center justify-between px-sm py-xs border-b border-good/20">
+                    <div className="flex items-center gap-xs">
+                      <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">Materiel transport</span>
+                      <span className="font-inter text-xxs font-semibold text-good">Bekræftet</span>
+                    </div>
+                    <span className="font-poppins font-semibold text-sm text-text-primary">{materielTypeTekst}</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-good/15 bg-good-bg/60">
+                          <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs whitespace-nowrap">Anlæg</th>
+                          <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs whitespace-nowrap">Beskrivelse</th>
+                          <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs whitespace-nowrap">Transport</th>
+                          <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs whitespace-nowrap">Chauffør</th>
+                          <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs whitespace-nowrap">Telefon</th>
+                          <th className="text-left font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest px-xs py-xxxs whitespace-nowrap">Ankomst</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          // Saml alle items der hører til de synlige transport-biler (én bil kan bære flere anlæg)
+                          const synligeRegnr = new Set(materielVis.map(m => m.regnr))
+                          const synligeItems = materielItems.filter(m => synligeRegnr.has(m.regnr))
+                          return synligeItems.map((m, i) => {
+                            const isLast = i === synligeItems.length - 1 && !(!materielTableExpanded && materielSorted.length > TABEL_DEFAULT)
+                            return (
+                              <tr key={m.resourceId} className={isLast ? '' : 'border-b border-good/15'}>
+                                <td className="align-middle font-inter text-xs font-semibold text-text-primary px-xs py-xs whitespace-nowrap">{m.anlaegsNr}</td>
+                                <td className="align-middle font-inter text-xs text-text-primary px-xs py-xs">{m.beskrivelse}</td>
+                                <td className="align-middle px-xs py-xs whitespace-nowrap">
+                                  <span className="font-inter text-xs tabular-nums text-text-primary">{m.regnr}</span>
+                                  <span className="font-inter text-xs text-text-muted ml-xxxs">({m.transportType})</span>
+                                </td>
+                                <td className="align-middle font-inter text-xs text-text-primary px-xs py-xs">{m.chauffoer}</td>
+                                <td className="align-middle px-xs py-xs">
+                                  <a
+                                    href={`tel:${m.tlf.replace(/\s/g, '')}`}
+                                    className="font-inter text-xs text-dark-teal flex items-center gap-xxxs hover:text-deep-teal transition-colors whitespace-nowrap"
+                                  >
+                                    <Phone size={11} aria-hidden="true" />
+                                    {m.tlf}
+                                  </a>
+                                </td>
+                                <td className="align-middle font-inter text-xs text-text-primary px-xs py-xs tabular-nums whitespace-nowrap">
+                                  {m.ankomst_plads_tid ?? '—'}
+                                </td>
+                              </tr>
+                            )
+                          })
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                  {materielSorted.length > TABEL_DEFAULT && (
+                    <div className="border-t border-good/15 px-xs py-xxxs">
+                      <button
+                        type="button"
+                        onClick={() => setMaterielTableExpanded(e => !e)}
+                        className="w-full flex items-center justify-center gap-xxxs font-inter text-xxs font-medium text-text-muted hover:text-deep-teal transition-colors min-h-touch"
+                        aria-expanded={materielTableExpanded}
+                      >
+                        {materielTableExpanded ? (
+                          <>
+                            <ChevronUp size={13} aria-hidden="true" /> Vis færre
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown size={13} aria-hidden="true" /> Vis alle ({materielSorted.length})
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* ── Materiel status-kort (ikke-bekræftet eller samleordre) — uændret ── */
+                <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${displayMaterielBekraeftet ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
+                  <div className="w-full flex items-center justify-between gap-xs">
+                    <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">Materiel transport</span>
+                    {displayMaterielBekraeftet && (
+                      <span className="font-inter text-xxs font-semibold text-good">Bekræftet</span>
+                    )}
+                  </div>
+                  <div className="flex-1 flex items-end pb-xxxs">
+                    <span className="font-poppins font-semibold text-xl text-text-primary tabular-nums">{displayAntalMateriel}</span>
+                  </div>
+                  <span className="font-inter text-xs text-text-muted min-h-[1em]">
+                    {displayMaterielBekraeftet ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
+                  </span>
                 </div>
               )}
             </div>
@@ -4631,7 +4844,6 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
               </span>
         */}
       </div>
-      )}
 
       {/* TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate) */}
       <section>
@@ -5124,12 +5336,14 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
           </section>
         )
       })()}
+      </>
+      )}
 
-      {/* ── Vejesedler ──────────────────────────── */}
+      {/* ── Kørsel (synlig overskrift; tidl. "Vejesedler" — datanavnet Vejeseddel beholdes internt) ── */}
       {/* TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate) */}
       <section>
         <div className="flex items-center justify-between mb-sm">
-          <h2 className="font-poppins font-semibold text-xl text-text-primary">Vejesedler</h2>
+          <h2 className="font-poppins font-semibold text-xl text-text-primary">Kørsel</h2>
           {/* Kompakt produkt-statusbar — pulje-læs-guard (Carsten 2026-06-05) */}
           {/* Logik: 1 aktivt produkt på dato → vis, 2+ → skjul (pulje-læs-risiko), 0 → skjul */}
           {/* TODO: Erstat med Supabase ordre-estimat pr. dag når klar */}
@@ -5419,7 +5633,7 @@ function AfregningContent({ vognmandBekraeftelse, todayDay, isSamleordreMode, sa
       {/* Kopieret 1:1 fra UdfoerselContent's "Udføres i perioden"-sektion. selectedDate
           er hejst til OrdrePlanScreen-root så valg deles med Udførsel-mode. */}
       {afregningDays.length > 0 && (
-        <section className="mb-lg">
+        <section>
           <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight mb-sm">Afregningsperiode</h2>
           <div className="flex items-center gap-xs flex-wrap">
             {afregningDays.map(ds => {

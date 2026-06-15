@@ -5,6 +5,7 @@
  */
 import { useRef, useState, KeyboardEvent, ClipboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { setAuth } from '@/utils/storage'
 
 const CORRECT_PIN = import.meta.env.VITE_DEMO_PIN ?? '123456'
 const PIN_LENGTH = 6
@@ -18,7 +19,7 @@ export function LoginScreen() {
 
   function submit(pin: string) {
     if (pin === CORRECT_PIN) {
-      sessionStorage.setItem('formand_auth', '1')
+      setAuth()
       navigate('/prototyper/gantt')
     } else {
       setShake(true)

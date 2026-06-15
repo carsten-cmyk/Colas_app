@@ -28,7 +28,7 @@ interface GanttOrder {
   id: string
   orderNumber: string
   projectName: string
-  state: 'active' | 'planned' | 'completed'
+  state: 'active' | 'planned' | 'completed' | 'cancelled'
   startDate: string // YYYY-MM-DD
   endDate: string   // YYYY-MM-DD
   tonsTotal: number
@@ -100,6 +100,21 @@ const MOCK_ORDERS: GanttOrder[] = [
       { id: 'p5', recipeCode: '31005A', recipeName: 'GAB 0/16', thicknessMm: 70, tonsTotal: 180, startDate: '2026-03-23', endDate: '2026-03-26', planlagt: false },
     ],
   },
+  {
+    // Eksempel: aflyst ordre — rød "Aflyst"-markering (uden årsag i Gantt, jf. FF 2026-06-15)
+    id: '5',
+    orderNumber: '1212347',
+    jobnummer: '5310',
+    projectName: 'Industrivej Slidlag, Køge',
+    state: 'cancelled',
+    startDate: '2026-03-17',
+    endDate: '2026-03-18',
+    tonsTotal: 140,
+    tonsDelivered: 0,
+    products: [
+      { id: 'p6', recipeCode: '82101H', recipeName: 'SMA 11S', thicknessMm: 40, tonsTotal: 140, startDate: '2026-03-17', endDate: '2026-03-18', planlagt: false },
+    ],
+  },
 ]
 
 const DAY_SHORT = ['sø', 'ma', 'ti', 'on', 'to', 'fr', 'lø']
@@ -135,6 +150,8 @@ function isInRange(day: Date, order: GanttOrder): boolean {
 
 function getBarColorClass(order: GanttOrder, day: Date): string {
   if (!isInRange(day, order)) return ''
+  // Aflyst overrider alt — rød markering (UDEN årsag i Gantt, jf. FF aflysnings-markeringer 2026-06-15)
+  if (order.state === 'cancelled') return 'bg-bad/10 border border-bad/30'
   // Nat: tidsvindue-farve overrider state-farve på hele baren
   if (order.tidsvindue === 'nat') return 'bg-deep-teal'
   // Weekend-ordrer og ordrer uden tidsvindue: brug state-farve
@@ -148,6 +165,7 @@ const STATE_LABEL: Record<GanttOrder['state'], string> = {
   active: 'I gang',
   planned: 'Planlagt',
   completed: 'Afsluttet',
+  cancelled: 'Aflyst',
 }
 
 // LÅST 2026-06-05: active=mørkegrøn (bg-good), planned=lysegrøn (bg-good-bg), completed=uændret
@@ -155,6 +173,7 @@ const STATE_BADGE: Record<GanttOrder['state'], string> = {
   active: 'bg-good text-white',
   planned: 'bg-good-bg text-good',
   completed: 'bg-light-aqua text-deep-teal',
+  cancelled: 'bg-bad/10 text-bad',
 }
 
 function getViewDays(mode: ViewMode): number {
@@ -429,6 +448,7 @@ export function GanttScreen() {
               { cls: 'bg-good', label: 'I gang' },
               { cls: 'bg-good-bg border border-good/30', label: 'Planlagt' },
               { cls: 'bg-light-aqua', label: 'Afsluttet' },
+              { cls: 'bg-bad/10 border border-bad/30', label: 'Aflyst' },
             ].map(({ cls, label }) => (
               <div key={label} className="flex items-center gap-xxxs">
                 <div className={`w-[20px] h-[10px] rounded-sm ${cls}`} />
