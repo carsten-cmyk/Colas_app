@@ -1036,6 +1036,11 @@ export function OrdrePlanScreen() {
   }
   // Bekræftelses-modal før afsendelse til fabrik
   const [showConfirmSend, setShowConfirmSend] = useState(false)
+  // "Bestilling for sent"-flag: deadline = kl 11 DAGEN FØR udlægningsdagen (selectedPlanDate).
+  // Efter deadline kan ordren stadig sendes, men formanden skal ringe til fabrik for at sikre
+  // produktionskapacitet. Vises pr. DEFAULT i prototypen så flowet kan ses uden tidssimulering.
+  // TODO: Erstat med Supabase/PLAN — reel beregning: nu > (selectedPlanDate − 1 dag, kl 11:00).
+  const bestillingForSent = true
   // TODO: Erstat med Supabase når klar — kommentar gemmes på ordren ved afsendelse
   const [kommentar, setKommentar] = useState('')
   // TODO: Erstat med Supabase når klar — kommentarer gemmes på ordren/dagen
@@ -2096,7 +2101,7 @@ export function OrdrePlanScreen() {
                             Send til fabrik
                           </span>
                           <span className="font-inter text-xxs text-deep-teal/70 text-center px-xxs leading-tight">
-                            {disabled ? 'Intet at sende' : `${totalIkkeSendt} bestilling${totalIkkeSendt === 1 ? '' : 'er'} klar`}
+                            {disabled ? 'Intet at sende' : 'Bestilling skal ske inden kl 11'}
                           </span>
                         </div>
                         {/* Fabriksnavn — bottom-aligned (sidste flex-child) */}
@@ -3161,9 +3166,15 @@ export function OrdrePlanScreen() {
               >
                 Send bestilling til fabrik?
               </h2>
-              <p className="font-inter text-sm text-text-secondary leading-relaxed">
-                Ordren afsendes til fabrikken nu. Når den er afsendt kan morgen tons og forventede tons ikke længere rettes i appen — eventuelle rettelser skal ske pr. telefon til fabrikken.
-              </p>
+              {bestillingForSent ? (
+                <p className="font-inter text-sm text-bad leading-relaxed bg-bad-bg border border-bad/30 rounded-lg px-sm py-xs">
+                  Bestillingen er lavet efter kl 11. Du skal derfor ringe til fabrikken for at sikre produktionskapacitet.
+                </p>
+              ) : (
+                <p className="font-inter text-sm text-text-secondary leading-relaxed">
+                  Ordren afsendes til fabrikken nu.
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-xxs">
               <label className="font-inter font-medium text-sm text-deep-teal">
