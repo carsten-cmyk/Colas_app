@@ -71,3 +71,8 @@ Transport_Løsning/
 
 # Playwright MCP verifikations-artefakter (ephemeral)
 .playwright-mcp/
+
+# Rådata fra PLAN/MAUS — kundedata, må IKKE committes (kun afledte .md)
+Docs/Datafiler/*.xlsx
+Docs/Datafiler/*.xls
+Docs/Datafiler/*.csv
