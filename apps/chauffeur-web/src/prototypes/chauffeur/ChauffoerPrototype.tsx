@@ -22,12 +22,11 @@ import { AnkommetUdfoerselsstedScreen } from './screens/AnkommetUdfoerselsstedSc
 import { TimeRegistrationScreen } from './screens/TimeRegistrationScreen'
 import { TaskListScreen } from './screens/TaskListScreen'
 import { KontakterScreen } from './screens/KontakterScreen'
-import { PauseReminderSimulatorScreen } from './screens/PauseReminderSimulatorScreen'
 import { BottomTabBar } from './components/BottomTabBar'
 import type { TabName } from './components/BottomTabBar'
 
 type AppScreen = 'splash' | 'app'
-type PrototypeSubScreen = 'timereg' | 'pause-reminder' | 'samles-paa-en-bil' | null
+type PrototypeSubScreen = 'timereg' | 'samles-paa-en-bil' | null
 
 const MESSAGE_COUNT = mockConversations.filter(
   c => !c.lastMessage.isRead && c.lastMessage.senderId !== 'me'
@@ -255,7 +254,6 @@ export function ChauffoerPrototype() {
               Prototyper
             </p>
             {[
-              { title: 'Pause-reminder (30 min)', desc: 'Simulér modal der popper op efter længere pause', screen: 'pause-reminder' as PrototypeSubScreen },
               { title: 'Samles på en bil (multi-produkt)', desc: 'Flow 12 — flere produkter på samme bil med vejning mellem hvert', screen: 'samles-paa-en-bil' as PrototypeSubScreen },
             ].map((item) => (
               <button
@@ -315,12 +313,6 @@ export function ChauffoerPrototype() {
           }}
           messageCount={MESSAGE_COUNT}
         />
-      )}
-      {isPrototyperTab && prototypeSubScreen === 'pause-reminder' && (
-        <>
-          <PauseReminderSimulatorScreen onClose={() => setPrototypeSubScreen(null)} />
-          <BottomTabBar activeTab={activeTab} onTabPress={handleTabPress} messageCount={MESSAGE_COUNT} />
-        </>
       )}
       {isPrototyperTab && prototypeSubScreen === 'samles-paa-en-bil' && (
         <SamlesPaaEnBilScreen onClose={() => setPrototypeSubScreen(null)} messageCount={MESSAGE_COUNT} />

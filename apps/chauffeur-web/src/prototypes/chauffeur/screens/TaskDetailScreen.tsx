@@ -2,7 +2,7 @@
  * PROTOTYPE — Opgave-detaljeskærm (fuld-skærms-layout)
  * Viser ordre-metrics, lokationer, information, formand-kontakt og handlingsknapper.
  */
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, MapPin, ArrowDown, ArrowUp } from 'lucide-react'
 import type { Task, TaskState } from '@/types/task'
 import { SAFE_AREA, FS } from '@/styles/spacing'
@@ -53,10 +53,52 @@ export function TaskDetailScreen({
   onGoToOtherTask,
   onArrivalConfirm,
 }: TaskDetailScreenProps) {
-  const [pauseConfirmOpen, setPauseConfirmOpen] = useState(false)
+  // Hviletid-interval-valg: null = modal lukket, tal = valgt varighed i sekunder (prototype bruger sekunder for hurtig demo)
+  const [hviletidPickerOpen, setHviletidPickerOpen] = useState(false)
+  /** Resterende sekunder på igangværende hviletid-nedtælling. null = ingen aktiv nedtælling. */
+  const [hviletidSekundstilbage, setHviletidSekundstilbage] = useState<number | null>(null)
+  const hviletidIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false)
   const [startConfirmOpen, setStartConfirmOpen] = useState(false)
   const [alreadyActiveOpen, setAlreadyActiveOpen] = useState(false)
+  // Nedtællings-effekt: kører mens hviletid er aktiv (taskState === 'paused' og sekundstilbage > 0)
+  useEffect(() => {
+    if (hviletidSekundstilbage === null || taskState !== 'paused') return
+    if (hviletidSekundstilbage <= 0) {
+      // Tid udløbet — slå hviletid automatisk fra
+      onStart()
+      setHviletidSekundstilbage(null)
+      return
+    }
+    hviletidIntervalRef.current = setInterval(() => {
+      setHviletidSekundstilbage(prev => (prev !== null ? prev - 1 : null))
+    }, 1000)
+    return () => {
+      if (hviletidIntervalRef.current) clearInterval(hviletidIntervalRef.current)
+    }
+  }, [hviletidSekundstilbage, taskState, onStart])
+
+  /** Formater sekunder til "MM:SS" til nedtællings-display */
+  function formaterNedtaelling(sek: number): string {
+    const m = Math.floor(sek / 60)
+    const s = sek % 60
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  }
+
+  /** Start hviletid med valgt varighed i minutter */
+  function startHviletid(minutter: number) {
+    onPause()
+    setHviletidSekundstilbage(minutter * 60)
+    setHviletidPickerOpen(false)
+  }
+
+  /** Manuel genoptag — stopper nedtælling og sætter state back til active */
+  function genoptagHviletid() {
+    if (hviletidIntervalRef.current) clearInterval(hviletidIntervalRef.current)
+    setHviletidSekundstilbage(null)
+    onStart()
+  }
+
   const [pickup, delivery] = task.locations
   const infoAlerts = task.alerts.filter(a => a.type !== 'traffic')
   const dangerAlerts = task.alerts.filter(a => a.type === 'traffic')
@@ -702,7 +744,7 @@ export function TaskDetailScreen({
         {taskState === 'active' && (
           <div style={{ display: 'flex', gap: 8 }}>
             <button
-              onClick={() => setPauseConfirmOpen(true)}
+              onClick={() => setHviletidPickerOpen(true)}
               style={{
                 flex: 1,
                 height: 52,
@@ -738,28 +780,42 @@ export function TaskDetailScreen({
           </div>
         )}
         {taskState === 'paused' && (
-          <button
-            onClick={onStart}
-            style={{
-              height: 52,
-              backgroundColor: C.yellow,
-              color: C.deepTeal,
-              borderRadius: 12,
-              border: 'none',
-              cursor: 'pointer',
-              fontFamily: 'Poppins, sans-serif',
-              fontWeight: 600,
-              fontSize: FS.md,
-            }}
-          >
-            Genoptag opgave
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {hviletidSekundstilbage !== null && (
+              <p style={{
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: FS.xl,
+                color: C.deepTeal,
+                textAlign: 'center',
+                margin: 0,
+              }}>
+                {formaterNedtaelling(hviletidSekundstilbage)}
+              </p>
+            )}
+            <button
+              onClick={genoptagHviletid}
+              style={{
+                height: 52,
+                backgroundColor: C.yellow,
+                color: C.deepTeal,
+                borderRadius: 12,
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: FS.md,
+              }}
+            >
+              Genoptag
+            </button>
+          </div>
         )}
       </div>
       )}
 
-      {/* Pause-bekræftelses-modal — unified pattern fra TimeRegistrationScreen linje 682-752 */}
-      {pauseConfirmOpen && (
+      {/* Hviletid-interval-picker — chauffør vælger varighed før hviletid starter */}
+      {hviletidPickerOpen && (
         <div
           style={{
             position: 'absolute',
@@ -770,7 +826,7 @@ export function TaskDetailScreen({
             justifyContent: 'center',
             padding: '0 24px',
           }}
-          onClick={() => setPauseConfirmOpen(false)}
+          onClick={() => setHviletidPickerOpen(false)}
         >
           <div
             style={{
@@ -786,16 +842,36 @@ export function TaskDetailScreen({
             onClick={(e) => e.stopPropagation()}
           >
             <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, textAlign: 'center' }}>
-              Start hviletid?
+              Vælg hviletid
             </span>
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.sm, color: C.textMuted, textAlign: 'center' }}>
-              Bekræft at du tager hviletid. Tryk Genoptag når du er klar til at fortsætte.
+              Hviletiden slår automatisk fra når den valgte tid er gået. Du kan genoptage manuelt før tid.
             </span>
-            <div style={{ display: 'flex', gap: 10, marginTop: 4, width: '100%' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4, width: '100%' }}>
+              {[15, 30, 45].map((minutter) => (
+                <button
+                  key={minutter}
+                  onClick={() => startHviletid(minutter)}
+                  style={{
+                    width: '100%',
+                    height: 52,
+                    backgroundColor: C.border,
+                    color: C.textPrimary,
+                    borderRadius: 12,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 600,
+                    fontSize: FS.md,
+                  }}
+                >
+                  {minutter} minutter
+                </button>
+              ))}
               <button
-                onClick={() => setPauseConfirmOpen(false)}
+                onClick={() => setHviletidPickerOpen(false)}
                 style={{
-                  flex: 1,
+                  width: '100%',
                   height: 44,
                   border: `1px solid ${C.deepTeal}`,
                   borderRadius: 50,
@@ -805,26 +881,10 @@ export function TaskDetailScreen({
                   fontWeight: 600,
                   fontSize: FS.sm,
                   color: C.deepTeal,
+                  marginTop: 4,
                 }}
               >
                 Annuller
-              </button>
-              <button
-                onClick={() => { onPause(); setPauseConfirmOpen(false) }}
-                style={{
-                  flex: 1,
-                  height: 44,
-                  backgroundColor: C.green,
-                  border: 'none',
-                  borderRadius: 50,
-                  cursor: 'pointer',
-                  fontFamily: 'Poppins, sans-serif',
-                  fontWeight: 600,
-                  fontSize: FS.sm,
-                  color: C.white,
-                }}
-              >
-                Hviletid
               </button>
             </div>
           </div>
