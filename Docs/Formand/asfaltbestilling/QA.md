@@ -3,404 +3,273 @@ section: asfaltbestilling
 app: formand
 document_type: q_and_a_for_customer
 created: 2026-05-27
-last_updated: 2026-05-27
+last_updated: 2026-06-18
+version: v2
 status: draft — afventer kunde-svar
 ---
 
-# Asfaltbestilling — Åbne spørgsmål til kunde-afklaring
+# Asfaltbestilling — Spørgsmål til kunde-afklaring (v2)
 
-> **Formål**: Disse spørgsmål er opstået under intern gennemgang af Asfaltbestilling-sektionen og skal afklares med kunden inden udvikling kan afsluttes.
-> **Format**: Pr. spørgsmål — kontekst (hvorfor det betyder noget) → konkrete valg → kundens svar (udfyldes på mødet).
-> **Sortering**: Grupperet efter emne. Mærket med 🔴 (kritisk), 🟡 (vigtig) eller 🟢 (nice-to-have).
+> **Formål**: Afklare de åbne beslutninger med kunden inden Asfaltbestilling går i udvikling. Sektionen frys IKKE før disse er besvaret.
+> **Format**: Pr. spørgsmål — kontekst → Colas-forslag → kundens svar (udfyldes på mødet).
+> **Mærkning**: 🔴 kritisk · 🟡 vigtig · 🟢 nice-to-have.
+> **To dele**: **Del 1** = nye beslutninger fra re-baseline 18. juni (prioritet denne runde). **Del 2** = videreførte spørgsmål fra v1.
 
 ---
+
+# DEL 1 — Nye beslutninger (re-baseline 2026-06-18)
+
+> Disse er opstået fordi prototypen er videreudviklet siden v1. De er det primære formål med denne kunde-runde.
+
+### 🟡 B-1: Vejr-markering — gemmes og sendes videre, eller rent visuelt?
+
+**Kontekst**: Formanden kan markere at vejret har påvirket en produkt-dag. I prototypen er markeringen i dag kun lokal og forsvinder — den gemmes ikke og sendes ikke videre.
+
+**Colas-forslag**: **Gem markeringen og send den videre** til vognmand/fabrik, så de ved at dagen er vejr-påvirket. (Ellers har markeringen ingen reel effekt.)
+
+**Kundens svar:**
+```
+[ ]
+```
+
+---
+
+### 🟡 B-3: Skal aflysnings-årsag "andet" kræve en fritekst-begrundelse?
+
+**Kontekst**: Aflysningsårsager er faste valg (regn/frost/underlag/andet). Spørgsmålet er om "andet" skal tvinge en kort skriftlig begrundelse.
+
+**Colas-forslag**: **Udskyd til senere fase** — ikke nødvendigt for første version.
+
+**Kundens svar:**
+```
+[ ]
+```
+
+---
+
+### 🟡 B-4: Hvor robust skal afsendelsen være i første fase?
+
+**Kontekst**: Tre mulige værn ved afsendelse: (a) advarsel hvis summen af tons overstiger ordrens total, (b) automatisk fortrydelse hvis afsendelse fejler undervejs, (c) værn mod dobbelt-klik/dobbelt-afsendelse.
+
+**Colas-forslag**: **Kun (c) dobbelt-afsendelses-værn i første fase.** (a) og (b) udskydes — de er nice-to-have og øger kompleksiteten.
+
+**Kundens svar:**
+```
+[ ]
+```
+
+---
+
+### 🟢 B-5: Skal dato-vælgeren vise ugedag?
+
+**Kontekst**: Datovælgeren viser i dag "16. marts 2026" (uden ugedag). Colas' generelle datoformat-regel anbefaler at vise ugedag i kontekst ("mandag 16. marts 2026").
+
+**Colas-beslutning (intern, 2026-06-18)**: **MED ugedag** — følger datoformat-reglen. *Til kundens orientering — ikke blokerende.*
+
+**Kundens svar:**
+```
+[ ]
+```
+
+---
+
+### 🟡 B-6: Skal en "for sent"-bestilling markeres synligt for vognmand/fabrik?
+
+**Kontekst**: Ny regel (Flow 9c): bestilling efter kl. 11 dagen før udlægning kan stadig sendes, men kræver et opkald til fabrik. Spørgsmålet er om systemet skal bære et synligt flag ("sendt for sent / kapacitet ikke bekræftet") videre til vognmand, fabrik og PLAN/Asfalttavlen.
+
+**Colas-forslag**: **Ja** — så modtagerne ved at kapacitet ikke er bekræftet endnu.
+
+**Kundens svar:**
+```
+[ ]
+```
+
+---
+
+### 🟡 B-7: Er kl. 11-fristen ens for alle fabrikker, eller forskellig pr. fabrik?
+
+**Kontekst**: Bestillingsfristen er sat til kl. 11. Forskellige fabrikker kan i princippet have forskellige cut-off-tider.
+
+**Colas-forslag**: **Ens (global) kl. 11 i første fase** — konfigurerbar pr. fabrik kan komme senere hvis behov.
+
+**Kundens svar:**
+```
+[ ]
+```
+
+---
+
+> **Interne tekniske beslutninger (kræver IKKE kunde-svar):**
+> - **B-2**: Datamodel for "Samles på en bil" (felt-struktur) — afklares internt.
+> - **E-1**: Oprydning af forældede ekstra-bestilling-felter i cross-app-payloads — afklares internt (architect retter i udviklingsfasen).
+
+---
+
+# DEL 2 — Videreførte spørgsmål fra v1
+
+> Stadig åbne fra forrige runde. Nogle er nu løst af de nye beslutninger og markeret derefter.
 
 ## A. Bestilling-livscyklus
 
-### ✅ Q-A1: Hvad sker hvis morgen-bestilling glemmes inden produktion?
-
-**Kontekst**: Formanden glemmer at sende morgen-bestilling før første bil skal læsse på fabrik kl. 06:30.
-
-**Mulige tilgange overvejet**:
-- (a) Systemet blokerer fabrikken indtil bestillingen kommer
-- (b) Fabrik producerer fra "Forventet"-feltet som auto-fallback
-- (c) Advarsel/påmindelse til formand uden system-automatik
-- (d) Reflektér nuværende workaround (telefon)
-
-**Svar (intern Colas-afklaring, 2026-05-27)**:
-> **(d)** Beholder nuværende telefon-workaround. Fabrik/vognmand ringer til formanden. Ingen system-automatik eller blocking. Skal afspejles i out-of-scope-notatet.
-
-**Til kunde-bekræftelse**: er denne arbejdsgang stadig den rigtige, eller ønsker kunden et system-trigger (fx SMS-påmindelse)?
-
-**Kundens kommentar:**
+### ✅ Q-A1: Hvad sker hvis morgen-bestilling glemmes? *(Colas-forslag: telefon-workaround — ingen system-automatik)*
+**Kundens svar:**
 ```
 [ ]
 ```
 
----
-
-### ✅ Q-A2: Skal der være en "Genåbn bestilling"-knap for sendte bestillinger?
-
-**Kontekst**: Efter "Send til fabrik" er felter låst. Hvis formanden indser en fejl, skal han kunne genåbne?
-
-**Mulige tilgange overvejet**:
-- (a) Knap "Genåbn bestilling" altid tilgængelig
-- (b) Knap kun før produktion er startet
-- (c) Ingen knap — telefon-til-fabrik er reglen
-
-**Svar (intern Colas-afklaring, 2026-05-27)**:
-> **(c)** Ingen genåbn-knap. Lås efter send er hard. Formanden må ringe til fabrik ved fejl. Eksisterende out-of-scope-notat om "edit-cascade efter send" bekræftet.
-
-**Til kunde-bekræftelse**: er det acceptabelt at fejl-rettelser altid kræver telefon-opringning til fabrik?
-
-**Kundens kommentar:**
+### ✅ Q-A2: Skal der være en "Genåbn bestilling"-knap? *(Colas-forslag: nej — rettelser sker pr. telefon til fabrik)*
+**Kundens svar:**
 ```
 [ ]
 ```
 
----
-
-### 🟡 Q-A3: Mid-day aflysning — hvad sker med allerede produceret asfalt?
-
-**Kontekst**: Formanden kan aflyse en produkt-dag efter send er gået igennem. Men hvad nu hvis fabrik allerede har produceret en batch, eller en bil allerede er på vej til pladsen?
-
-**Spørgsmål til kunde**:
-- (a) **Asfalt produceret, ikke læsset endnu** → Fabrik håndterer det internt (genbrug/kassér)? Ingen UI-effekt?
-- (b) **Bil læsset, på vej til pladsen** → Bilen leverer alligevel (formand håndterer manuelt), ELLER systemet skal kunne stoppe bilen med push-besked til chauffør?
-- (c) **Bil på pladsen / aflæsning i gang** → Bilen færdiggør sin nuværende læs (kan ikke aflyses), kun fremtidige læs aflyses?
+### 🟡 Q-A3: Mid-day aflysning — hvad sker med allerede produceret asfalt / bil på vej?
+- (a) Produceret, ikke læsset → fabrik håndterer internt, ingen UI-effekt?
+- (b) Bil læsset/på vej → leverer alligevel, eller skal systemet kunne stoppe bilen?
+- (c) Bil på plads → færdiggør nuværende læs, kun fremtidige aflyses?
 
 **Kundens svar:**
 ```
 [ ]
 ```
 
----
+### ~~Q-A4: Tidsgrænse for ekstra-bestilling~~ — **BORTFALDET**
+> Ekstra-bestilling oprettes ikke længere af formand (besluttet 3. juni). Timing af morgen-bestilling dækkes nu af kl. 11-fristen (B-7 / Flow 9c).
 
-### 🟡 Q-A4: Bestilling sent på dagen — er der en tidsgrænse?
-
-**Kontekst**: Ekstra-bestilling kan tilføjes når som helst i dagens forløb. Men fabrik har åbningstider og produktion tager tid.
-
-**Spørgsmål til kunde**:
-- Skal systemet have en hard cut-off (fx ingen ekstra-bestilling efter kl. 14:00 til samme dag)?
-- Skal ekstra-bestilling automatisk skubbes til næste dag hvis den kommer efter en bestemt tid?
-- Eller er det op til formanden + fabrik manuelt (samme telefon-workaround som A1)?
-
+### 🟢 Q-A5: Dag der passerer uden bestilling — markeres "Manglende"/"For sent", auto-aflyses, eller bare historisk?
 **Kundens svar:**
 ```
 [ ]
 ```
-
----
-
-### 🟢 Q-A5: Dag der passerer uden bestilling
-
-**Kontekst**: Hvis en dag i ordrens udførelses-periode passerer uden at formand har sendt noget for den dag.
-
-**Spørgsmål til kunde**:
-- Skal dagen markeres "Manglende" / "For sent" i UI'en?
-- Auto-aflyses den med en system-årsag?
-- Eller bare en historisk markering uden konsekvens?
-
-**Kundens svar:**
-```
-[ ]
-```
-
----
 
 ## B. Edge cases på data
 
-### 🟡 Q-B1: Tons-validering
-
-**Kontekst**: Felterne `tonsPlanned` og `morgenTons` accepterer tal. Men hvilke grænser?
-
-**Spørgsmål til kunde**:
-- **Tilladte værdier**: heltal kun (24 t), eller decimaler (24,5 t)?
-- **Mindste værdi**: er 0 t en gyldig bestilling (= "produkt aflyst for dagen" — eller skal det blot lade værre at sende)?
-- **Maksimum**: skal der være et logisk loft (fx 500 t pr. produkt pr. dag), eller blot ordrens samlede tons som loft?
-
+### 🟡 Q-B1: Tons-validering — decimaler tilladt? Er 0 t gyldig? Maksimum-loft?
 **Kundens svar:**
 ```
 [ ]
 ```
 
----
-
-### 🟢 Q-B2: Sum-warning threshold
-
-**Kontekst**: Hvis summen af `tonsPlanned` overstiger ordrens samlede bestilte tons, vises en blød advarsel (men det blokerer ikke).
-
-**Spørgsmål til kunde**:
-- Skal advarslen trigge LIGE over total (24,1 vs 24,0), eller med en buffer (fx +5%)?
-- Skal advarslen være blokerende ved et bestemt punkt (fx +20% over)?
-- Eller bare en lille muted-tekst der ikke forstyrrer flow'et?
-
+### 🟢 Q-B2: Sum-warning threshold — *(afhænger af B-4: hvis sum-warning udskydes, bortfalder dette indtil videre)*
 **Kundens svar:**
 ```
 [ ]
 ```
-
----
 
 ## C. Fabrik-feedback
 
-### 🔴 Q-C1: Hvad hvis fabrik afviser bestilling?
-
-**Kontekst**: I dag er bestillingen "fire-and-forget" — formand sender, fabrik modtager. Men hvad hvis fabrik **ikke kan levere** (kapacitet, produkt-fejl, nedbrud)?
-
-**Spørgsmål til kunde**:
-- Skal fabrik kunne sende en **afvisning** retur til formand (notifikation + "Afvist af fabrik"-status)?
-- Eller håndteres alt manuelt via telefon (som A1)?
-- Hvis afvisning er i UI: skal formand kunne sende **igen** efter rettelse, eller skal det altid være telefon?
+### 🔴 Q-C1: Hvad hvis fabrik afviser bestilling (kapacitet/fejl/nedbrud)?
+- Skal fabrik kunne sende en afvisning retur ("Afvist af fabrik"-status)?
+- Eller håndteres alt via telefon?
+- Bemærk: hænger sammen med kl. 11-reglen (B-6) — for-sent-bestillinger er netop dem hvor kapacitet kan mangle.
 
 **Kundens svar:**
 ```
 [ ]
 ```
 
----
-
-### 🟡 Q-C2: Bekræftelse "modtaget af fabrik"
-
-**Kontekst**: Nu sættes status til "Sendt" når formand klikker. Men der er ingen synlig kvittering på at fabrik har **set** den.
-
-**Spørgsmål til kunde**:
-- Skal der være en yderligere status "Bekræftet af fabrik" (med tidspunkt) — fabrik klikker accept?
-- Eller er "Sendt" tilstrækkeligt (fabrik tager ansvar fra det punkt)?
-- Hvis bekræftelse: hvem på fabrik gør det? Hver gang en bestilling kommer ind, eller batch-vis?
-
+### 🟡 Q-C2: "Bekræftet af fabrik"-kvittering — skal der være en status efter "Sendt", eller er "Sendt" nok?
 **Kundens svar:**
 ```
 [ ]
 ```
 
----
-
-### 🟢 Q-C3: "Produktion startet"-signal
-
-**Kontekst**: Skal formand kunne se hvornår fabrik faktisk er begyndt at producere?
-
-**Spørgsmål til kunde**:
-- Skal status kunne være "I produktion" (efter "Sendt", før "Bil på vej")?
-- Eller er det overkill — formand følger med via Vejesedler i Udførsel-tabben uanset?
-
+### 🟢 Q-C3: "Produktion startet"-signal — skal formand kunne se hvornår fabrik er begyndt?
 **Kundens svar:**
 ```
 [ ]
 ```
-
----
 
 ## D. Multi-formand / konflikter
 
-### 🟡 Q-D1: To formænd redigerer samme ordre samtidigt
-
-**Kontekst**: Hvad sker hvis to formænd er logget på samme ordre og begge prøver at sende?
-
-**Spørgsmål til kunde**:
-- Hvor ofte sker dette i praksis? Sjældent / ofte?
-- Hvis det sker: skal den ene få en fejl ("Allerede sendt af [navn]"), eller skal det merges?
-- Skal vi vise hvilken anden formand der har ordren åbnet (real-time presence-indikator)?
-
+### 🟡 Q-D1: To formænd på samme ordre samtidigt — fejl ("Allerede sendt af [navn]"), merge, eller presence-indikator?
 **Kundens svar:**
 ```
 [ ]
 ```
 
----
-
-### 🟢 Q-D2: PLAN-data ændrer sig mens formand er i UI'en
-
-**Kontekst**: Hvis ordre-data ændres i PLAN (fx nyt produkt tilføjes, dato udvides) mens formand er midt i bestilling.
-
-**Spørgsmål til kunde**:
-- Skal UI'en auto-opdatere (med en toast: "Ordre opdateret fra PLAN")?
-- Eller skal formand klikke "Refresh" manuelt?
-- Skal en advarsel komme hvis ændring sker MENS formand har en bestilling under sending?
-
+### 🟢 Q-D2: PLAN-data ændrer sig mens formand er i UI'en — auto-opdater m. toast, eller manuel refresh?
 **Kundens svar:**
 ```
 [ ]
 ```
-
----
 
 ## E. UI-detaljer
 
-### 🟢 Q-E1: Sortering af produkter
-
-**Kontekst**: Produkt-bokse vises på en dag. Hvilken rækkefølge?
-
-**Spørgsmål til kunde**:
-- Alfabetisk efter navn?
-- Efter receptkode (numerisk)?
-- Efter rækkefølge de er tilføjet i den oprindelige ordre fra PLAN?
-- Efter forventet udlægnings-rækkefølge?
-
+### 🟢 Q-E1: Sortering af produkt-bokse — alfabetisk, receptkode, PLAN-rækkefølge, eller udlægnings-rækkefølge?
 **Kundens svar:**
 ```
 [ ]
 ```
 
----
-
-### 🟢 Q-E2: Recept-detaljer synlige?
-
-**Kontekst**: I dag viser produkt-bokse navn + receptkode + tykkelse. Receptens detaljer (mineralogi, type, klassificering) er ikke synlige.
-
-**Spørgsmål til kunde**:
-- Behøver formand se flere recept-detaljer (fx via expand-funktion på produktboksen)?
-- Eller er navn + kode tilstrækkeligt — detaljerne hører til PLAN-systemet?
-
+### 🟢 Q-E2: Recept-detaljer synlige (expand på boksen), eller er navn + kode nok?
 **Kundens svar:**
 ```
 [ ]
 ```
 
----
-
-### 🟢 Q-E3: Kommentar-feltet — regler
-
-**Kontekst**: Ved "Send til fabrik" kan formand skrive en kommentar (valgfri).
-
-**Spørgsmål til kunde**:
-- Skal der være en max-tegn-grænse (500 ofte brugt)?
-- Skal kommentaren være synlig som **historik** efter send (under produkt-boksen som læselig info)?
-- Eller er den engang-vist (kun i selve send-handlingen)?
-
+### 🟢 Q-E3: Kommentar-feltet — max-tegn? Synlig som historik efter send, eller engangs-vist?
 **Kundens svar:**
 ```
 [ ]
 ```
 
----
-
-### 🟢 Q-E4: Bekræftelses-modal indhold
-
-**Kontekst**: Modal der vises før formand bekræfter send.
-
-**Spørgsmål til kunde**:
-- Skal den vise: liste over produkter + tons + total + samles-flags + ordre-nr + dato?
-- Skal den vise et forventet **leverings-tidspunkt** baseret på fabrik+vognmand?
-- Skal den vise estimeret **bil-antal** (baseret på bil-kapacitet)?
-
+### 🟢 Q-E4: Bekræftelses-modal indhold — ud over den nye kl. 11-advarsel: skal den vise produkt-liste + total + estimeret leveringstid + bil-antal?
 **Kundens svar:**
 ```
 [ ]
 ```
 
----
-
-### 🟢 Q-E5: "Samles på en bil" — visuel indikator
-
-**Kontekst**: Når 2-3 produkter er markeret med "Samles på en bil", skal de visuelt være kædet sammen?
-
-**Spørgsmål til kunde**:
-- Vises en linje/streg mellem dem?
-- Får de samme baggrundsfarve eller markering?
-- Eller bare et lille badge på hver markeret produkt?
-
+### 🟢 Q-E5: "Samles på en bil" — visuel indikator (linje mellem bokse, fælles farve, eller blot badge)?
 **Kundens svar:**
 ```
 [ ]
 ```
 
----
+## F. Cross-app integrationer
 
-## F. Cross-app integrations
-
-### 🟡 Q-F1: "Egen bil"-flow integration
-
-**Kontekst**: I FUNCTIONAL_FLOWS er der en "Egen bil"-variant af bilbestilling (formand bestemmer chauffør + reg.nr selv). Spørgsmål: hvor vælges "Egen bil"?
-
-**Spørgsmål til kunde**:
-- Vælges det i **Asfaltbestilling** (sammen med tons-indtastning)?
-- Eller i **Bil-disponering** (separat sektion efter morgen-bestilling)?
-- Hvis i Asfaltbestilling: er det en checkbox pr. produkt, pr. dag, eller pr. hele bestillingen?
-
+### 🟡 Q-F1: "Egen bil"-flow — vælges det i Asfaltbestilling eller i Bil-disponering? Pr. produkt/dag/bestilling?
 **Kundens svar:**
 ```
 [ ]
 ```
 
----
-
-### 🟡 Q-F2: Vognmand-kapacitet-validering
-
-**Kontekst**: Hvis vognmand har 3 biler men formand bestiller mere end de kan klare på en dag.
-
-**Spørgsmål til kunde**:
-- Skal systemet **forhindre** bestillingen (rød fejl)?
-- Skal det blot vise en **advarsel** ("Vognmand har 3 biler — kan kun dække ~120 t/dag")?
-- Eller intet — fabrik+vognmand håndterer det manuelt?
-
+### 🟡 Q-F2: Vognmand-kapacitet — skal systemet advare/blokere hvis der bestilles mere end vognmands biler kan dække?
 **Kundens svar:**
 ```
 [ ]
 ```
 
----
-
-### 🟡 Q-F3: Fabrik-kapacitet-validering
-
-**Kontekst**: Hvis fabrikkens daglige produktion ikke kan rumme bestillingen.
-
-**Spørgsmål til kunde**:
-- Skal systemet kende fabrikkens kapacitet og advare? (Data fra PLAN?)
-- Eller er det fabrikkens problem at afvise (jf. Q-C1)?
-
+### 🟡 Q-F3: Fabrik-kapacitet — skal systemet kende fabrikkens kapacitet og advare (data fra PLAN), eller er det fabrikkens ansvar (jf. Q-C1 + kl. 11-reglen)?
 **Kundens svar:**
 ```
 [ ]
 ```
 
----
+## G. Vejr og afregning
 
-## G. Vejr-flag og afregning
-
-### 🟡 Q-G1: Vejr-flag automatik
-
-**Kontekst**: Formand kan toggle et "Vejr"-flag på en produkt-dag — informativt at vejret har påvirket dagen.
-
-**Spørgsmål til kunde**:
-- Skal vejr-flaget **automatisk trigge** "minus regn"-fradrag i afregning?
-- Eller er det **rent informativt** — afregning sker uafhængigt?
-- Hvis automatik: hvilket fradrag-beløb / procent?
-
+### 🟡 Q-G1: Vejr-markering automatik — skal den trigge "minus regn"-fradrag i afregning, eller rent informativ? *(hænger sammen med B-1)*
 **Kundens svar:**
 ```
 [ ]
 ```
-
----
 
 ## H. "Samles på en bil" detaljer
 
-### 🟡 Q-H1: Kan "Samles på en bil" ændres EFTER send?
-
-**Kontekst**: I dag er flaget låst med batchen (samme regel som tonsPlanned/morgenTons).
-
-**Spørgsmål til kunde**:
-- Er det OK at flaget er **låst** efter send?
-- Eller skal det kunne ændres til/fra **mens dagen kører** (fx hvis bilen alligevel kun har plads til ét produkt på dagen)?
-
+### 🟡 Q-H1: Kan "Samles på en bil" ændres EFTER send, eller låst med afsendelsen?
 **Kundens svar:**
 ```
 [ ]
 ```
 
----
-
-## Bonus: Tværgående regler at låse
-
-Mens vi har kunden på linjen, foreslår jeg vi også får bekræftelse på følgende — de er nævnt i andre sektioner men hører delvist hjemme i Asfaltbestilling:
+## Z. Tværgående regler at bekræfte
 
 | # | Beslutning | Forslag |
 |---|---|---|
-| Z1 | **Dato-pille-rækkefølge** når perioden spænder flere måneder | Sorteret kronologisk, måneds-skifte vises som lille separator |
-| Z2 | **Default-værdier** ved ny dag | tonsPlanned = parent.startDate; morgenTons = `undefined` (skal udfyldes manuelt) |
-| Z3 | **Aflysningsårsag "andet"** | Kræver fritekst-kommentar (>10 tegn) |
-| Z4 | **Decimal-separator i tons** | Komma (24,5 t) — IKKE punktum |
+| Z1 | Dato-pille-rækkefølge over flere måneder | Kronologisk, måneds-skift som lille separator |
+| Z2 | Default-værdier ved ny dag | "Forventet" = parent-værdi; "Morgen-bestilling" = tom (udfyldes manuelt) |
+| ~~Z3~~ | ~~Aflysningsårsag "andet" fritekst~~ | **Flyttet til B-3** |
+| Z4 | Decimal-separator i tons | Komma (24,5 t) — ikke punktum |
 
 **Kundens svar / kommentarer:**
 ```
@@ -411,35 +280,20 @@ Mens vi har kunden på linjen, foreslår jeg vi også får bekræftelse på føl
 
 ## Tjekliste til kundemøde
 
-**Allerede afklaret internt — kun bekræftelse fra kunde:**
-- [ ] ✅ Q-A1 glemt morgen-bestilling (forslag: telefon-workaround)
-- [ ] ✅ Q-A2 "Genåbn bestilling"-knap (forslag: ingen knap)
+**Prioritet (nye beslutninger — Del 1):**
+- [ ] 🟡 B-1 vejr gem+send
+- [ ] 🟡 B-3 aflysnings-note
+- [ ] 🟡 B-4 afsendelses-robusthed
+- [ ] 🟢 B-5 ugedag (kun orientering)
+- [ ] 🟡 B-6 for-sent-flag videre
+- [ ] 🟡 B-7 kl. 11 global vs. pr. fabrik
 
-**Åbne — kræver kundens svar:**
-- [ ] 🟡 Q-A3 mid-day aflysning
-- [ ] 🟡 Q-A4 tids-grænse for ekstra-bestilling
-- [ ] 🟢 Q-A5 dag der passerer uden bestilling
-- [ ] 🟡 Q-B1 tons-validering
-- [ ] 🟢 Q-B2 sum-warning threshold
+**Videreført (Del 2) — anbefalet rækkefølge: 🔴 først, så 🟡 A→H, så 🟢:**
 - [ ] 🔴 Q-C1 fabrik afviser
-- [ ] 🟡 Q-C2 "modtaget af fabrik"-bekræftelse
-- [ ] 🟢 Q-C3 "produktion startet"-signal
-- [ ] 🟡 Q-D1 to formænd samtidigt
-- [ ] 🟢 Q-D2 PLAN-data ændrer sig
-- [ ] 🟢 Q-E1 produkt-sortering
-- [ ] 🟢 Q-E2 recept-detaljer
-- [ ] 🟢 Q-E3 kommentar-felt-regler
-- [ ] 🟢 Q-E4 bekræftelses-modal-indhold
-- [ ] 🟢 Q-E5 "samles på en bil"-visuel
-- [ ] 🟡 Q-F1 "egen bil" hvor vælges
-- [ ] 🟡 Q-F2 vognmand-kapacitet
-- [ ] 🟡 Q-F3 fabrik-kapacitet
-- [ ] 🟡 Q-G1 vejr-flag automatik
-- [ ] 🟡 Q-H1 "samles på en bil" lås efter send
-- [ ] 🟢 Z1-Z4 tværgående regler
-
-**Anbefalet rækkefølge på mødet**: start med 🔴 (Q-C1), så 🟡 i topic-rækkefølge A→H, så 🟢 til sidst hvis tiden tillader. Q-A1 + Q-A2 kan tages hurtigt som åbning ("vi har overvejet X — er det OK?").
+- [ ] 🟡 Q-A3 · Q-B1 · Q-C2 · Q-D1 · Q-F1 · Q-F2 · Q-F3 · Q-G1 · Q-H1
+- [ ] 🟢 Q-A5 · Q-B2 · Q-C3 · Q-D2 · Q-E1..E5 · Z1·Z2·Z4
+- [ ] ✅ Q-A1 · Q-A2 (hurtig bekræftelse)
 
 ---
 
-*Dokument-version: 2026-05-27 · draft*
+*Dokument-version: 2026-06-18 · v2 · draft*

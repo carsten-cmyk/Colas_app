@@ -2,930 +2,431 @@
 section: asfaltbestilling
 app: formand
 tab: planlaegning
-phase: dev-ready
+phase: interview
 created: 2026-05-26
-last_updated: 2026-05-26
-contract_version: 1.0
-status: SIGNED-2026-05-26
-frozen: true
-signed_by: Carsten
+last_updated: 2026-06-18
+contract_version: 2.0
+status: DRAFT
+frozen: false
+supersedes: CONTRACT.v1-frozen.md (SIGNED-2026-05-26)
+signed_by: null
 ---
 
-# Validation Contract — Asfaltbestilling (Formand · Planlægning-tab)
+# Validation Contract v2 — Asfaltbestilling (Formand · Planlægning-tab)
 
-> **Brug:** Når status = `SIGNED-yyyy-mm-dd` er denne fil **FROZEN**. Architect læser den, builder bygger mod den, reviewer + validator tjekker mod den.
-> **Regel:** Builder MÅ IKKE starte uden signed contract. Validator MÅ IKKE editere — kun raise amendment-request.
+> ## 🟡 STATUS: DRAFT — IKKE FROZEN. Architect må IKKE starte.
+>
+> **Hvorfor v2:** v1 (`SIGNED-2026-05-26`, bevaret som `CONTRACT.v1-frozen.md`) er forældet. Prototypen er drevet ~3 uger; architect-re-baseline (2026-06-18) konkluderede at ~25% af de 48 ASF-kriterier er ugyldige (ekstra-bestilling slettet, aflysning flyttet, datovælger ændret, Flow 9c tilføjet).
+>
+> **Denne fil låser IKKE noget endnu.** Den afventer Carstens beslutning på **B-1..B-7 + E-1** (§9) + sign-off. Først derefter: `SIGNED-yyyy-mm-dd` → FROZEN.
+>
 > **Læs sammen med:**
-> - `.claude/sections/formand/asfaltbestilling.md` — komponent-scope
-> - `.claude/docs/DATA_FIELDS.md` (sektion: Asfaltbestilling) — felter, validation, Supabase-mapping
-> - `Docs/Formand/asfaltbestilling/FLOWS.md` — alle 9 UX-flows
-> - `.claude/docs/FUNCTIONAL_FLOWS.md` (ABE-1..8) — cross-app kontrakt
-> - `.claude/docs/STATUS_VOKABULAR.md` — låst 2026-05-26
-> - `.claude/docs/DATOFORMAT.md` — låst 2026-05-26
-> - `Docs/Formand/asfaltbestilling/KICKOFF.md` — forretnings-scope
+> - `.claude/sections/formand/asfaltbestilling.md` — re-scoped komponent-scope + drift-noter (D-A..D-K)
+> - `.claude/docs/DATA_FIELDS.md` (sektion Asfaltbestilling) — re-scoped felter
+> - `.claude/docs/FUNCTIONAL_FLOWS.md` — ABE-1..8, ABE-2b, Flow 9b, Flow 9c
+> - `.claude/docs/STATUS_VOKABULAR.md`, `.claude/docs/DATOFORMAT.md`
+> - `Docs/Formand/asfaltbestilling/CONTRACT.v1-frozen.md` — fuld v1 (kriterie-tekster genbruges hvor stadig gyldige)
 
 ---
 
 ## Identitet
 
-- **Sektion:** Asfaltbestilling
-- **App:** Formand
-- **Manifest:** `.claude/sections/formand/asfaltbestilling.md`
-- **Kickoff:** `Docs/Formand/asfaltbestilling/KICKOFF.md`
-- **Status:** `DRAFT`
-- **Contract-version:** 1.0
+- **Sektion:** Asfaltbestilling · **App:** Formand · **Tab:** Planlægning
+- **Status:** `DRAFT` (v2)
 - **Godkendt af Carsten:** `[ ] Dato: ___`
 
 ---
 
-## Cross-cutting blockers — HARD GATE
+## 0. Re-baseline-oversigt (hvad ændrer sig fra v1)
 
-Builder MÅ IKKE starte hvis nogen af disse er åbne:
-
-- [x] **Status-vokabular låst** (2026-05-26) — `TransportOrderStatus`, `AflysningsAarsag`, `ProduktTilstand` eksisterer i `shared/types/`
-- [x] **Datoformat låst** (2026-05-26) — `formatLongDate`, `formatLongDateWithDay`, `formatDateTime` skal eksistere i `shared/utils/dateFormat.ts`
-- [~] **Multi-produkt-på-bil kerne låst** (2026-05-19) — 4 opfølgnings-spg. = `TBD-refinement`, ikke blocker for build
-- [N/A] **Auth/RLS-model** — sektionen har ingen rolle-differentiering INDE i sektionen (kun formand ser den). Auth dækkes på app-niveau.
-
-> **Status:** ✅ Builder må starte når contract er signed.
-
----
-
-## Domæne-invariants
-
-> Disse er ufravigelige regler. Brydes én → bug, ikke et legitimt edge-case.
-
-| # | Invariant | Type |
+| v1-område | v2-status | ASF-IDs påvirket |
 |---|---|---|
-| INV-1 | `activeProductId` og `selectedPlanDate` er **controlled fra parent** (`OrdrePlanScreen`) — container ejer dem ikke, den propagerer kun via callbacks | SKAL-ALTID |
-| INV-2 | Auto-skift af `activeProductId` (når current ikke matcher noget produkt på `selectedPlanDate`) sker i `useAsfaltbestilling` — **aldrig** i container eller anden komponent | SKAL-ALTID |
-| INV-3 | `isSent === true` låser `tonsPlanned`-input, `morgenTons`-input, og `samlesPaaEnBil`-checkbox. Vejr-toggle (C4) og aflys-knap (C2) forbliver aktive | SKAL-ALTID |
-| INV-4 | Send-batch er **atomar** pr. `(orderId, selectedPlanDate)`: alle ikke-sendte morgen-bestillinger + alle ikke-sendte ekstra-bestillinger (med `tons > 0` og `productId !== ''`) sendes sammen. Fejler én → ingen `transport_orders` oprettes, ingen `ekstra.sent` opdateres | SKAL-ALTID |
-| INV-5 | Kommentar er pr. (orderId, date)-batch — **aldrig** pr. row. Samme `kommentar`-streng gemmes på alle `transport_orders` der oprettes i samme batch | SKAL-ALTID |
-| INV-6 | Aflysning nulstiller `tonsPlanned` til `0` men bevarer `morgenTons` for audit. `restoreDay` bringer **ikke** `tonsPlanned` tilbage — formand skal genindtaste | SKAL-ALTID |
-| INV-7 | Sum-validering `sum(tonsPlanned) ≤ tonsTotal` er **soft warning**, må aldrig blokere send | MÅ-ALDRIG (blokere) |
-| INV-8 | Dato-piller bruger `formatLongDateWithDay` (fx `mandag 16. marts 2026`) jf. DATOFORMAT.md | SKAL-ALTID |
-| INV-9 | `puljelaes`, `multilaes`, `andreOrdrer` på `ekstra_bestillinger` vises **aldrig** i denne sektions UI — kun data-flags for vejeseddel/afregning | MÅ-ALDRIG (vises) |
-| INV-10 | `transport_orders` skrives kun med `status = 'afventer'` fra denne sektion. `'bekraeftet'` sættes af fabrik/vognmand (ikke her) | SKAL-ALTID |
+| Flow C1 — Send | **REVIDERET** — kommentar-flow OK; sum-warning/5s-rollback/in-flight = **B-4**; Flow 9c-tekst tilføjet | ASF-001 (gyldig), ASF-002 (revideret), ASF-003/004/005/006 (**B-4 — TBD**), ASF-007 (gyldig), ASF-008 (**ugyldig** — ekstra væk) |
+| Flow C2 — Aflys | **OMSKREVET** — aflysning via `AflysningCell`, ikke ProductBoxV2 | ASF-009..014 (omskrevet → AFL-serie) |
+| Flow C3 — Restore | **GYLDIG** (med D-K bug-fix) | ASF-015/016 → bevaret |
+| Flow C4 — Vejr | **TBD** — afhænger af B-1 (persist vs. visuelt) | ASF-017/018 (**B-1**), ASF-019 (visuel, gyldig) |
+| Flow C5 — Samles | **REVIDERET** — kun på produkt; placering = B-2 | ASF-020/021 (**B-2**), ASF-022 (**ugyldig** — ekstra væk) |
+| Flow C6 — Ekstra opret | **SLETTET** | ASF-023/024/025 (**ugyldige**) |
+| Flow C7 — Ekstra slet | **SLETTET** | ASF-026/027 (**ugyldige**) |
+| Flow C8 — Datovælger | **REVIDERET** — ingen sent-state-pille; ugedag = B-5 | ASF-028 (gyldig), ASF-029 (**B-5**), ASF-030 (**ugyldig** — ingen pr-pille send-state) |
+| Flow C9 — Read-only | **GYLDIG** for ProductBoxV2; EkstraBox nu altid read-only | ASF-031 (gyldig), ASF-032 (omskrevet) |
+| Cross-app ABE | **GYLDIG m. forbehold** — E-1 (kind='ekstra' arvegods) | ASF-033..040 (E-1 + B-1) |
+| Flow 9c — kl-11 | **NY** | DLN-serie (ny) |
 
 ---
 
-## 1. Accept-kriterier (BDD-format)
+## 1. Cross-cutting blockers — HARD GATE
 
-> Hvert kriterium har unique ID `ASF-NNN`. Klassifikation:
-> - **TESTBAR** = Playwright/Vitest kan checke automatisk
-> - **VISUEL** = screenshot-diff mod prototype-baseline
-> - **HUMAN** = kræver manuel verifikation (forretningsregel)
+- [x] **Status-vokabular låst** (2026-05-26) — `TransportOrderStatus`, `AflysningsAarsag`
+- [x] **Datoformat låst** (2026-05-26) — men prototype bruger `formatLongDate` UDEN ugedag → **B-5 BLOKERER** dato-display-kriterier (DLN/dato-piller) indtil afklaret
+- [~] **Multi-produkt-på-bil kerne** — samles-flag-placering = **B-2 BLOKERER** samles-kriterier
+- [N/A] **Auth/RLS** — ingen rolle-diff inde i sektionen
+- [~] **Flow 9c (kl-11)** låst 2026-06-18 — men persist-flag (**B-6**) + konfigurerbarhed (**B-7**) åbne; **B-6 BLOKERER** evt. cross-app `sentLate`-kriterium
 
----
-
-### Flow C1 — Send-bestilling-flow
-
-#### ASF-001 — Klik "Send til fabrik" åbner bekræftelses-modal
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      tilladt-write-queue
-COMPONENT:    SendTilFabrikCTA + SendBekraeftelsesModal
-
-GIVEN:        mindst én ikke-sendt produkt-bestilling for `selectedPlanDate` med `morgenTons > 0`
-AND:          ingen in-flight send-batch
-WHEN:         bruger klikker "Send til fabrik"-CTA
-THEN:         `SendBekraeftelsesModal` rendres med `open=true`
-AND:          kommentar-textarea er tom (lokal state reset)
-AND:          fokus er flyttet til kommentar-textarea for tilgængelighed
-```
-
-#### ASF-002 — Bekræftelse i modal udløser atomic batch-send
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      tilladt-write-queue
-COMPONENT:    SendBekraeftelsesModal + useAsfaltbestilling
-
-GIVEN:        modal er åben med kommentar="Husk indkørsel via Nord"
-AND:          dagen har 2 morgen-bestillinger (`morgenTons > 0`) og 1 ekstra-bestilling (`tons > 0`, `productId !== ''`)
-WHEN:         bruger klikker "Send til fabrik" i modalen
-THEN:         `sendAlleForSelectedDate("Husk indkørsel via Nord")` kaldes
-AND:          3 `transport_orders` INSERTes (2 kind='morgen' + 1 kind='ekstra')
-AND:          alle 3 rækker har `status='afventer'`, `kommentar="Husk indkørsel via Nord"`
-AND:          de 2 `day_plans` og 1 `ekstra_bestilling` markeres som sendt (UI-derived `isSent=true`)
-AND:          modal lukker
-AND:          alle 3 produkt-/ekstra-bokse skifter til read-only-tilstand jf. INV-3
-```
-
-#### ASF-003 — Atomic batch ruller hele tilbage ved fejl
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    useAsfaltbestilling.sendAlleForSelectedDate
-
-GIVEN:        3 ikke-sendte rækker klar til send (2 morgen + 1 ekstra)
-AND:          mock-server returnerer 500 på den anden INSERT
-WHEN:         `sendAlleForSelectedDate("test")` kaldes
-THEN:         ingen `transport_orders` rækker oprettes (rollback)
-AND:          `ekstra_bestillinger.sent` opdateres ikke for nogen
-AND:          retur-objektet er `{ created: [], skipped: [], errors: [{ id, message }] }`
-AND:          error-toast vises: "X bestillinger nåede ikke frem — prøv igen"
-AND:          alle 3 bokse forbliver i ikke-sendt-tilstand
-```
-
-#### ASF-004 — Sum-warning vises i modal når `sum(tonsPlanned) > tonsTotal`
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    SendBekraeftelsesModal
-
-GIVEN:        produkt har `tonsTotal = 100`
-AND:          `sum(tonsPlanned)` på alle dage = 110
-WHEN:         modal åbnes via "Send til fabrik"-CTA
-THEN:         warning-element rendres i modalen: "OBS: 10 tons over total plan (110/100)"
-AND:          "Send til fabrik"-knappen er stadig enabled (soft warning, jf. INV-7)
-AND:          warning er placeret over kommentar-textareaen, ikke over knappen
-```
-
-#### ASF-005 — Optimistic UI viser sentstate i 5s, derefter rollback hvis ingen ack
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    useAsfaltbestilling + SendTilFabrikCTA
-
-GIVEN:        bruger klikker "Send til fabrik" i modalen
-AND:          backend svarer ikke inden for 5000ms
-WHEN:         5s timeout udløber uden ack
-THEN:         optimistic sentstate rulles tilbage
-AND:          bokse vender tilbage til ikke-sendt-tilstand
-AND:          error-toast vises: "Bestillingen kunne ikke afsendes — prøv igen"
-AND:          form-state (tons-inputs, kommentar) bevares så formand ikke skal re-indtaste
-```
-
-#### ASF-006 — CTA er disabled mens batch er in-flight
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    SendTilFabrikCTA
-
-GIVEN:        modal er åben, bruger har klikket "Send til fabrik"
-AND:          batch er in-flight (ikke ack endnu)
-WHEN:         bruger forsøger at åbne modal igen (klik på CTA)
-THEN:         CTA er disabled + viser loading-spinner
-AND:          modal kan ikke åbnes (preventet dobbelt-send, jf. D2)
-```
-
-#### ASF-007 — Kommentar-tooltip vises under CTA efter send
-
-```
-TYPE:         VISUEL
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    SendTilFabrikCTA
-
-GIVEN:        dagen er sendt med `kommentar="Husk indkørsel via Nord"`
-WHEN:         bruger hovrer over `SendTilFabrikCTA`
-THEN:         tooltip vises med kommentar-teksten
-AND:          screenshot-diff mod baseline < 1.0%
-```
-
-#### ASF-008 — Ekstra-bestilling med tom `productId` skips, advarsel vises
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    useAsfaltbestilling.sendAlleForSelectedDate
-
-GIVEN:        1 morgen-bestilling klar + 2 ekstra-bestillinger, hvoraf én har `productId=''`
-WHEN:         `sendAlleForSelectedDate("")` kaldes
-THEN:         2 `transport_orders` INSERTes (1 morgen + 1 ekstra med productId)
-AND:          retur-objektet er `{ created: [...2 ids...], skipped: [{ id: "ekstra-id-uden-product", reason: "missing_product" }], errors: [] }`
-AND:          warning-toast vises: "1 ekstra-bestilling blev ikke sendt — mangler produkt"
-AND:          ekstra-row uden productId forbliver `sent=false`
-```
+> **Status:** 🟡 **BLOCKED for delmængde.** Kriterier der afhænger af B-1/B-2/B-4/B-5/B-6/E-1 markeres `[BLOCKED-Bn]` og kan ikke testes før beslutning. Resten kan signes.
 
 ---
 
-### Flow C2 — Aflys-produkt-dag-flow
+## 2. Domæne-invariants (revideret)
 
-#### ASF-009 — Klik X åbner reason-picker
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      tilladt-write-queue
-COMPONENT:    ProductBoxV2
-
-GIVEN:        `ProductBoxV2` rendres i Default-mode for dag X
-WHEN:         bruger klikker X-knappen øverst-højre
-THEN:         container sætter `cancellingDayId = day.id`
-AND:          boksen re-rendres i Reason-picker-mode med 4 årsags-knapper (Regn, Frost, Underlag, Andet)
-AND:          tons-inputs er skjult i denne mode
-```
-
-#### ASF-010 — Vælg årsag aflyser dagen og opdaterer state
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      tilladt-write-queue
-COMPONENT:    ProductBoxV2 + useAsfaltbestilling.cancelDay
-
-GIVEN:        Reason-picker er åben for dag X med `morgenTons=12, tonsPlanned=15`
-WHEN:         bruger klikker "Regn"-knappen
-THEN:         `cancelDay(productId, dayId, 'regn')` kaldes
-AND:          `day_plans` UPDATE: `cancelled=true, cancel_reason='regn', tons_planned=0` (jf. INV-6)
-AND:          `morgenTons` bevares = 12 (audit)
-AND:          boksen re-rendres i Aflyst-mode (opacity-60, bad-border)
-AND:          `StatusPill.kind='aflyst'`
-AND:          `cancellingDayId` nulstilles til `null`
-```
-
-#### ASF-011 — `AflysningsAarsag='andet'` kræver fritekst-note
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      tilladt-write-queue
-COMPONENT:    ProductBoxV2 (Reason-picker-mode med "Andet"-valg)
-
-GIVEN:        Reason-picker er åben, bruger klikker "Andet"
-WHEN:         "Andet" er valgt
-THEN:         fritekst-felt vises (max 200 tegn jf. D1)
-AND:          "Bekræft"-knap er disabled indtil mindst 1 tegn er skrevet
-WHEN:         bruger skriver "Beskadiget asfalt fundet" og klikker Bekræft
-THEN:         `cancelDay(productId, dayId, 'andet')` kaldes med `cancel_reason_note="Beskadiget asfalt fundet"`
-AND:          `day_plans.cancel_reason_note` persisteres
-```
-
-#### ASF-012 — Blur-luk på reason-picker
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    ProductBoxV2 (Reason-picker-mode)
-
-GIVEN:        Reason-picker er åben for dag X
-WHEN:         bruger klikker udenfor boksen (på baggrunden eller anden komponent)
-THEN:         `cancellingDayId` nulstilles til `null`
-AND:          boksen vender tilbage til forrige mode (Default eller Sent+aktiv)
-AND:          ingen aflysning er sket
-```
-
-#### ASF-013 — Cascade-aflysning af allerede sendt dag fires ABE-5 + ABE-6
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      tilladt-write-queue
-COMPONENT:    useAsfaltbestilling.cancelDay
-
-GIVEN:        dag X er sendt (mindst én `transport_order` med `day_plan_id = X.id`)
-WHEN:         `cancelDay(productId, X.id, 'regn')` kaldes
-THEN:         `day_plans` UPDATE: cancelled=true, cancel_reason='regn'
-AND:          relevante `transport_orders` får cancel-payload (soft-cancel cascade jf. C2-default)
-AND:          ABE-5 fires: vognmand notificeres
-AND:          ABE-6 fires: fabrik notificeres
-AND:          UI: boksen er stadig i Sendt+aktiv-mode VISUELT men nu med Aflyst-mode overlay (aflyst vinder)
-```
-
-#### ASF-014 — Når alle produkter på dagen aflyses, skifter `selectedPlanDate`
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    AsfaltbestillingSection + useAsfaltbestilling
-
-GIVEN:        `selectedPlanDate = '2026-03-16'`, dagen har 1 ikke-aflyst produkt tilbage
-WHEN:         bruger aflyser sidste produkt på dagen
-THEN:         dato-pillen for `2026-03-16` forsvinder fra `DatePillsRow`
-AND:          `selectedPlanDate` skifter automatisk til nærmeste fremtidige dato i `planDays` med mindst ét ikke-aflyst produkt
-AND:          hvis ingen fremtidig dato findes, skifter til nærmeste tidligere dato
-AND:          hvis ingen lovlig dato findes, vises empty-state "Alle dage aflyst"
-```
-
----
-
-### Flow C3 — Fortryd-aflysning-flow
-
-#### ASF-015 — "Fortryd"-link reaktiverer dagen lokalt
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      tilladt-write-queue
-COMPONENT:    ProductBoxV2 (Aflyst-mode) + useAsfaltbestilling.restoreDay
-
-GIVEN:        dag X er aflyst med `cancel_reason='regn', tons_planned=0, morgen_tons=12`
-WHEN:         bruger klikker "Fortryd"-link i Aflyst-mode
-THEN:         `restoreDay(dayId)` kaldes (NB: signatur er `(dayId)` med self-lookup, ikke `(productId, dayId)` — fix af prototype-bug jf. C10)
-AND:          `day_plans` UPDATE: cancelled=false, cancel_reason=null, cancel_reason_note=null
-AND:          `tons_planned` forbliver 0 (INV-6 — formand skal genindtaste)
-AND:          `morgen_tons` forbliver 12
-AND:          boksen re-rendres i Default-mode med tons-input = 0
-AND:          `StatusPill.kind='afventer'` med label='Klar til afsendelse' (fordi morgenTons != null)
-```
-
-#### ASF-016 — Cascade ved restore IKKE fires
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    useAsfaltbestilling.restoreDay
-
-GIVEN:        dag X var sendt og derefter aflyst (cascade fyret via ABE-5/6)
-WHEN:         bruger klikker "Fortryd"
-THEN:         INGEN cascade fires til vognmand/fabrik (jf. C3-default)
-AND:          UI viser advarsel: "Dagen er reaktiveret lokalt. Hvis du vil sende den til fabrik igen, klik 'Send til fabrik'."
-AND:          dagen er nu i `'afventer'`-state (UI-derived) indtil re-send
-```
-
----
-
-### Flow C4 — Vejr-toggle-flow
-
-#### ASF-017 — Vejr-toggle persisterer på `day_plans.weather_active`
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      tilladt-write-queue
-COMPONENT:    ProductBoxV2 + useAsfaltbestilling.toggleWeather
-
-GIVEN:        dag X har `weather_active=false`
-WHEN:         bruger klikker vejr-ikon nederst-højre på `ProductBoxV2`
-THEN:         `toggleWeather(productId, dayId, true)` kaldes
-AND:          `day_plans.weather_active=true` persisteres
-AND:          ikon-styling skifter fra `bg-[#F5F5F5]` til `bg-dark-teal`
-```
-
-#### ASF-018 — Vejr-toggle tilladt på sendt dag
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      tilladt-write-queue
-COMPONENT:    ProductBoxV2 (Sent+aktiv-mode) + useAsfaltbestilling.toggleWeather
-
-GIVEN:        dag X er sendt (`isSent=true`)
-WHEN:         bruger klikker vejr-ikon
-THEN:         toggle fungerer (ikke locked jf. C7)
-AND:          `day_plans.weather_active` opdateres
-AND:          ABE-8 fires: vognmand + fabrik får opdateret flag
-```
-
-#### ASF-019 — Vejr-toggle visuelle states
-
-```
-TYPE:         VISUEL
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    ProductBoxV2 (vejr-toggle)
-
-GIVEN:        `ProductBoxV2` rendres
-THEN:         Inactive state: `bg-[#F5F5F5]` + grå ikon, screenshot-diff < 0.5%
-AND:          Active state (`day.weather_active=true`): `bg-dark-teal` + hvid ikon, screenshot-diff < 0.5%
-```
-
----
-
-### Flow C5 — Samles-på-en-bil-flow
-
-#### ASF-020 — Samles-checkbox persisterer på `day_plans.samles_paa_en_bil`
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      tilladt-write-queue
-COMPONENT:    ProductBoxV2 + useAsfaltbestilling.toggleSamlesPaaEnBil
-
-GIVEN:        dag X har `samles_paa_en_bil=false`
-WHEN:         bruger klikker "Samles på en bil"-checkbox
-THEN:         `toggleSamlesPaaEnBil(productId, dayId, true)` kaldes
-AND:          `day_plans.samles_paa_en_bil=true` persisteres
-AND:          ABE-7 fires til vognmand
-```
-
-#### ASF-021 — Samles-checkbox er locked på sendt dag
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    ProductBoxV2 (Sent+aktiv-mode)
-
-GIVEN:        dag X er sendt (`isSent=true`)
-WHEN:         bruger forsøger at klikke samles-checkbox
-THEN:         checkbox er disabled (read-only)
-AND:          ingen state-mutation sker
-AND:          tooltip eller visuel cue: "Bilbestilling sendt — ring til fabrik for ændringer" (jf. C8-default)
-```
-
-#### ASF-022 — Samles-flag på ekstra-bestilling
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      tilladt-write-queue
-COMPONENT:    EkstraBestillingBox + useEkstraBestilling.updateEkstra
-
-GIVEN:        ekstra-row med `samles_paa_en_bil=false`
-WHEN:         bruger toggler samles-checkbox
-THEN:         `updateEkstra(id, { samlesPaaEnBil: true })` kaldes
-AND:          `ekstra_bestillinger.samles_paa_en_bil=true` persisteres
-```
-
----
-
-### Flow C6 — Ekstra-bestilling-flow
-
-#### ASF-023 — Klik "+ Ekstra" opretter tom row
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      tilladt-write-queue
-COMPONENT:    EkstraBestillingCTA + useEkstraBestilling.addEkstra
-
-GIVEN:        `productsForSelectedDate.length > 0`, dvs. CTA er synlig (B8)
-WHEN:         bruger klikker "+ Ekstra"
-THEN:         `addEkstra()` kaldes
-AND:          ny `ekstra_bestillinger` INSERT: `order_id`, `date=selectedPlanDate`, `product_id=NULL`, `tons=0`, `samles_paa_en_bil=false`, `puljelaes=false`, `multilaes=false`, `sent=false`
-AND:          ny `EkstraBestillingBox` rendres i Default-mode med tom productId-dropdown og tons=0
-```
-
-#### ASF-024 — Ekstra-CTA er skjult når ingen produkter på dagen
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    AsfaltbestillingSection + EkstraBestillingCTA
-
-GIVEN:        `productsForSelectedDate.length === 0`
-WHEN:         sektionen rendres
-THEN:         `EkstraBestillingCTA` rendres ikke
-AND:          empty-state "Ingen produkter denne dag" vises i stedet (rendret af container)
-```
-
-#### ASF-025 — Ekstra-CTA er synlig når alle produkter er aflyste
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    AsfaltbestillingSection + EkstraBestillingCTA
-
-GIVEN:        `productsForSelectedDate.length > 0`, men alle produkter har `cancelled=true`
-WHEN:         sektionen rendres
-THEN:         `EkstraBestillingCTA` er stadig synlig (B8-default: altid synlig når der er produkter på dagen)
-AND:          aflyste produkt-bokse rendres i Aflyst-mode
-```
-
----
-
-### Flow C7 — Sletning-af-ekstra-flow
-
-#### ASF-026 — Slet ikke-sendt ekstra
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      tilladt-write-queue
-COMPONENT:    EkstraBestillingBox + useEkstraBestilling.removeEkstra
-
-GIVEN:        ekstra-row eksisterer med `sent=false`
-WHEN:         bruger klikker X-knap øverst på ekstra-boksen
-THEN:         `removeEkstra(id)` kaldes
-AND:          `ekstra_bestillinger` row DELETEs
-AND:          boksen forsvinder fra UI
-```
-
-#### ASF-027 — Slet sendt ekstra IKKE tilladt
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    EkstraBestillingBox (Sendt-mode)
-
-GIVEN:        ekstra-row har `sent=true`
-WHEN:         boksen rendres
-THEN:         X-knap er ikke synlig (jf. C9-default)
-AND:          ingen DELETE-mulighed fra UI
-```
-
----
-
-### Flow C8 — Dato-pille-skift-flow
-
-#### ASF-028 — Klik dato-pille opdaterer `selectedPlanDate`
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    DatePillsRow
-
-GIVEN:        `DatePillsRow` rendres med 5 piller, `selectedPlanDate='2026-03-16'`
-WHEN:         bruger klikker pille `'2026-03-18'`
-THEN:         `onSelect('2026-03-18')` kaldes
-AND:          parent `setSelectedPlanDate('2026-03-18')` kaldes
-AND:          `productsForSelectedDate` rekalkuleres for ny dato
-AND:          `activeProductId` auto-skiftes via `useAsfaltbestilling`-effect hvis nuværende ikke matcher (INV-2)
-```
-
-#### ASF-029 — Dato-piller bruger `formatLongDateWithDay`
-
-```
-TYPE:         VISUEL
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    DatePillsRow
-
-GIVEN:        pille for `'2026-03-16'` (mandag)
-WHEN:         pille rendres
-THEN:         tekst i pille = `"mandag 16. marts 2026"` jf. INV-8 + DATOFORMAT.md
-AND:          screenshot-diff mod baseline < 1.0%
-```
-
-#### ASF-030 — Pille-status afspejler `sentStateByDate`
-
-```
-TYPE:         VISUEL
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    DatePillsRow + useAsfaltbestilling.sentStateByDate
-
-GIVEN:        dato D har 2 produkter, begge sendt
-THEN:         pille for D rendres med `bg-good` + CheckCircle2-ikon (`all-sent`-state)
-AND:          screenshot-diff < 1.0%
-
-GIVEN:        dato D har 2 produkter, 1 sendt + 1 ikke
-THEN:         pille rendres med `partial`-styling (TBD: design ikke explicit i prototype — bekræft i Fase build)
-```
-
----
-
-### Flow C9 — Read-only-efter-send-flow
-
-#### ASF-031 — `isSent=true` låser inputs på `ProductBoxV2`
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    ProductBoxV2
-
-GIVEN:        `transport_order` eksisterer for dayId, dvs. `isSent=true`
-WHEN:         boksen rendres
-THEN:         Forventet-input er disabled (jf. INV-3)
-AND:          Morgen-input er disabled
-AND:          samles-checkbox er disabled
-AND:          vejr-toggle er stadig aktiv (jf. ASF-018)
-AND:          X-aflys-knap er stadig aktiv (jf. ASF-013)
-AND:          produkt-header-klik virker stadig (driver Spec-grid fokus)
-```
-
-#### ASF-032 — `EkstraBestillingBox.sent=true` skjuler alle write-elementer
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    EkstraBestillingBox
-
-GIVEN:        ekstra-row med `sent=true`
-WHEN:         boksen rendres
-THEN:         tons-input er disabled
-AND:          productId-dropdown er disabled
-AND:          samles-checkbox er disabled
-AND:          X-slet-knap er skjult (jf. ASF-027)
-AND:          E-badge + read-only tons + produkt-navn + (evt.) samles-indikator vises
-```
-
----
-
-### Cross-app writes (ABE-1 til ABE-8)
-
-#### ASF-033 — ABE-1: Send-batch skriver `transport_orders` for vognmand
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand → vognmand (cross-app)
-OFFLINE:      tilladt-write-queue
-COMPONENT:    useAsfaltbestilling.sendAlleForSelectedDate
-
-GIVEN:        2 morgen-bestillinger + 1 ekstra klar til send
-WHEN:         `sendAlleForSelectedDate("test")` lykkes
-THEN:         3 `transport_orders` rækker eksisterer i DB med korrekte felter:
-              - `order_id`, `date`, `kind`, `tons`, `product_id`, `samles_paa_en_bil`, `weather_active`, `kommentar="test"`, `sent_at=NOW()`, `status='afventer'`
-AND:          vognmand-disponering kan queryer rækkerne (verificeres via integration-test)
-```
-
-#### ASF-034 — ABE-2: Send-batch er læsbar for fabrik
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand → fabrik (cross-app)
-OFFLINE:      n/a
-COMPONENT:    transport_orders schema + JOIN på products
-
-GIVEN:        send-batch lykkes
-WHEN:         fabrik queryer `transport_orders JOIN products`
-THEN:         resultatet inkluderer alle 3 nye rækker
-AND:          hver række har join'ed `recipe_code`, `recipe_name`, `factory_code`
-```
-
-#### ASF-035 — ABE-3: Morgen-tons pre-fyldes i Udførsel-dagsoverblik
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand (cross-section samme app)
-OFFLINE:      n/a
-COMPONENT:    useAsfaltbestilling.sendAlleForSelectedDate → Formand.UdfoerselDagsoverblik
-
-GIVEN:        morgen-bestilling sendt for produktet med `morgen_tons=12`
-WHEN:         formand åbner Udførsel-dagsoverblik for samme `(orderId, date, productId)`
-THEN:         "faktisk udlagt"-input er pre-fyldt med `12`
-AND:          formand kan stadig overskrive værdien manuelt
-AND:          hvis manuel værdi allerede er sat, beholder den (pre-fill overskriver IKKE)
-```
-
-#### ASF-036 — ABE-4: AsfaltKoersel markerer dagen som "klar til bilbestilling"
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand (cross-section samme app)
-OFFLINE:      n/a
-COMPONENT:    useAsfaltbestilling.sendAlleForSelectedDate → AsfaltKoersel-sektion
-
-GIVEN:        mindst én morgen-bestilling sendt for dato D
-WHEN:         formand scroller til AsfaltKoersel-sektion på samme skærm
-THEN:         dato D er markeret som "klar til bilbestilling" (UI-cue)
-AND:          total_tons_for_date = aggregeret morgen-tons af alle sendte produkter for dagen
-```
-
-#### ASF-037 — ABE-5: CancelDay efter send fires soft-cancel cascade til vognmand
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand → vognmand (cross-app)
-OFFLINE:      tilladt-write-queue
-COMPONENT:    useAsfaltbestilling.cancelDay
-
-GIVEN:        dag X er sendt med `transport_order` eksisterende
-WHEN:         `cancelDay(productId, X.id, 'regn')` kaldes
-THEN:         `day_plans.cancelled=true, cancel_reason='regn'`
-AND:          `transport_orders` der peger på X.id får cancel-payload (soft-cancel — verificeres via integration-test mod vognmand-receiver)
-AND:          notification-event sendes til vognmand: "Dagens bestilling for [adresse] er aflyst (årsag: regn)"
-```
-
-#### ASF-038 — ABE-6: CancelDay efter send fires til fabrik
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand → fabrik (cross-app)
-OFFLINE:      tilladt-write-queue
-COMPONENT:    useAsfaltbestilling.cancelDay
-
-GIVEN:        dag X er sendt
-WHEN:         `cancelDay(...)` kaldes
-THEN:         fabrik-receiver modtager event med `day_plan_id` + `cancel_reason`
-AND:          relevante `transport_orders` markeres som aflyst i fabrik-kø-view
-```
-
-#### ASF-039 — ABE-7: ToggleSamlesPaaEnBil fires til vognmand
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand → vognmand (cross-app)
-OFFLINE:      tilladt-write-queue
-COMPONENT:    useAsfaltbestilling.toggleSamlesPaaEnBil
-
-GIVEN:        dag X har `samles_paa_en_bil=false`, ikke sendt endnu
-WHEN:         `toggleSamlesPaaEnBil(productId, X.id, true)` kaldes
-THEN:         `day_plans.samles_paa_en_bil=true` persisteres
-AND:          vognmand-receiver ser flag når næste `transport_order` ankommer (eller real-time hvis allerede sendt)
-```
-
-#### ASF-040 — ABE-8: ToggleWeather fires til vognmand + fabrik
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand → vognmand + fabrik (cross-app)
-OFFLINE:      tilladt-write-queue
-COMPONENT:    useAsfaltbestilling.toggleWeather
-
-GIVEN:        dag X har `weather_active=false`
-WHEN:         `toggleWeather(productId, X.id, true)` kaldes
-THEN:         `day_plans.weather_active=true` persisteres
-AND:          vognmand-receiver opdaterer "Vejr-påvirket"-flag i UI
-AND:          fabrik-receiver opdaterer flag i kø-view
-AND:          ingen automatisk re-disponering eller minus-regn-fradrag (jf. INV — ren information)
-```
-
----
-
-### Status-vokabular usage
-
-#### ASF-041 — `TransportOrder.status='afventer'` ved INSERT
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    useAsfaltbestilling.sendAlleForSelectedDate
-
-GIVEN:        send-batch udløses
-WHEN:         `transport_orders` INSERT'es
-THEN:         hver row har `status='afventer'` (jf. INV-10 + STATUS_VOKABULAR §5)
-AND:          ALDRIG `status='bekraeftet'` direkte (det sættes af fabrik/vognmand i deres egen sektion)
-```
-
-#### ASF-042 — `AflysningsAarsag` enum-værdier matcher præcist
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    ProductBoxV2 Reason-picker + useAsfaltbestilling.cancelDay
-
-GIVEN:        Reason-picker rendres
-THEN:         4 knapper med labels: "Regn", "Frost", "Underlag", "Andet"
-AND:          ved klik kaldes `cancelDay` med præcis enum-værdi: `'regn' | 'frost' | 'underlag' | 'andet'` (lowercase, snake_case-style, jf. STATUS_VOKABULAR §8)
-AND:          DB-write bruger samme enum-værdier
-```
-
-#### ASF-043 — `StatusPill.kind` er UI-derived, ikke persisteret
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    StatusPill + AsfaltbestillingSection
-
-GIVEN:        dag X med `cancelled=true, isSent=false`
-THEN:         `StatusPill.kind='aflyst'`
-
-GIVEN:        dag X med `cancelled=false, isSent=true`
-THEN:         `StatusPill.kind='sendt'`
-
-GIVEN:        dag X med `cancelled=false, isSent=false, morgenTons=null`
-THEN:         `StatusPill.kind='afventer', afventerLabel='Indtast morgen'`
-
-GIVEN:        dag X med `cancelled=false, isSent=false, morgenTons=12`
-THEN:         `StatusPill.kind='afventer', afventerLabel='Klar til afsendelse'`
-
-AND:          ingen `pillKind`-felt persisteres i DB (kun beregnes per render)
-```
-
----
-
-### Dato-format
-
-#### ASF-044 — ISO storage på alle dato-felter
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    useAsfaltbestilling + useEkstraBestilling
-
-GIVEN:        formand opretter en ny dag/ekstra/transport_order
-THEN:         alle date-felter persisteres som ISO `yyyy-mm-dd` (jf. DATOFORMAT.md)
-AND:          `sent_at`, `confirmed_at`, `cancelled_at` persisteres som ISO 8601 + TZ
-AND:          ingen storage i andet format (fx `dd/mm/yyyy`)
-```
-
-#### ASF-045 — Lang-format display med ugedag i dato-piller
-
-```
-TYPE:         VISUEL
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    DatePillsRow
-
-GIVEN:        pille for `'2026-03-16'`
-THEN:         tekst = "mandag 16. marts 2026" (formatLongDateWithDay)
-AND:          ALDRIG "16/3" eller "2026-03-16" (jf. feedback_global_date_format + INV-8)
-```
-
----
-
-### Visual baseline-kriterier
-
-#### ASF-046 — Visual baseline: alle komponent-states
-
-```
-TYPE:         VISUEL
-ROLLE:        formand
-OFFLINE:      n/a
-COMPONENT:    alle 8 presenter-komponenter
-
-GIVEN:        prototype-baseline genereret via `?prototype=1`-route
-THEN:         visual diff for hver komponent + state < threshold:
-              - ProductBoxV2 default/focused/sent/cancelled/reason-picker/with-tags/weather-active: 0.5%
-              - EkstraBestillingBox default/sent: 0.5%
-              - StatusPill sendt/afventer/aflyst: 0.5%
-              - DatePillsRow normal/selected/all-sent: 1.0%
-              - SendTilFabrikCTA enabled/disabled/with-tooltip: 1.0%
-              - SendBekraeftelsesModal default/with-warning: 1.0%
-              - EkstraBestillingCTA default: 0.5%
-              - AsfaltbestillingSection full-render: 2.0%
-```
-
----
-
-### Offline-opførsel
-
-#### ASF-047 — Write-queue ved offline-send
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      tilladt-write-queue
-COMPONENT:    useAsfaltbestilling.sendAlleForSelectedDate
-
-GIVEN:        bruger er offline (DevTools throttle = Offline)
-WHEN:         `sendAlleForSelectedDate("test")` kaldes
-THEN:         batch køes i write-queue
-AND:          UI viser optimistisk sentstate på alle bokse
-AND:          OfflineBanner er synlig (app-level)
-AND:          ved reconnect: batch replayes
-AND:          hvis server afviser hele batch: fuld rollback (jf. D4) + toast "X bestillinger nåede ikke frem"
-```
-
-#### ASF-048 — Cached reads ved offline
-
-```
-TYPE:         TESTBAR
-ROLLE:        formand
-OFFLINE:      read-only-cached
-COMPONENT:    useAsfaltbestilling
-
-GIVEN:        bruger har tidligere besøgt sektionen + er nu offline
-WHEN:         sektionen åbnes
-THEN:         products + day_plans + ekstra_bestillinger vises fra cache
-AND:          OfflineBanner er synlig
-AND:          alle write-actions køes (ikke blokeret)
-```
-
----
-
-## 2. Out-of-scope
-
-> Eksplicit IKKE en del af denne sektion. Builder må ikke "fixe" disse.
-
-- **Afregnings-logik** — `puljelaes`, `multilaes`, `andreOrdrer` er data-flags i `ekstra_bestillinger`-tabellen, men UI'en hører til Afregning-sektionen.
-- **Returlæs-håndtering** — separat flow (`project_returlaes_diskussion`)
-- **Vognmand-disponerings-UI** — separat sektion. Asfaltbestilling skriver kun `transport_orders`.
-- **Fabrik-ordre-kø-UI** — kommende sektion.
-- **"Bekræftet af fabrik"-state-visualisering** (`confirmed_at`) — hører til Kørsel-sektionen (jf. C11).
-- **Historik / audit-log** — ingen view i denne sektion.
-- **Edit-cascade efter send** (ud over vejr-toggle + aflysning) — locked, formand ringer til fabrik.
-- **Multi-formand-konflikt-UX** — server-side optimistic locking + 409 → toast + refetch er det vi går med. Mere avanceret konflikt-UI hører til en tværgående sync-sektion.
-- **Authentication / RLS-tjek** — app-level auth dækker.
-- **Bilberegner / kapacitets-validering** — hører til AsfaltKoersel-sektionen.
-- **Cross-app modtager-rendering** (vognmand/fabrik/chauffør-UI) — bygges i deres egne sektion-pakker.
-
----
-
-## 3. Visual baseline
-
-> Validator sammenligner produktion mod prototype-screenshots. Baseline genereres første gang via `npm run formand:e2e -- --update-snapshots` mod prototype-route.
-
-| Komponent | Baseline-screenshot | Threshold | States dækket |
+| # | Invariant | Type | Ændring vs. v1 |
 |---|---|---|---|
-| `ProductBoxV2` | `.claude/screenshots/asfaltbestilling/productbox-*.png` | 0.5% | default, focused, sent, cancelled, selecting-reason, with-tags, weather-active |
-| `EkstraBestillingBox` | `.claude/screenshots/asfaltbestilling/ekstra-*.png` | 0.5% | default, sent |
-| `StatusPill` | `.claude/screenshots/asfaltbestilling/pill-*.png` | 0.5% | sendt, afventer-indtast-morgen, afventer-klar, aflyst |
-| `DatePillsRow` | `.claude/screenshots/asfaltbestilling/datepills-*.png` | 1.0% | normal, selected, all-sent, partial |
-| `SendTilFabrikCTA` | `.claude/screenshots/asfaltbestilling/sendcta-*.png` | 1.0% | enabled, disabled, with-tooltip |
-| `SendBekraeftelsesModal` | `.claude/screenshots/asfaltbestilling/modal-*.png` | 1.0% | default, with-sum-warning |
-| `EkstraBestillingCTA` | `.claude/screenshots/asfaltbestilling/ekstracta-*.png` | 0.5% | default |
-| `AsfaltbestillingSection` (full) | `.claude/screenshots/asfaltbestilling/section-*.png` | 2.0% | full-render integration |
+| INV-1 | `activeProductId` og `selectedPlanDate` er controlled fra parent (`OrdrePlanScreen`) | SKAL-ALTID | uændret |
+| INV-2 | Auto-skift af `activeProductId` sker i `useAsfaltbestilling` | SKAL-ALTID | uændret |
+| INV-3 | `isSent === true` låser `tonsPlanned`, `morgenTons`, samles-checkbox. Vejr-toggle forbliver aktiv | SKAL-ALTID | aflys-knap fjernet fra ProductBoxV2 (nu i AflysningCell) |
+| INV-4 | Send-batch er atomar pr. `(orderId, selectedPlanDate)` for alle ikke-sendte morgen-bestillinger | SKAL-ALTID | **ekstra-bestillinger fjernet fra batch** (kun morgen). Rollback-robusthed = B-4 |
+| INV-5 | Kommentar er pr. (orderId, date)-batch — aldrig pr. row | SKAL-ALTID | uændret |
+| INV-6 | Aflysning nulstiller `tonsPlanned`=0, bevarer `morgenTons` for audit. `restoreDay` bringer ikke `tonsPlanned` tilbage | SKAL-ALTID | uændret (prototype `cancelDay` sætter `tonsPlanned: 0` ✓) |
+| INV-7 | Sum-validering er soft warning, må aldrig blokere | MÅ-ALDRIG (blokere) | **B-4** — sum-warning findes ikke i prototype |
+| INV-8 | Dato-display | SKAL-ALTID | **B-5** — `formatLongDate` (uden ugedag) i prototype vs. DATOFORMAT (med) |
+| INV-9 | ~~`puljelaes`/`multilaes`/`andreOrdrer` vises aldrig~~ | — | **BORTFALDET** — ekstra-konstrukt fjernet |
+| INV-10 | `transport_orders` skrives kun med `status='afventer'` fra denne sektion | SKAL-ALTID | uændret |
+| INV-11 (NY) | Aflysning sker udelukkende via `AflysningCell` (Ordredetaljer-grid). ProductBoxV2 har ingen aflys-entry | SKAL-ALTID | NY (D-C) |
+| INV-12 (NY) | `EkstraBestillingBox` + `day.ekstraTons` er **read-only** — formand muterer aldrig ekstra-tons i app'en (PLAN-push only) | MÅ-ALDRIG (mutere) | NY (D-A/D-B) |
+| INV-13 (NY) | "For sent"-bestilling (efter kl-11-deadline) blokeres ALDRIG — kan altid sendes | MÅ-ALDRIG (blokere) | NY (Flow 9c) |
 
 ---
 
-## 4. API-contracts (per komponent)
+## 3. Accept-kriterier (v2)
 
-> Eksakt Props + callbacks pr. komponent. **Bindende.** Builder må IKKE udvide uden contract-amendment.
-> Komplet detalje findes i `.claude/docs/DATA_FIELDS.md` (sektion Asfaltbestilling). Her er kun signatur-resumé.
+> Klassifikation: **TESTBAR** / **VISUEL** / **HUMAN**. `[BLOCKED-Bn]` = afventer beslutning.
+
+### Flow C1 — Send-bestilling
+
+#### ASF-001 — Klik "Send til fabrik" åbner bekræftelses-modal — **GYLDIG**
+```
+TYPE: TESTBAR | ROLLE: formand | OFFLINE: tilladt-write-queue
+COMPONENT: SendTilFabrikCTA + SendBekraeftelsesModal
+GIVEN: mindst ét ikke-sendt produkt for selectedPlanDate
+WHEN: bruger klikker "Send til fabrik"-CTA (ikke disabled)
+THEN: SendBekraeftelsesModal rendres med open=true
+AND: kommentar-textarea er tom (lokal state)
+```
+
+#### ASF-002 — Bekræftelse sender ikke-sendte morgen-bestillinger — **REVIDERET (ekstra fjernet)**
+```
+TYPE: TESTBAR | ROLLE: formand | OFFLINE: tilladt-write-queue
+COMPONENT: SendBekraeftelsesModal + useAsfaltbestilling
+GIVEN: modal åben, kommentar="Husk indkørsel via Nord", dagen har 2 ikke-sendte morgen-bestillinger
+WHEN: bruger klikker "Send til fabrik" i modalen
+THEN: alle ikke-sendte dayIds markeres sendt (sentDayIds)
+AND: kommentar gemmes på datoen (sentKommentarer[selectedPlanDate])
+AND: 2 transport_orders oprettes med kind='morgen', status='afventer'
+AND: modal lukker; begge ProductBoxV2 skifter til read-only (INV-3)
+NOTE: INGEN ekstra-bestillinger i batch (konstrukt fjernet — D-A)
+```
+
+#### ASF-003 — Atomic rollback ved fejl — **[BLOCKED-B4]**
+```
+Prototype har ingen rollback. Afhænger af B-4 (er fuld batch-robusthed Fase 1?).
+Hvis B-4=ja: behold v1 ASF-003. Hvis B-4=nej: drop til senere fase.
+```
+
+#### ASF-004 — Sum-warning i modal — **[BLOCKED-B4]**
+```
+Prototype har ingen sum-warning. Afhænger af B-4.
+```
+
+#### ASF-005 — Optimistic 5s-rollback — **[BLOCKED-B4]**
+
+#### ASF-006 — CTA disabled mens batch in-flight — **[BLOCKED-B4]**
+
+#### ASF-007 — Kommentar-tooltip under CTA efter send — **GYLDIG**
+```
+TYPE: VISUEL | ROLLE: formand
+COMPONENT: SendTilFabrikCTA
+GIVEN: dagen sendt med kommentar="Husk indkørsel via Nord"
+WHEN: bruger hovrer over "Kommentarer sendt til fabrik"-linje
+THEN: tooltip viser kommentar-teksten (instant, custom CSS-tooltip)
+AND: screenshot-diff mod baseline < 1.0%
+```
+
+#### ~~ASF-008~~ — **UGYLDIG** (ekstra-bestilling med tom productId — konstrukt fjernet)
+
+### Flow C1b — kl-11-deadline (NY — Flow 9c)
+
+#### DLN-001 — Send-knap viser permanent deadline-tekst — **VISUEL/TESTBAR**
+```
+TYPE: TESTBAR+VISUEL | ROLLE: formand
+COMPONENT: SendTilFabrikCTA
+GIVEN: mindst én ikke-sendt bestilling (CTA enabled)
+THEN: status-linjen viser permanent "Bestilling skal ske inden kl 11"
+GIVEN: intet at sende (disabled)
+THEN: status-linjen viser "Intet at sende"
+AND: screenshot-diff < 1.0%
+```
+
+#### DLN-002 — Modal viser rød advarsel når bestilling er for sent — **TESTBAR/VISUEL**
+```
+TYPE: TESTBAR+VISUEL | ROLLE: formand
+COMPONENT: SendBekraeftelsesModal
+GIVEN: bestillingForSent=true, modal åbnes
+THEN: rød advarselsboks (bg-bad-bg border-bad/30 text-bad) med teksten:
+      "Bestillingen er lavet efter kl 11. Du skal derfor ringe til fabrikken
+       for at sikre produktionskapacitet."
+GIVEN: bestillingForSent=false
+THEN: neutral tekst "Ordren afsendes til fabrikken nu."
+AND: screenshot-diff < 1.0% per variant
+```
+
+#### DLN-003 — For sent blokerer IKKE afsendelse — **TESTBAR (INV-13)**
+```
+TYPE: TESTBAR | ROLLE: formand
+GIVEN: bestillingForSent=true, modal åben
+WHEN: bruger klikker "Send til fabrik"
+THEN: send gennemføres normalt (ingen blokering)
+```
+
+#### DLN-004 — Persistent "for sent"-flag videre til downstream — **[BLOCKED-B6]**
+```
+Afhænger af B-6: skal sentLate/needs_capacity_call følge med til vognmand/fabrik/Asfalttavlen?
+Hvis B-6=ja: transport_orders.sent_late=true ved send efter deadline + ABE-payload.
+```
+
+### Flow C2 — Aflys (OMSKREVET → AflysningCell)
+
+#### AFL-001 — "Aflys dag"-knap åbner picker — **TESTBAR**
+```
+TYPE: TESTBAR | ROLLE: formand | COMPONENT: AflysningCell
+GIVEN: produkt uden aflyste dage
+WHEN: bruger klikker "Aflys dag"
+THEN: onOpenPicker(defaultDayId) kaldes (default = valgt dato hvis aktiv, ellers første aktive)
+AND: picker viser dato-select + 4 årsags-knapper + OK/Fortryd
+```
+
+#### AFL-002 — Vælg dato + årsag + OK aflyser dagen — **TESTBAR**
+```
+TYPE: TESTBAR | ROLLE: formand | COMPONENT: AflysningCell + useAsfaltbestilling.cancelDay
+GIVEN: picker åben, dato valgt, årsag "Regn" valgt
+WHEN: bruger klikker OK
+THEN: onCancelDay(dayId, 'regn') → cancelDay sætter cancelled=true, cancelReason='regn', tonsPlanned=0 (INV-6)
+AND: morgenTons bevares (audit)
+AND: ProductBoxV2 for dagen skifter til Aflyst-mode; StatusPill kind='aflyst'
+AND: AflysningCell viser dagen i aflyste-liste (dato + "(pga. Regn)")
+```
+
+#### AFL-003 — OK disabled indtil årsag valgt — **TESTBAR**
+```
+GIVEN: picker åben, ingen årsag valgt → OK disabled
+WHEN: årsag valgt → OK enabled
+```
+
+#### AFL-004 — Fortryd lukker picker uden aflysning — **TESTBAR**
+```
+WHEN: bruger klikker Fortryd → onClosePicker, ingen mutation
+```
+
+#### AFL-005 — "Aflys flere" når 1+ aflyst men dage tilbage — **TESTBAR**
+```
+GIVEN: 1 aflyst dag, 2 aktive tilbage → "Aflys flere"-knap vises + aflyste-liste
+GIVEN: alle dage aflyst → kun liste, ingen knap
+```
+
+#### AFL-006 — Cascade ved aflysning af sendt dag — **TESTBAR (E-1 + B-6 forbehold)**
+```
+GIVEN: dag X sendt (transport_order findes)
+WHEN: cancelDay(productId, X.id, 'regn')
+THEN: ABE-5 (vognmand) + ABE-6 (fabrik) soft-cancel cascade fires
+NOTE: integration-test mod receivers; cancelReason='regn' med i payload
+```
+
+#### AFL-007 — Andet-årsag fritekst — **[BLOCKED-B3]**
+```
+Prototype har INGEN fritekst ved 'andet' (4 knapper, ingen note-felt).
+Afhænger af B-3: skal cancel_reason_note med i Fase 1?
+```
+
+### Flow C3 — Fortryd aflysning
+
+#### ASF-015 — "Fortryd"-link reaktiverer dagen — **GYLDIG (m. D-K bug-fix)**
+```
+TYPE: TESTBAR | ROLLE: formand | COMPONENT: ProductBoxV2 (Aflyst) + useAsfaltbestilling.restoreDay
+GIVEN: dag X aflyst (cancel_reason='regn', tons_planned=0, morgen_tons=12)
+WHEN: bruger klikker "Fortryd" i Aflyst-mode
+THEN: restoreDay(dayId) kaldes — signatur (dayId) med self-lookup (FIX af D-K bug: prototype bruger activeProductId)
+AND: cancelled=false, cancelReason=undefined
+AND: tons_planned forbliver 0 (INV-6); morgen_tons forbliver 12
+AND: ProductBoxV2 i Default-mode; StatusPill kind='afventer'
+```
+
+#### ASF-016 — Cascade ved restore IKKE fires — **GYLDIG**
+```
+GIVEN: dag X var sendt+aflyst (cascade fyret)
+WHEN: bruger klikker "Fortryd"
+THEN: INGEN cascade til vognmand/fabrik; dagen lokal-reaktiveret indtil re-send
+```
+
+### Flow C4 — Vejr-toggle
+
+#### ASF-017 — Vejr-toggle persisterer — **[BLOCKED-B1]**
+```
+Prototype: weatherActive er lokal useState, persisterer intet.
+Hvis B-1=persist: day.weatherActive + toggleWeather-action + write-queue.
+Hvis B-1=visuelt Fase 1: kun lokal toggle, ingen persist, ingen cross-app.
+```
+
+#### ASF-018 — Vejr-toggle tilladt på sendt dag — **[BLOCKED-B1]** (visuel del gyldig)
+
+#### ASF-019 — Vejr-toggle visuelle states — **GYLDIG (VISUEL)**
+```
+TYPE: VISUEL | COMPONENT: ProductBoxV2 (vejr-toggle)
+Inactive: bg-[#F5F5F5] + dark-teal ikon; Active: bg-dark-teal + hvid ikon. diff < 0.5%
+```
+
+### Flow C5 — Samles på en bil
+
+#### ASF-020 — Samles-checkbox persisterer — **[BLOCKED-B2]**
+```
+Prototype: productSamlesFlags-map (Record<pid__did, boolean>), ikke day.samlesPaaEnBil.
+Hvis B-2=DayPlan-felt: toggleSamlesPaaEnBil + day.samlesPaaEnBil + ABE-7.
+Hvis B-2=behold map: setProductSamles(productId, dayId, v).
+```
+
+#### ASF-021 — Samles-checkbox locked på sendt dag — **GYLDIG**
+```
+GIVEN: isSent=true → checkbox disabled, ingen mutation (prototype: disabled={isSent})
+```
+
+#### ~~ASF-022~~ — **UGYLDIG** (samles-flag på ekstra-bestilling — konstrukt fjernet)
+
+### Flow C6/C7 — Ekstra opret/slet — **ALLE UGYLDIGE**
+
+#### ~~ASF-023..027~~ — **UGYLDIGE** (D-A: formand opretter/sletter ikke ekstra-bestillinger)
+
+### Flow C6b — Ekstra-visning (read-only PLAN — NY rolle)
+
+#### EKS-001 — EkstraBestillingBox vises når day.ekstraTons findes — **TESTBAR**
+```
+TYPE: TESTBAR | COMPONENT: EkstraBestillingBox
+GIVEN: day.ekstraTons = { tons: 8, bekraeftetAf: 'fabrik', tidspunkt: '...' }
+THEN: boks rendres ved siden af produktet: "Ekstra: +8 tons" + "Bekræftet: kl. HH:MM"
+AND: StatusPill kind='ekstra-bekraeftet' ("Bekræftet fabrik") under boksen
+GIVEN: day.ekstraTons undefined → boksen rendres ikke (returnerer null)
+```
+
+#### EKS-002 — EkstraBestillingBox er read-only — **TESTBAR (INV-12)**
+```
+THEN: ingen inputs, ingen dropdown, ingen slet-knap, ingen callbacks
+```
+
+### Flow C8 — Datovælger (REVIDERET — unified, ingen sent-state)
+
+#### ASF-028 — Klik dato-pille opdaterer selectedPlanDate — **GYLDIG**
+```
+TYPE: TESTBAR | COMPONENT: DatePillsRow
+GIVEN: piller for hele ordrens dag-spænd, selectedPlanDate='2026-03-16'
+WHEN: bruger klikker pille '2026-03-18'
+THEN: setSelectedPlanDate('2026-03-18'); productsForSelectedDate rekalkuleres
+AND: activeProductId auto-skiftes via hook hvis nuværende ikke matcher (INV-2)
+```
+
+#### ASF-029 — Dato-format på piller — **[BLOCKED-B5]**
+```
+Prototype: formatLongDate "16. marts 2026" (UDEN ugedag).
+DATOFORMAT.md: planlægnings-view = ugedag PÅ. B-5 afgør.
+```
+
+#### ASF-030b — Passeret dag vises gennemstreget — **VISUEL (NY, erstatter ugyldig ASF-030)**
+```
+TYPE: VISUEL | COMPONENT: DatePillsRow
+GIVEN: pille for dato < i dag
+THEN: hvid bg + line-through + text-muted; aria-label suffix " (overstået)"
+NOTE: v1 ASF-030 (per-pille all-sent/partial send-state) er UGYLDIG — sent-state-pille fjernet (D-D)
+```
+
+### Flow C9 — Read-only efter send
+
+#### ASF-031 — isSent låser ProductBoxV2-inputs — **GYLDIG**
+```
+TYPE: TESTBAR | COMPONENT: ProductBoxV2
+GIVEN: isSent=true
+THEN: Forventet-input disabled; Morgen-input disabled; samles-checkbox disabled
+AND: vejr-toggle aktiv; produkt-header-klik virker (driver Spec-grid)
+NOTE: aflys-knap findes IKKE i ProductBoxV2 længere (INV-11)
+```
+
+#### ASF-032 — EkstraBestillingBox er altid read-only — **OMSKREVET**
+```
+THEN: ingen write-elementer uanset state (INV-12). v1's "sent=true skjuler X-knap" er bortfaldet.
+```
+
+### Cross-app writes (ABE-1..8)
+
+#### ASF-033 — ABE-1: Send-batch skriver transport_orders for vognmand — **GYLDIG m. E-1**
+```
+TYPE: TESTBAR | ROLLE: formand → vognmand
+THEN: transport_orders rows (kind='morgen') med order_id, date, tons, product_id,
+      samles_paa_en_bil (B-2), weather_active (B-1), kommentar, sent_at, status='afventer'
+E-1: payload må IKKE indeholde kind='ekstra'-rows (konstrukt fjernet) — modsiger nuværende FF L2442
+```
+
+#### ASF-034 — ABE-2: Send-batch læsbar for fabrik — **GYLDIG**
+#### ASF-035 — ABE-3: Morgen-tons pre-fyldes i Udførsel-dagsoverblik — **GYLDIG**
+#### ASF-036 — ABE-4: AsfaltKoersel "klar til bilbestilling" — **GYLDIG**
+#### ASF-037 — ABE-5: CancelDay efter send → vognmand cascade — **GYLDIG** (kaldt fra AflysningCell nu)
+#### ASF-038 — ABE-6: CancelDay efter send → fabrik — **GYLDIG**
+#### ASF-039 — ABE-7: Samles → vognmand — **[BLOCKED-B2]**
+#### ASF-040 — ABE-8: ToggleWeather → vognmand + fabrik — **[BLOCKED-B1]**
+#### ASF-041 — ABE-2b: Send-batch → PLAN/Asfalttavlen (pr. produkt-celle) — **GYLDIG (NY ift. v1)**
+```
+TYPE: TESTBAR | ROLLE: formand → PLAN
+THEN: Asfalttavlen modtager dagens bestillinger pr. produkt-celle (LÅST 2026-06-12).
+NOTE: ekstra-bestillinger pr. produkt skal også fremgå pr. celle (fra PLAN-data) — retning afklares til PLAN-kickoff
+```
+
+### Status-vokabular + dato-format
+
+#### ASF-042 — transport_order.status='afventer' ved INSERT — **GYLDIG**
+#### ASF-043 — AflysningsAarsag enum-match (4 værdier) — **GYLDIG** (nu i AflysningCell via CANCEL_REASONS)
+#### ASF-044 — StatusPill.kind UI-derived (4 kinds inkl. 'ekstra-bekraeftet') — **REVIDERET**
+```
+GIVEN cancelled → 'aflyst'; isSent → 'sendt'; morgenTons==null → afventer 'Indtast morgen';
+      morgenTons!=null → afventer 'Klar til afsendelse'; day.ekstraTons → 'ekstra-bekraeftet' (egen boks)
+AND: ingen kind persisteres i DB
+```
+#### ASF-045 — ISO storage på dato-felter — **GYLDIG**
+#### ASF-046 — Dato-display lang-format — **[BLOCKED-B5]**
+
+### Visual baseline
+
+#### ASF-047 — Visual baseline alle komponent-states — **REVIDERET**
+```
+TYPE: VISUEL — baselines re-genereres mod NUVÆRENDE prototype:
+- ProductBoxV2: default/focused/sent/cancelled/with-tags/weather-active (NB: reason-picker IKKE baseline'et — dead): 0.5%
+- EkstraBestillingBox: read-only: 0.5%
+- StatusPill: sendt/afventer/aflyst/ekstra-bekraeftet (4 kinds): 0.5%
+- AflysningCell: tilstand-A/B/C + picker-open: 0.5%
+- DatePillsRow: selected/passeret/default (INGEN all-sent): 1.0%
+- SendTilFabrikCTA: enabled(kl-11-tekst)/disabled/with-tooltip: 1.0%
+- SendBekraeftelsesModal: forsent-rød/til-tiden-neutral: 1.0%
+- AsfaltbestillingSection full-render: 2.0%
+```
+
+### Offline
+
+#### ASF-048 — Write-queue ved offline-send — **GYLDIG (B-4-robusthed adskilt)**
+#### ASF-049 — Cached reads ved offline — **GYLDIG**
+
+---
+
+## 4. Out-of-scope (revideret)
+
+- Afregnings-logik (puljelaes/multilaes/vejesedler hører til afregning)
+- Returlæs-håndtering
+- Vognmand-disponerings-UI / Fabrik-ordre-kø-UI (egne sektioner)
+- "Bekræftet af fabrik"-state for morgen-bestilling (`confirmed_at`) — Kørsel-sektion
+- Asfalt kørsel / Bilbehov-dashboard, Materiel, Afregning-mode, pinnede opstarts-læs, Udførsel-mode
+- Samleordre-orkestrering (her kun grænseflade-props: `ordreTagLabels`, `samleordreCtx`)
+- **Ekstra-bestilling-oprettelse** (formand opretter ikke — PLAN-push only)
+- Den faktiske kl-11-deadline-beregning (`nu > deadline`) — Supabase/PLAN-integration; her kun `bestillingForSent`-flag-UI
+
+---
+
+## 5. API-contracts (per komponent — re-scoped)
+
+> Eksakt props. Komplet i `DATA_FIELDS.md`. Felter markeret (B-n) afhænger af beslutning.
 
 ### `AsfaltbestillingSection` (Container)
-
 ```typescript
 export interface AsfaltbestillingSectionProps {
   orderId: string
@@ -933,289 +434,175 @@ export interface AsfaltbestillingSectionProps {
   samleordreCtx: SamleordreContext | null
   activeProductId: string
   onActiveProductIdChange: (id: string) => void
-  selectedPlanDate: string                          // ISO yyyy-mm-dd
+  selectedPlanDate: string                          // ISO
   onSelectedPlanDateChange: (date: string) => void
 }
 ```
 
 ### `DatePillsRow` (Presenter)
-
 ```typescript
 export interface DatePillsRowProps {
-  dates: string[]                                   // ISO, sorted ASC
+  dates: string[]                                   // ISO, sorted ASC — hele ordrens dag-spænd
   selectedDate: string
-  sentStateByDate: Record<string, 'all-sent' | 'partial' | 'none'>
+  today: string                                     // ISO — til passeret-styling
   onSelect: (date: string) => void
+  // FJERNET ift. v1: sentStateByDate (ingen pr-pille send-state)
 }
 ```
 
 ### `ProductBoxV2` (Presenter)
-
 ```typescript
 export interface ProductBoxV2Props {
   product: MockProduct
-  day: DayPlan
+  day: DayPlan                                       // viser KUN originalt tonsPlanned
   isFocused: boolean
-  isSelectingReason: boolean
   isSent: boolean
   ordreTagLabels?: string[]
+  samlesPaaEnBil?: boolean                           // (B-2)
   onFocus: () => void
   onUpdateTons: (v: number) => void
   onUpdateMorgenTons: (v: number | undefined) => void
-  onToggleWeather: (active: boolean) => void
-  onToggleSamlesPaaEnBil: (samles: boolean) => void
-  onCancel: () => void
-  onAbortCancel: () => void
-  onConfirmCancel: (reason: AflysningsAarsag, note?: string) => void  // note kun ved 'andet'
-  onRestore: () => void
+  onSamlesPaaEnBilChange?: (v: boolean) => void      // (B-2)
+  onRestore: () => void                              // Fortryd i Aflyst-mode
+  // (B-1) onToggleWeather?: (active: boolean) => void — kun hvis vejr persisteres
+  // FJERNET: onCancel/onAbortCancel/onConfirmCancel/isSelectingReason (D-C → AflysningCell)
 }
 ```
 
-### `EkstraBestillingBox` (Presenter)
-
+### `EkstraBestillingBox` (Presenter — READ-ONLY)
 ```typescript
 export interface EkstraBestillingBoxProps {
-  ekstra: EkstraBestilling
-  products: MockProduct[]
-  onUpdate: (patch: Partial<EkstraBestilling>) => void
-  onRemove: () => void
+  product: MockProduct
+  day: DayPlan                                       // rendres kun hvis day.ekstraTons findes
+  // INGEN callbacks — read-only
 }
 ```
 
-### `StatusPill` (Presenter)
-
+### `StatusPill` (Presenter — 🌍 shared-kandidat)
 ```typescript
 export interface StatusPillProps {
-  kind: 'sendt' | 'aflyst' | 'afventer'             // UI-derived
-  afventerLabel?: string                            // default 'Afventer'
+  kind: 'sendt' | 'aflyst' | 'afventer' | 'ekstra-bekraeftet'
+  afventerLabel?: string
 }
 ```
 
-### `EkstraBestillingCTA` (Presenter)
-
+### `AflysningCell` (Presenter — NY)
 ```typescript
-export interface EkstraBestillingCTAProps {
-  onClick: () => void
+export interface AflysningCellProps {
+  product: MockProduct
+  udfoerselSelectedDate?: string                     // ISO — default i picker
+  pickerOpenForDayId: string | null                  // controlled fra container
+  onOpenPicker: (defaultDayId: string) => void
+  onClosePicker: () => void
+  onCancelDay: (dayId: string, reason: AflysningsAarsag) => void
 }
 ```
 
 ### `SendTilFabrikCTA` (Presenter)
-
 ```typescript
 export interface SendTilFabrikCTAProps {
   disabled: boolean
-  totalIkkeSendt: number                            // ≥ 0
+  factoryLabel: string                               // fx "PROD A EAST KØGE PH"
   sentKommentar: string | null
-  isInFlight: boolean                               // disabled + spinner mens batch in-flight (D2)
   onClick: () => void
+  // FJERNET: totalIkkeSendt (erstattet af permanent kl-11-tekst, D-G)
+  // (B-4) isInFlight?: boolean — kun hvis in-flight-spinner i Fase 1
 }
 ```
 
 ### `SendBekraeftelsesModal` (Presenter)
-
 ```typescript
 export interface SendBekraeftelsesModalProps {
   open: boolean
-  sumWarning: { sum: number; total: number } | null  // null = ingen warning
+  bestillingForSent: boolean                         // Flow 9c — conditional rød advarsel
   onCancel: () => void
-  onConfirm: (kommentar: string) => void              // kommentar trimmed
+  onConfirm: (kommentar: string) => void
+  // (B-4) sumWarning?: { sum: number; total: number } | null
 }
 ```
 
-### `useAsfaltbestilling(orderId)` (Hook)
-
+### `useAsfaltbestilling(orderId)` (Hook — ÉN hook; useEkstraBestilling fjernet)
 ```typescript
 export function useAsfaltbestilling(orderId: string): {
-  // State
   products: MockProduct[]
   activeProductId: string
   setActiveProductId: (id: string) => void
-  selectedPlanDate: string                          // ISO
+  selectedPlanDate: string
   setSelectedPlanDate: (date: string) => void
-
-  // Derived
-  planDays: string[]                                // ISO[]
+  planDays: string[]
   productsForSelectedDate: Array<{ product: MockProduct; day: DayPlan }>
-  orderStartDate: string                            // ISO
-  orderEndDate: string                              // ISO
-  sentStateByDate: Record<string, 'all-sent' | 'partial' | 'none'>
-
-  // Queries
+  sentDayIds: Set<string>                            // (eller isDaySent(dayId))
   isDaySent: (dayId: string) => boolean
   kommentarForDate: (date: string) => string | null
-
-  // Actions
+  bestillingForSent: boolean                         // Flow 9c
   updateTons: (productId: string, dayId: string, tons: number) => void
   updateMorgenTons: (productId: string, dayId: string, tons: number | undefined) => void
-  cancelDay: (productId: string, dayId: string, reason: AflysningsAarsag, note?: string) => void
-  restoreDay: (dayId: string) => void               // self-lookup via dayId (C10 fix)
-  toggleWeather: (productId: string, dayId: string, active: boolean) => void
-  toggleSamlesPaaEnBil: (productId: string, dayId: string, samles: boolean) => void
-  sendAlleForSelectedDate: (kommentar: string) => Promise<{
-    created: string[]                               // transport_order ids
-    skipped: Array<{ id: string; reason: 'missing_product' | 'zero_tons' }>
-    errors: Array<{ id: string; message: string }>
-  }>
-
-  // Standard
+  cancelDay: (productId: string, dayId: string, reason: AflysningsAarsag) => void
+  restoreDay: (dayId: string) => void                // self-lookup via dayId (D-K fix)
+  setProductSamles: (productId: string, dayId: string, value: boolean) => void  // (B-2)
+  sendAlleForSelectedDate: (/* kommentar afhænger af B-4 */) => void | Promise<unknown>
+  // (B-1) toggleWeather — kun hvis vejr persisteres
   loading: boolean
   error: Error | null
 }
 ```
-
-### `useEkstraBestilling(orderId, selectedDate)` (Hook)
-
-```typescript
-export function useEkstraBestilling(orderId: string, selectedDate: string): {
-  ekstraForSelectedDate: EkstraBestilling[]
-  addEkstra: () => void
-  updateEkstra: (id: string, patch: Partial<EkstraBestilling>) => void
-  removeEkstra: (id: string) => void
-  isEkstraSent: (id: string) => boolean
-  markSent: (ids: string[]) => void                 // callback brugt af useAsfaltbestilling.sendAlleForSelectedDate
-
-  loading: boolean
-  error: Error | null
-}
-```
-
----
-
-## 5. Offline-opførsel
-
-> Per `project_offline_strategi`: Formand SKAL arbejde offline.
-
-| Operation | Online | Offline | Sync-strategi |
-|---|---|---|---|
-| Læs products + day_plans + ekstra | Supabase | Cached (IndexedDB) | OfflineBanner vises |
-| `updateTons` / `updateMorgenTons` | Supabase write | Write-queue + optimistic UI | Auto-sync ved reconnect |
-| `toggleWeather` / `toggleSamlesPaaEnBil` | Supabase write | Write-queue | Auto-sync ved reconnect |
-| `cancelDay` / `restoreDay` | Supabase write | Write-queue | Auto-sync; last-write-wins ved konflikt |
-| `addEkstra` / `updateEkstra` / `removeEkstra` | Supabase write | Write-queue | Auto-sync |
-| `sendAlleForSelectedDate` (batch) | Supabase + cross-app push | Write-queue, optimistisk sentstate + 5s timeout | Auto-sync; **fuld rollback** ved partial-fejl (D4) |
 
 ---
 
 ## 6. Rolle-adgang
-
-| Rolle | Read | Write | Notes |
-|---|---|---|---|
-| Formand | ✅ | ✅ | Ejer sektionen — alle 9 flows |
-| Vognmand | ❌ (kan ikke se UI) | ❌ | Ser kun resulterende disponerings-opgaver (cross-app via ABE-1/5/7/8) |
-| Chauffør | ❌ | ❌ | Modtager downstream multi-produkt-loading-flow (ABE-7) |
-| Fabrik | ❌ (kan ikke se UI) | ❌ | Ser kun ordre-kø (ABE-2/6/8) |
-| Kunde | ❌ | ❌ | Skjult |
-
-**RLS-tjek:** Dækkes på app-niveau. Sektionen behøver ingen ekstra rolle-tjek.
+Uændret fra v1: Formand full; Vognmand/Fabrik read-only-derived (cross-app); Chauffør/Kunde hidden. RLS på app-niveau.
 
 ---
 
-## 7. Test-strategi
+## 7. Test-matrix (accept-ID → test-fil)
 
-### 7.1 — Unit (Vitest)
-
-| Target | Coverage-mål | Fokus |
-|---|---|---|
-| `useAsfaltbestilling` reducer | 90% lines | Alle actions: updateTons, updateMorgenTons, cancelDay, restoreDay, toggleWeather, toggleSamlesPaaEnBil + auto-skift af activeProductId |
-| `useEkstraBestilling` reducer | 90% lines | addEkstra, updateEkstra, removeEkstra, markSent |
-| `sendAlleForSelectedDate` orchestration | 95% branches | Happy path, partial-skip (missing productId), batch-fail rollback, 5s timeout |
-| Derived selectors (`sentStateByDate`, `productsForSelectedDate`, `planDays`) | 90% lines | Edge cases: tom liste, alle aflyste, alle sendte |
-
-### 7.2 — Component (Vitest + Testing Library + Storybook)
-
-| Target | Coverage-mål | Fokus |
-|---|---|---|
-| `ProductBoxV2` (7 modes) | 80% lines | Hver visual mode via Storybook stories — TESTBAR + VISUEL |
-| `EkstraBestillingBox` (2 modes) | 80% | Sendt-mode (alt locked) + Default |
-| `StatusPill` (4 derived states) | 90% | Alle 4 kind+label kombinationer |
-| `DatePillsRow` (3 pille-states) | 80% | Selected, all-sent, partial, default |
-| `SendBekraeftelsesModal` | 80% | Default + with-sum-warning + tom kommentar + max-længde |
-| `SendTilFabrikCTA` | 80% | enabled / disabled / in-flight / with-tooltip |
-
-### 7.3 — Integration (hook + container)
-
-| Test | Fokus |
+| Accept-ID | Test-fil |
 |---|---|
-| `AsfaltbestillingSection.integration.test.tsx` | Container + begge hooks wired sammen + alle 9 flows happy path |
-| `sendAlleForSelectedDate.integration.test.ts` | Atomic batch: success, partial-skip, rollback |
-| `auto-skift-activeProductId.test.ts` | Dato-pille-skift → auto-skift virker |
-
-### 7.4 — E2E (Playwright)
-
-| Test-fil | Dækker |
-|---|---|
-| `apps/formand/e2e/asfaltbestilling-c1-send.spec.ts` | ASF-001 til ASF-008 (Flow C1) |
-| `apps/formand/e2e/asfaltbestilling-c2-cancel.spec.ts` | ASF-009 til ASF-014 (Flow C2) |
-| `apps/formand/e2e/asfaltbestilling-c3-restore.spec.ts` | ASF-015, ASF-016 |
-| `apps/formand/e2e/asfaltbestilling-c4-weather.spec.ts` | ASF-017 til ASF-019 |
-| `apps/formand/e2e/asfaltbestilling-c5-samles.spec.ts` | ASF-020 til ASF-022 |
-| `apps/formand/e2e/asfaltbestilling-c6-ekstra.spec.ts` | ASF-023 til ASF-025 |
-| `apps/formand/e2e/asfaltbestilling-c7-delete-ekstra.spec.ts` | ASF-026, ASF-027 |
-| `apps/formand/e2e/asfaltbestilling-c8-date-pills.spec.ts` | ASF-028 til ASF-030 |
-| `apps/formand/e2e/asfaltbestilling-c9-readonly.spec.ts` | ASF-031, ASF-032 |
-| `apps/formand/e2e/asfaltbestilling-crossapp.spec.ts` | ASF-033 til ASF-040 |
-| `apps/formand/e2e/asfaltbestilling-offline.spec.ts` | ASF-047, ASF-048 |
-| `apps/formand/e2e/asfaltbestilling-visual.spec.ts` | ASF-046 (visual diff) |
-
-**Coverage-mål totalt:** 80% lines, 70% branches på `useAsfaltbestilling` + `useEkstraBestilling` + `AsfaltbestillingSection`.
+| ASF-001/002/007, DLN-001..004 | `e2e/asfaltbestilling-c1-send.spec.ts` |
+| AFL-001..007 | `e2e/asfaltbestilling-c2-aflys.spec.ts` |
+| ASF-015/016 | `e2e/asfaltbestilling-c3-restore.spec.ts` |
+| ASF-017..019 | `e2e/asfaltbestilling-c4-weather.spec.ts` (B-1) |
+| ASF-020/021 | `e2e/asfaltbestilling-c5-samles.spec.ts` (B-2) |
+| EKS-001/002 | `e2e/asfaltbestilling-ekstra-readonly.spec.ts` |
+| ASF-028/029/030b | `e2e/asfaltbestilling-c8-datepills.spec.ts` (B-5) |
+| ASF-031/032 | `e2e/asfaltbestilling-c9-readonly.spec.ts` |
+| ASF-033..041 | `e2e/asfaltbestilling-crossapp.spec.ts` (E-1, B-1, B-2, B-6) |
+| ASF-042..046 | `c1-send` + `c8-datepills` + `visual` |
+| ASF-047 | `e2e/asfaltbestilling-visual.spec.ts` |
+| ASF-048/049 | `e2e/asfaltbestilling-offline.spec.ts` |
+| ASF-003/004/005/006, AFL-007, DLN-004 | **BLOKERET** — afventer B-3/B-4/B-6 |
 
 ---
 
-## 8. Test-matrix (accept-ID → test-fil)
-
-| Accept-ID | Type | Test-fil |
-|---|---|---|
-| ASF-001..008 | TESTBAR/VISUEL | `e2e/asfaltbestilling-c1-send.spec.ts` |
-| ASF-009..014 | TESTBAR | `e2e/asfaltbestilling-c2-cancel.spec.ts` |
-| ASF-015..016 | TESTBAR | `e2e/asfaltbestilling-c3-restore.spec.ts` |
-| ASF-017..019 | TESTBAR/VISUEL | `e2e/asfaltbestilling-c4-weather.spec.ts` |
-| ASF-020..022 | TESTBAR | `e2e/asfaltbestilling-c5-samles.spec.ts` |
-| ASF-023..025 | TESTBAR | `e2e/asfaltbestilling-c6-ekstra.spec.ts` |
-| ASF-026..027 | TESTBAR | `e2e/asfaltbestilling-c7-delete-ekstra.spec.ts` |
-| ASF-028..030 | TESTBAR/VISUEL | `e2e/asfaltbestilling-c8-date-pills.spec.ts` |
-| ASF-031..032 | TESTBAR | `e2e/asfaltbestilling-c9-readonly.spec.ts` |
-| ASF-033..040 | TESTBAR | `e2e/asfaltbestilling-crossapp.spec.ts` |
-| ASF-041..043 | TESTBAR | `e2e/asfaltbestilling-c1-send.spec.ts` + `c2-cancel.spec.ts` (status-vokabular del af eksisterende tests) |
-| ASF-044..045 | TESTBAR/VISUEL | `e2e/asfaltbestilling-c8-date-pills.spec.ts` + `e2e/asfaltbestilling-visual.spec.ts` |
-| ASF-046 | VISUEL | `e2e/asfaltbestilling-visual.spec.ts` |
-| ASF-047..048 | TESTBAR | `e2e/asfaltbestilling-offline.spec.ts` |
-
----
-
-## 9. TBD-refinement (ikke-blockerende åbne spørgsmål)
-
-> Listet eksplicit så architect/builder ved at disse kan blive afklaret under build. Hvis afklaring kommer FØR build, opdater contract via amendment.
-
-| # | Spørgsmål | Owner | Påvirker |
-|---|---|---|---|
-| MP-1 | Hvordan vises "kombineret samleordre" (flere ordrer på samme bil) i vognmand-UI? | Vognmand-sektion | Påvirker IKKE Asfaltbestilling — kun receiver-rendering |
-| MP-2 | Hvilke kombinationer af produkter (recepter) må samles på én bil? Regel-tabel? | Forretning/Fabrik | Påvirker IKKE Asfaltbestillings UI — kun valideringer der evt. tilføjes senere |
-| MP-3 | Default-vejning per produkt på fabrik når `samles_paa_en_bil=true` — auto eller manuel? | Fabrik-sektion + Chauffør | Påvirker IKKE Asfaltbestilling — kun chauffør/fabrik-flow |
-| MP-4 | Cross-ordre-fordeling (`ekstra_bestilling.andreOrdrer`) — hvem populerer det? Formand i Asfaltbestilling, eller derived ved afregning? | Carsten + Afregning-sektion | **Påvirker bestilling-UI potentielt.** Bekræft før build. Default: derived ved afregning (ikke UI-felt her). |
-| D1 | Skal `cancel_reason_note` (fritekst ved `'andet'`) have max-længde i UI? | Carsten | Default 200 tegn — bekræft |
-| D2 | Skal "Send til fabrik"-knappen vise loading-spinner under in-flight batch (5s window)? | Bekræftet — ja | — |
-| D3 | Skal `sentStateByDate` opdateres optimistisk ved send (før server-ack)? | Bekræftet — ja, optimistisk | — |
-| D4 | Partial vs. fuld rollback ved write-queue-replay-fejl | Bekræftet — fuld rollback | — |
-| D5 | Offline-banner: app-level eller sektion-level | Bekræftet — app-level (`<OfflineBanner />` i AppShell) | — |
-
----
-
-## 10. Contract-amendments log
-
-> Hver gang contract ændres efter sign-off, log her.
+## 8. Amendments-log
 
 | Dato | Amendment | Årsag | Re-signed |
 |---|---|---|---|
-| 2026-05-26 | Initial DRAFT (v1.0) | Interview-Fase-D output | `[ ]` |
+| 2026-05-26 | v1.0 SIGNED (FROZEN) | Interview Fase D | ✅ (se CONTRACT.v1-frozen.md) |
+| 2026-06-18 | v2.0 DRAFT — re-scope efter ~3 ugers drift + architect-re-baseline | EkstraBestilling slettet, aflysning → AflysningCell, datovælger unified, Flow 9c tilføjet, StatusPill 4. kind | `[ ]` |
+
+---
+
+## 9. ÅBNE FORRETNINGS-SPØRGSMÅL — kræver Carstens beslutning før sign-off
+
+> Disse blokerer de markerede `[BLOCKED-Bn]`-kriterier. Resten af kontrakten kan signes når disse er besvaret (eller eksplicit udskudt med "ikke Fase 1").
+
+| # | Spørgsmål | Påvirker | Default-forslag |
+|---|---|---|---|
+| **B-1** | Skal `weatherActive` persisteres + cross-app (ABE-8) i Fase 1, eller rent visuelt? (i dag: lokal useState, fyrer intet) | ASF-017/018/040, `DayPlan.weatherActive`, `toggleWeather`, ABE-8 | Foreslå: persistér i Fase 1 (ellers er ABE-8 død) |
+| **B-2** | `samles`-flag på `DayPlan.samlesPaaEnBil` (kontrakt) eller behold `productSamlesFlags`-map? | ASF-020/039, ProductBoxV2-props, ABE-7 | Foreslå: flyt til `DayPlan.samlesPaaEnBil` (renere, cross-app-klar) |
+| **B-3** | Skal `cancel_reason_note` (fritekst ved årsag 'andet') med i Fase 1? (ikke i prototype) | AFL-007 | Foreslå: udskyd — ikke Fase 1 |
+| **B-4** | Skal sum-warning + optimistic 5s-rollback + in-flight-spinner med i Fase 1, eller over-spec? | ASF-003/004/005/006, modal + CTA-props | Foreslå: kun in-flight-disable (dobbeltklik-værn) i Fase 1; sum-warning + 5s-rollback udskydes |
+| **B-5** | Dato-piller MED ugedag (DATOFORMAT) eller UDEN (prototype "16. marts 2026")? | ASF-029/046, DatePillsRow, AflysningCell | Foreslå: behold prototype (uden) ELLER opdater DATOFORMAT — Carsten afgør |
+| **B-6** | Skal "for sent"-bestilling bære persistent flag (`sent_late`/`needs_capacity_call`) videre til vognmand/fabrik/Asfalttavlen? | DLN-004, `transport_orders.sent_late`, ABE-payloads | Foreslå: ja (modtagere bør vide at kapacitet ikke er bekræftet) |
+| **B-7** | kl-11-deadline konfigurerbar pr. fabrik, eller global? | Deadline-beregning (post-Fase-1 integration) | Foreslå: global i Fase 1, gør konfigurerbar ved integration |
+| **E-1** | **ABE-konsistens:** FF L2442-L2455 (ABE-1/2) refererer stadig `kind='ekstra'`-rows, men Flow 9b + FF L2699 siger ekstra-konstruktet er fjernet og `kind` kollapset til `'morgen'`. Skal `kind='ekstra'` fjernes helt fra `transport_orders` + ABE-payloads? | ASF-033, TransportOrder-type, alle ABE-tabeller | Foreslå: ja — fjern `kind='ekstra'` + `ekstraBestillingId`; architect retter FF i dev-fasen |
 
 ---
 
 ## Sign-off
 
-**Status overgang:**
-- `DRAFT` → `SIGNED-yyyy-mm-dd` ved Carstens godkendelse
-- `SIGNED-...` → automatisk FROZEN (kun amendments via re-interview eller validator-amendment-request)
+- `DRAFT` → `SIGNED-yyyy-mm-dd` ved Carstens godkendelse (efter B-1..B-7 + E-1 besvaret)
+- `SIGNED-...` → FROZEN (kun amendments via re-interview)
 
-**Underskrevet:** _______________
-**Dato:** _______________
-**Version:** 1.0
+**Underskrevet:** _______________  **Dato:** _______________  **Version:** 2.0

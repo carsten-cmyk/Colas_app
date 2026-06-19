@@ -4,114 +4,124 @@ app: formand
 tab: planlægning
 document_type: customer_spec
 created: 2026-05-27
-last_updated: 2026-05-27
-status: draft (afventer kunde-gennemgang)
+last_updated: 2026-06-18
+version: v2
+status: draft (afventer kunde-sign-off)
 print_format: A4
 ---
 
-# Asfaltbestilling — Funktionsbeskrivelse
+# Asfaltbestilling — Funktionsbeskrivelse (v2)
 
 > **Dette dokument**: Beskriver hvordan formanden bestiller dagens asfalt på en ordre, og hvilke konsekvenser hver handling har for fabrik, vognmand og chauffør.
-> **Til**: Kundens gennemgang og godkendelse inden udvikling
-> **Sign-off**: Sidste side
+> **Til**: Kundens gennemgang og sign-off inden udvikling.
+> **Sign-off**: Sidste side. **Sektionen går IKKE i udvikling før dette dokument + spørgsmålslisten (`QA.md`) er signet af kunden.**
+
+> ### ⚠️ Hvad er ændret siden v1 (27. maj 2026)
+> Prototypen er videreudviklet i ~3 uger. De vigtigste forretnings­ændringer kunden skal være opmærksom på:
+> 1. **Formanden opretter IKKE længere ekstra-bestillinger i appen** (besluttet 3. juni). Ekstra tons registreres af fabrikken og vises kun som læse-information hos formanden.
+> 2. **Aflysning er flyttet** fra den enkelte produkt-boks til en samlet aflysnings-celle under ordre-detaljerne (samme sted uanset om man er i Planlægning, Udførsel eller Afregning).
+> 3. **Ny regel: bestilling skal ske inden kl. 11 dagen før udlægning** (18. juni). For sen bestilling blokeres ikke, men formanden skal ringe til fabrikken.
 
 ---
 
 ## 1. Formål
 
-Formanden bruger Asfaltbestilling **hver morgen** til at fortælle fabrikken og vognmanden hvad der skal produceres og køres ud i løbet af dagen. Sektionen er det første touch-point i arbejdsgangen — uden dem ingen produktion, ingen biler, ingen kørsel.
+Formanden bruger Asfaltbestilling **hver morgen** til at fortælle fabrikken og vognmanden hvad der skal produceres og køres ud i løbet af dagen. Det er det første touch-point i arbejdsgangen — uden bestillingen ingen produktion, ingen biler, ingen kørsel.
 
-Sektionen dækker både:
-- **Morgenbestillingen** (planlagt dagsforbrug)
-- **Ekstra-bestillinger** løbende på dagen, når formanden ser at mere er nødvendigt
-- **Aflysninger** ved fx regn, frost eller dårligt underlag
-- **Markeringer** der signaler hvilke produkter skal pakkes på samme bil
+Sektionen dækker:
+- **Morgenbestillingen** (planlagt dagsforbrug pr. produkt)
+- **Afsendelse til fabrik** (én samlet pakke pr. dag)
+- **Aflysning** ved fx regn, frost eller dårligt underlag
+- **"Samles på en bil"-markering** der signalerer hvilke produkter der skal pakkes på samme bil
+- **Visning af ekstra tons** som fabrikken har registreret (læse-information)
 
 ---
 
 ## 2. Brugerrejse — morgenbestillingen
 
 ### Trin 1: Formanden åbner ordren
-Formanden åbner dagens ordre og lander på **Planlægning-tabben**. Han ser dagens dato øverst i en række pillen-knapper (én pille per dag i den planlagte udførelses-periode). Den aktive dag er fremhævet.
+Formanden åbner dagens ordre og lander på **Planlægning-tabben**. Øverst vælger han dag via en datovælger der spænder hele ordrens udlægnings­periode. Datovælgeren er den samme på tværs af Planlægning, Udførsel og Afregning. Passerede dage er gennemstregede.
 
 ### Trin 2: Formand ser dagens produkter
 Under datovælgeren ligger ét boks-felt per **produkt** (fx "AB 11t" eller "SMA 8t"). Hvert produkt-felt viser:
 - Produktnavn + receptkode + tykkelse
-- Felt: **"Forventet i dag"** (tonsPlanned — formandens estimat)
-- Felt: **"Morgen-bestilling"** (morgenTons — det fabrikken skal producere)
+- Felt: **"Forventet i dag"** (formandens estimat)
+- Felt: **"Morgen-bestilling"** (det fabrikken skal producere)
 - Status: Afventer / Sendt / Aflyst
 
+Hvis fabrikken har registreret **ekstra tons** på et produkt, vises det i en separat boks ved siden af — **kun som læse-information** ("+N tons · Bekræftet fabrik" med tidspunkt). Formanden kan ikke redigere den.
+
 ### Trin 3: Formand indtaster tons
-Formanden taster det antal tons han vil bestille til morgenproduktion ind i hvert produkt-felt. Han kan også tilføje **"Samles på en bil"**-flag hvis 2-3 produkter skal pakkes sammen.
+Formanden taster det antal tons han vil bestille til morgenproduktion ind i hvert produkt-felt. Han kan sætte **"Samles på en bil"**-flag hvis 2-3 produkter skal pakkes sammen på samme bil.
 
 ### Trin 4: Formand klikker "Send til fabrik"
-Bunden af sektionen har én knap: **"Send til fabrik"**. Klik åbner en bekræftelses-modal med:
-- Opsummering: hvilke produkter, hvor meget, hvilken dato
-- Felt for **kommentar til fabrik** (valgfri)
+Bunden af sektionen har én knap: **"Send til fabrik"**, der viser fabrikkens navn og en permanent påmindelse: **"Bestilling skal ske inden kl. 11"**. Klik åbner en bekræftelses-modal med:
+- Mulighed for at knytte en **kommentar til fabrik** (valgfri)
 - Bekræft-knap
 
-Når formanden bekræfter, sendes **alle dagens bestillinger** som én samlet pakke (atomic batch) til både fabrik og vognmand. Optisk: alle produkt-felter skifter til status **"Sendt"** og bliver låst for redigering.
+**Hvis bestillingen er for sent på den** (efter kl. 11 dagen før udlægning), viser modalen en tydelig rød advarsel: *"Bestillingen er lavet efter kl. 11. Du skal derfor ringe til fabrikken for at sikre produktionskapacitet."* Bestillingen kan **stadig sendes** — den blokeres ikke.
 
-### Trin 5: Senere på dagen — ekstra-bestilling
-Hvis formanden ser at der køres mere end planlagt, kan han klikke **"+ Tilføj ekstra bestilling"**. Han vælger produkt fra en dropdown, taster tons, og sender. Ekstra-bestillinger har samme cross-app effekt som morgen-bestilling.
+Når formanden bekræfter, sendes **alle dagens bestillinger** som én samlet pakke til både fabrik og vognmand. Alle produkt-felter skifter til status **"Sendt"**.
+
+### Trin 5: Ekstra tons i løbet af dagen (kommer fra fabrik)
+Hvis der køres mere end planlagt, registrerer **fabrikken** ekstra-mængden i deres system. Den vises automatisk hos formanden som læse-information på det relevante produkt ("+N tons · Bekræftet fabrik"). **Formanden gør ingenting** — han opretter ikke længere ekstra-bestillinger selv.
 
 ### Trin 6: Aflysning ved dårligt vejr
-Hvis vejret skifter, kan formanden aflyse et enkelt produkt for en specifik dag. Han vælger en **årsag** (regn / frost / dårligt underlag / andet) og bekræfter. Fabrik og vognmand modtager besked og kan frigøre ressourcer.
-
-Aflysning kan fortrydes (kun lokalt — kræver ny send hvis dagen tidligere var sendt).
+Hvis vejret skifter, kan formanden aflyse en specifik dag via **aflysnings-cellen under ordre-detaljerne**. Han vælger dato + **årsag** (regn / frost / dårligt underlag / andet) og bekræfter. Fabrik og vognmand modtager besked og kan frigøre ressourcer.
 
 ---
 
 ## 3. Forretningsregler
 
 ### 3.1 Morgenbestilling
-- **Atomic batch**: Alle ændringer på én dag sendes som én transaktion. Enten lykkes alt eller intet.
-- **Lås efter send**: `morgenTons`, `tonsPlanned`, `samlesPaaEnBil` kan IKKE redigeres efter "Sendt"-status. Rettelser sker pr. telefon til fabrik.
-- **Vejr-flag og aflysning** kan stadig sættes efter send.
-- **Sum-warning**: Hvis summen af `tonsPlanned` overstiger ordrens totale bestilte tons, vises en blød advarsel — men det blokerer ikke afsendelsen.
-- **Kommentar pr. dag**: Én kommentar gælder alle bestillinger sendt samme batch.
+- **Samlet afsendelse pr. dag**: Alle produkter for én dag sendes som én pakke til fabrik + vognmand.
+- **Bestillingsfrist kl. 11**: Bestilling skal sendes inden **kl. 11 dagen før udlægningsdagen**, så fabrikken kan planlægge næste-dags produktion. Frist­påmindelsen står permanent på send-knappen.
+- **For sent = ring, ikke blokér**: Bestilling efter fristen kan stadig sendes, men formanden får en rød advarsel om at ringe til fabrikken for at sikre kapacitet.
+- **Kommentar pr. afsendelse**: Én kommentar følger med den samlede afsendelse.
 
-### 3.2 Ekstra-bestillinger
-- Tilføjes løbende efter morgenbestillingen.
-- Skal have produkt valgt før de kan sendes.
-- Slettes lokalt indtil de er sendt — efter send er de låst (samme regler som morgenbestilling).
-- Har eget atomic-batch-flow uafhængigt af morgenbestillingen.
+### 3.2 Ekstra tons (læse-information fra fabrik)
+- Formanden **opretter ikke** ekstra-bestillinger i appen (ændret 3. juni 2026).
+- Ekstra tons registreres af fabrikken og vises hos formanden som **read-only** ("+N tons · Bekræftet fabrik" + tidspunkt).
+- Indgår automatisk i de samlede tons-beregninger nedstrøms (Udførsel, Afregning).
 
 ### 3.3 "Samles på en bil"-flag
-- Markeres pr. produkt pr. dag (også pr. ekstra-bestilling).
-- Signalerer at op til 3 produkter skal pakkes på samme bil hvis bilens kompartmenter tillader det.
-- Driver et særskilt loading-flow hos chauffør (multi-produkt-script på fabrik).
-- Synligt hos fabrik (planlæg samtidig produktion), vognmand (matche bilens kapacitet) og chauffør (læsse-instruktion).
+- Markeres pr. produkt pr. dag.
+- Signalerer at op til 3 produkter skal pakkes på samme bil, hvis bilens kompartmenter tillader det.
+- Driver et særskilt læsse-flow hos chauffør (multi-produkt-script på fabrik).
+- Synligt hos fabrik, vognmand og chauffør.
 
-### 3.4 Aflysningsårsager
-Faste valg (ikke fri-tekst): **regn · frost · underlag · andet**. Kun "andet" kræver kommentar.
+### 3.4 Aflysning
+- Sker i **aflysnings-cellen under ordre-detaljerne** (ikke længere på produkt-boksen).
+- Faste årsager (ikke fri-tekst): **regn · frost · underlag · andet**.
+- Fabrik + vognmand modtager besked og frigør ressourcer.
 
 ### 3.5 Offline-håndtering
 - Formand kan indtaste og sende selv uden internet.
-- Send-handlingen lægges i en write-queue der synkroniseres når forbindelse genoprettes.
-- Optisk UI viser **"Sendt"** med det samme (optimistic) — hvis batchen fejler ved sync, vises fejl + auto-rollback efter 5 sekunder.
+- Send-handlingen lægges i en kø der synkroniseres når forbindelse genoprettes.
 
-### 3.6 Frosne valg (allerede besluttet med kunden)
+### 3.6 Frosne valg (allerede besluttet)
 | Beslutning | Dato | Værdi |
 |---|---|---|
-| Status-ord | 2026-05-26 | Afventer / Sendt / Aflyst (på dansk, ikke engelsk) |
+| Status-ord | 2026-05-26 | Afventer / Sendt / Aflyst (dansk) |
 | Datoformat i UI | 2026-05-26 | "16. marts 2026" (lang form) |
 | Multi-produkt-model | 2026-05-19 | Samme bil kan rumme op til 3 produkter |
-| Aflysnings-årsager | 2026-05-22 | 4 faste valg + fri-tekst kun ved "andet" |
+| Aflysnings-årsager | 2026-05-22 | 4 faste valg (regn/frost/underlag/andet) |
+| Ekstra-bestilling fjernet fra formand | 2026-06-03 | Ekstra tons kommer fra fabrik (read-only) |
+| Bestillingsfrist kl. 11 | 2026-06-18 | Inden kl. 11 dagen før — for sent ≠ blokeret |
 
 ---
 
 ## 4. Skærmbilleder
 
-> **Bemærk:** Prototype er klar — se på `formandsapp.netlify.app` (eller lokalt på port 5174) → en ordre → Planlægning-tabben.
+> Prototype er live på `formandsapp.netlify.app` (eller lokalt på port 5174) → en ordre → Planlægning-tabben.
 >
-> **Til print-versionen:** Indsæt skærmbilleder her af:
-> 1. Planlægning-tab med datovælger + 3 produkt-bokse (default state)
-> 2. Produkt-boks med tons indtastet, "Samles på en bil" tjekket
-> 3. Send-til-fabrik bekræftelses-modal
-> 4. Status efter send: alle bokse låst med "Sendt"-pille
-> 5. Ekstra-bestilling formular
-> 6. Aflys-modal med årsags-dropdown
+> **Til print-versionen — indsæt skærmbilleder af:**
+> 1. Planlægning-tab med datovælger + produkt-bokse
+> 2. Produkt-boks med tons indtastet + "Samles på en bil" tjekket
+> 3. Send-til-fabrik-knap med "Bestilling skal ske inden kl. 11"
+> 4. Bekræftelses-modal med den røde "for sent"-advarsel
+> 5. Ekstra tons-boks (read-only "Bekræftet fabrik")
+> 6. Aflysnings-celle under ordre-detaljerne
 
 ---
 
@@ -119,72 +129,69 @@ Faste valg (ikke fri-tekst): **regn · frost · underlag · andet**. Kun "andet"
 
 | Rolle | Ser sektionen | Kan ændre | Cross-app effekt |
 |---|---|---|---|
-| **Formand** | Ja, fuld kontrol | Alt | — |
+| **Formand** | Ja, fuld kontrol | Tons, samles-flag, aflysning, send | — |
 | **Vognmand** | Nej (intern data) | Nej | Modtager bestilling → disponerer biler |
-| **Fabrik** | Nej (intern data) | Nej | Modtager bestilling → producerer |
-| **Chauffør** | Nej | Nej | Modtager kørsler via vognmand. "Samles på en bil"-flag styrer hans læsse-flow |
+| **Fabrik** | Nej (intern data) | Registrerer ekstra tons | Modtager bestilling → producerer; sender ekstra tons retur |
+| **Chauffør** | Nej | Nej | Modtager kørsler via vognmand; "Samles på en bil" styrer læsse-flow |
 | **Kunde** | Nej | Nej | — |
-
-Asfaltbestilling er **kun synlig for formanden**. De andre apps modtager data-effekterne uden at se selve UI'en.
 
 ---
 
-## 6. Cross-app effekter — hvad sker der i andre apps når formanden trykker "Send til fabrik"?
+## 6. Cross-app effekter — når formanden trykker "Send til fabrik"
 
 | Modtager | Hvad de får | Hvad de gør |
 |---|---|---|
-| **Fabrik** | Liste over produkter + tons + dato + samles-flag + kommentar | Planlægger produktion til afhentnings-tidspunktet |
-| **Vognmand** | Bilbestilling for dagen + første-læs-tidspunkt + interval | Disponerer biler i sin app, sender bekræftelse retur |
-| **Formand · Udførsel** | "Morgen tons"-værdien | Bruges som default for "faktisk udlagt"-feltet i dagsoverblikket |
-| **Formand · Asfaltkørsel** | "Dagen er klar til bilbestilling"-signal | Aktiverer bilbestilling-sektionen i samme app |
-| **Chauffør** | (Via vognmand) Kørsels-opgaver inkl. "Samles på en bil"-flag | Får besked om kørsler + multi-produkt-loading-instruktioner |
+| **Fabrik** | Produkter + tons + dato + samles-flag + kommentar | Planlægger produktion |
+| **Vognmand** | Bilbestilling for dagen | Disponerer biler, sender bekræftelse retur |
+| **PLAN / Asfalttavlen** | Dagens samlede bestillinger pr. fabrik/ordre | Konsoliderings-overblik for fabrik-mester + koordinator |
+| **Formand · Udførsel** | "Morgen tons"-værdien | Default for "faktisk udlagt" i dagsoverblik |
+| **Formand · Asfaltkørsel** | "Dagen klar til bilbestilling"-signal | Aktiverer bilbestilling i samme app |
 
 ---
 
 ## 7. Hvad sektionen IKKE dækker
 
-For at undgå misforståelser — disse områder hører til andre sektioner og dækkes separat:
-
-- **Bil-disponering** (vognmand bestemmer hvilke biler der kører) → "Vognmand · Disponerings-view"
-- **Afregning** af kørsler og bil-timer → "Afregning"-tabben
-- **Faktisk udlagt** (hvad blev der reelt kørt på dagen) → "Udførsel · Dagsoverblik"
-- **Historik / audit-log** — hvem sendte hvad hvornår → Separat administrations-view
+- **Bil-disponering** (vognmand vælger biler) → Vognmand · Disponerings-view
+- **Afregning** af kørsler/bil-timer → Afregning-tabben
+- **Faktisk udlagt** → Udførsel · Dagsoverblik
 - **Bil-, fabrik- og chauffør-UI** → Egne apps
 
 ---
 
-## 8. Åbne spørgsmål til kunden
+## 8. Spørgsmål til kunde-sign-off
 
-Følgende detaljer mangler endelig afklaring inden udvikling kan afslutte fuldstændigt:
+Den fulde spørgsmålsliste ligger i **`QA.md`** (samme mappe). De vigtigste beslutninger der mangler kundens svar i denne runde:
 
-| # | Spørgsmål | Påvirker |
+| # | Emne | Colas-forslag |
 |---|---|---|
-| Q1 | Skal en formand kunne **redigere en sendt bestilling** ved fejl, eller skal det altid være telefon-til-fabrik? | Edit-cascade-flow |
-| Q2 | Skal **vejr-flaget** automatisk trigge en fradrag-beregning i afregning, eller er det rent informativt? | Afregnings-regler |
-| Q3 | Skal **"Samles på en bil"** kunne ændres EFTER send (uden at gen-sende)? Eller låses det med batchen? | Edit-cascade-flow |
-| Q4 | Hvis flere formænd er logget på samme ordre samtidigt, hvad sker hvis de begge prøver at sende? | Konflikt-håndtering |
+| B-1 | Skal vejr-markering gemmes + sendes videre til vognmand/fabrik, eller være rent visuelt? | Gem + send videre |
+| B-3 | Skal aflysnings-årsag "andet" kræve en fritekst-begrundelse? | Udskyd til senere fase |
+| B-4 | Hvor robust skal afsendelse være (advarsel ved for mange tons, fortrydelse ved fejl)? | Kun værn mod dobbelt-afsendelse i første fase |
+| B-6 | Skal en for-sent-bestilling markeres synligt for vognmand/fabrik (så de ved kapacitet ikke er bekræftet)? | Ja |
+| B-7 | Er kl. 11-fristen ens for alle fabrikker, eller forskellig pr. fabrik? | Ens for alle i første fase |
+
+(B-2 og E-1 er rent tekniske og afklares internt.)
 
 ---
 
 ## 9. Status og næste skridt
 
-**Sektionens fase**: dev-ready (klar til udvikling efter sign-off)
-**Prototype**: bygget og live på `formandsapp.netlify.app`
-**Tekniske detaljer**: i `KICKOFF.md` + `CONTRACT.md` + `FLOWS.md`
-**Cross-app dataflow**: dokumenteret i `.claude/docs/FUNCTIONAL_FLOWS.md`
+**Sektionens fase**: re-interview gennemført — afventer kunde-sign-off.
+**Prototype**: live på `formandsapp.netlify.app`.
+**Tekniske detaljer**: `CONTRACT.md` (v2 draft) + `FLOWS.md` + `.claude/docs/FUNCTIONAL_FLOWS.md` (Flow 9b + 9c + ABE-1..8).
 
-Efter kundens sign-off på dette dokument går sektionen i **udvikling** — anslået varighed iflg. interviewer-vurdering: TBD.
+Efter kundens sign-off omsættes svarene til den endelige kontrakt (v2) → sektionen går i udvikling.
 
 ---
 
 ## Sign-off
 
-Ved at underskrive dette dokument bekræfter kunden at:
+Ved at underskrive bekræfter kunden at:
 - Forretningsformålet er forstået og accepteret
 - Brugerrejsen matcher den forventede arbejdsgang
-- Forretningsreglerne er gennemgået
+- Forretningsreglerne (inkl. de tre ændringer øverst) er gennemgået
 - Cross-app effekter er accepteret
-- De åbne spørgsmål er besvaret (eller markeret som ikke-blokerende)
+- Spørgsmålene i `QA.md` er besvaret (eller markeret som ikke-blokerende)
 
 | | Navn | Rolle | Dato | Underskrift |
 |---|---|---|---|---|
@@ -194,4 +201,4 @@ Ved at underskrive dette dokument bekræfter kunden at:
 
 ---
 
-*Dokument-version: 2026-05-27 · draft*
+*Dokument-version: 2026-06-18 · v2 · draft*
