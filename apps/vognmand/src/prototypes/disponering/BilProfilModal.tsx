@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { BILTYPER } from '@/mocks/biler'
+import { formatPhone } from '@shared/utils/phone'
 import type { Bil, Chauffør } from '@/mocks/biler'
 
 interface BilProfilModalProps {
@@ -136,7 +137,7 @@ export function BilProfilModal({
                 className="flex-1 bg-white border border-box-outline rounded-lg px-3 py-2 font-inter text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-deep-teal/20 focus:border-deep-teal/40 transition"
               >
                 {aktiveChauffører.map(c => (
-                  <option key={c.id} value={c.id}>{c.navn} · {c.mobil}</option>
+                  <option key={c.id} value={c.id}>{c.navn} · {formatPhone(c.mobil)}</option>
                 ))}
                 <option value="__ny">+ Opret ny chauffør</option>
               </select>

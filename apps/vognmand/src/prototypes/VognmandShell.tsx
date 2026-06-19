@@ -4,9 +4,7 @@
  * Må ikke importeres i produktionskode.
  */
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
-import { List, Calendar } from 'lucide-react'
-import { MOCK_ORDRER } from '@/mocks/ordrer'
-import { antalÅbne } from '@/mocks/disponeringState'
+import { List, Calendar, ArrowLeftRight } from 'lucide-react'
 
 type NavItem = {
   id: string
@@ -16,16 +14,15 @@ type NavItem = {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'liste',  label: 'Aktive ordre',     icon: <List size={15} />,     path: '/prototyper/liste' },
-  { id: 'gantt',  label: 'Kalender oversigt', icon: <Calendar size={15} />, path: '/prototyper/gantt' },
-  { id: 'arkiv',  label: 'Ordre arkiv',      icon: <List size={15} />,     path: '/prototyper/arkiv' },
+  { id: 'liste',         label: 'Aktive ordre',      icon: <List size={15} />,           path: '/prototyper/liste' },
+  { id: 'gantt',         label: 'Kalender oversigt', icon: <Calendar size={15} />,       path: '/prototyper/gantt' },
+  { id: 'dataudveksling', label: 'Dataudveksling',   icon: <ArrowLeftRight size={15} />, path: '/prototyper/dataudveksling' },
+  { id: 'arkiv',         label: 'Ordre arkiv',       icon: <List size={15} />,           path: '/prototyper/arkiv' },
 ]
 
 export function VognmandShell() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const åbneCount = antalÅbne(MOCK_ORDRER.map(o => o.id))
-
   return (
     <div className="min-h-screen bg-page flex flex-col">
 
@@ -52,7 +49,7 @@ export function VognmandShell() {
           <nav className="flex flex-col gap-[2px] px-xs" style={{ paddingTop: 66 }} aria-label="Hovedmenu">
             {NAV_ITEMS.map(item => {
               const isActive = item.id === 'liste'
-                ? (pathname.startsWith('/prototyper/liste') || pathname.startsWith('/prototyper/disponering'))
+                ? (pathname.startsWith('/prototyper/liste') || pathname.startsWith('/prototyper/disponering') || pathname.startsWith('/prototyper/koersel'))
                 : item.id === 'gantt'
                 ? pathname.startsWith('/prototyper/gantt')
                 : pathname.startsWith(item.path)
@@ -78,11 +75,6 @@ export function VognmandShell() {
                     ].join(' ')} />
                     {item.label}
                   </span>
-                  {item.id === 'liste' && åbneCount > 0 && (
-                    <span className="font-inter text-[11px] font-semibold bg-bad text-white rounded-full px-1.5 py-px min-w-[18px] text-center leading-tight">
-                      {åbneCount}
-                    </span>
-                  )}
                 </button>
               )
             })}

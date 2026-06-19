@@ -13,10 +13,9 @@ import { MOCK_ORDRER } from '@/mocks/ordrer'
 // DATO-NOTE: Gantt-headeren viser kun ugedag-initialer + dato-tal i komprimerede kalender-celler —
 // disse er ikke fulde datoer i tekst-form og konverteres ikke til lang-format (jf. DATOFORMAT.md).
 // Periode-labelen (fmtShort) bruger kortformat ("13. mar") da det er en komprimeret range-overskrift.
-import type { Ordre, DagDisponering } from '@/types/vognmand'
+import type { Ordre } from '@/types/vognmand'
 
 type ViewMode = 'uge' | '14-dage' | 'maaned'
-type CellStatus = 'groen' | 'orange' | 'roed' | 'gul' | 'neutral'
 
 // Forankret prototype-dato
 const TODAY = new Date('2026-03-16T00:00:00')
@@ -42,29 +41,6 @@ function isWeekend(d: Date): boolean {
   return dow === 0 || dow === 6
 }
 
-function førsteLæsAggregeret(dage: DagDisponering[]): string {
-  const synlige = dage.filter(d => d.bestilteBiler > 0)
-  if (synlige.length === 0) return '—'
-  // Regel: brug Nr. 1's startTid hvis formand HAR valgt start-rækkefølge med tid
-  // Fallback: førsteLæsPåPlads (formands planlagte ankomsttid)
-  const resolve = (d: DagDisponering): string | undefined =>
-    d.startRaekkefoelge?.[0] != null && d.startTider?.[0] != null
-      ? d.startTider![0]!
-      : d.førsteLæsPåPlads
-  const første = resolve(synlige[0])
-  if (!første) return '—'
-  const ensartet = synlige.every(d => resolve(d) === første)
-  return ensartet ? første : 'Varierer'
-}
-
-function intervalAggregeret(dage: DagDisponering[]): string {
-  const synlige = dage.filter(d => d.bestilteBiler > 0)
-  if (synlige.length === 0) return '—'
-  const første = synlige[0].intervalMinutter
-  if (første == null) return '—'
-  const ensartet = synlige.every(d => d.intervalMinutter === første)
-  return ensartet ? `+${første} min` : 'Varierer'
-}
 
 // TODO (produktion): Brug dansk kalender med danske mærkedage (helligdage).
 // Skal markere mindst: nytårsdag, skærtorsdag, langfredag, 2. påskedag, store bededag,
@@ -75,19 +51,6 @@ function getViewDays(mode: ViewMode): number {
   if (mode === 'uge') return 7
   if (mode === '14-dage') return 14
   return 31
-}
-
-
-function getBestilling(ordre: Ordre, day: Date): DagDisponering | undefined {
-  const iso = day.toISOString().slice(0, 10)
-  return ordre.dage.find(d => d.dato === iso)
-}
-
-function getCellStatus(b: DagDisponering): CellStatus {
-  if (b.ændretAfFormand) return 'gul'
-  if (b.disponeredeBiler === b.bestilteBiler) return 'groen'
-  if (b.disponeredeBiler > 0) return 'orange'
-  return 'roed'
 }
 
 // Finder tidligste urgente dag (rød/orange/gul) fra og med i dag
@@ -111,14 +74,6 @@ function sortOrdrer(ordrer: Ordre[]): Ordre[] {
     if (au && bu) return au.localeCompare(bu)
     return a.endDate.localeCompare(b.endDate)
   })
-}
-
-const CELL_BAR_CLASS: Record<CellStatus, string> = {
-  groen:   'bg-good',
-  orange:  'bg-warning',
-  roed:    'bg-bad',
-  gul:     'bg-yellow',
-  neutral: 'bg-light-aqua/50',
 }
 
 
@@ -296,21 +251,14 @@ export function VognmandGanttScreen() {
                         Holdnummer 10541 – Jens Thorsager
                       </p>
                       <p className="font-inter text-[11px] text-text-muted">
-                        Formand: Lars Hansen – 22 33 44 55
+                        Formand: Lars Hansen – +45 22 33 44 55
                       </p>
                       <div className="mt-xs flex flex-col gap-0.5">
                         <div className="flex items-baseline gap-1.5">
                           <span className="font-inter text-[9px] font-medium uppercase tracking-widest text-text-muted">Mængde</span>
                           <span className="font-inter text-[11px] font-semibold text-text-secondary">{ordre.mængdeTotal} t · {ordre.produktKode}</span>
                         </div>
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="font-inter text-[9px] font-medium uppercase tracking-widest text-text-muted">Første læs</span>
-                          <span className="font-inter text-[11px] font-semibold text-text-secondary">{førsteLæsAggregeret(ordre.dage)}</span>
-                        </div>
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="font-inter text-[9px] font-medium uppercase tracking-widest text-text-muted">Interval</span>
-                          <span className="font-inter text-[11px] font-semibold text-text-secondary">{intervalAggregeret(ordre.dage)}</span>
-                        </div>
+
                       </div>
                     </button>
 
@@ -319,24 +267,15 @@ export function VognmandGanttScreen() {
                       const inRange = day >= start && day <= end
                       const isToday = sameDay(day, TODAY)
                       const we = isWeekend(day)
-                      const bestilling = inRange ? getBestilling(ordre, day) : undefined
                       const isFirst = inRange && (sameDay(day, start) || di === 0)
                       const isLast = inRange && (sameDay(day, end) || di === days.length - 1)
 
-                      const status: CellStatus | null = inRange
-                        ? bestilling
-                          ? getCellStatus(bestilling)
-                          : 'neutral'
-                        : null
-
-                      // Nat: tidsvindue-farve overrider status-farve på hele baren
-                      const barColorClass = inRange && status
-                        ? ordre.tidsvindue === 'nat' ? 'bg-deep-teal'
-                        : CELL_BAR_CLASS[status]
+                      // Bar-farve drives udelukkende af ordre.tidsvindue
+                      const barColorClass = inRange
+                        ? ordre.tidsvindue === 'nat'     ? 'bg-deep-teal'
+                        : ordre.tidsvindue === 'weekend' ? 'bg-warning'
+                        : 'bg-good'
                         : ''
-
-                      // Tilgang B: weekend-overlay kun på weekend-celler inden for bar-spanet
-                      const showWeekendOverlay = inRange && we && ordre.tidsvindue === 'weekend'
 
                       return (
                         <div
@@ -358,29 +297,17 @@ export function VognmandGanttScreen() {
                             />
                           )}
 
-                          {inRange && status && (
-                            <>
-                              {/* Sammenhængende stav */}
-                              <div
-                                className={[
-                                  'h-[6px] w-full relative',
-                                  barColorClass,
-                                  isFirst ? 'rounded-l-full ml-[3px]' : '',
-                                  isLast ? 'rounded-r-full mr-[3px]' : '',
-                                ]
-                                  .filter(Boolean)
-                                  .join(' ')}
-                              >
-                                {/* Tilgang B: weekend-overlay — bg-bad på lø/sø-celler inden for bar */}
-                                {showWeekendOverlay && (
-                                  <span
-                                    className="absolute inset-0 bg-bad pointer-events-none"
-                                    style={{ zIndex: 2 }}
-                                    aria-label="Weekend-udførelse"
-                                  />
-                                )}
-                              </div>
-                            </>
+                          {inRange && (
+                            <div
+                              className={[
+                                'h-[6px] w-full',
+                                barColorClass,
+                                isFirst ? 'rounded-l-full ml-[3px]' : '',
+                                isLast ? 'rounded-r-full mr-[3px]' : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                            />
                           )}
                         </div>
                       )
@@ -394,13 +321,9 @@ export function VognmandGanttScreen() {
         {/* Forklaring */}
         <div className="flex items-center flex-wrap gap-4 mt-4 pl-1">
           {[
-            { cls: 'bg-bad',        label: 'Ikke disponeret' },
-            { cls: 'bg-warning',    label: 'Delvist disponeret' },
-            { cls: 'bg-good',       label: 'Fuldt disponeret' },
-            { cls: 'bg-yellow',     label: 'Ændret af formand' },
-              { cls: 'bg-light-aqua/50', label: 'Ingen bestilling (weekend/fridag)' },
-            { cls: 'bg-deep-teal',    label: 'Nat' },
-            { cls: 'bg-bad',          label: 'Weekend-udførelse' },
+            { cls: 'bg-good',      label: 'Normal udførsel' },
+            { cls: 'bg-deep-teal', label: 'Nat' },
+            { cls: 'bg-warning',   label: 'Weekend' },
           ].map(({ cls, label }) => (
             <div key={label} className="flex items-center gap-1.5">
               <div className={`w-5 h-2.5 rounded-full ${cls}`} />

@@ -441,7 +441,7 @@ export function VognmandDisponeringsScreen() {
                     <p className="font-inter text-xs text-text-primary">Jens Thorsager</p>
                     <p className="font-inter text-xxs text-text-muted mt-xxxs">Ordrenummer {ordre.ordrenr}</p>
                     <p className="font-inter text-xs text-text-secondary mt-xxxs">Formand: Lars Hansen</p>
-                    <p className="font-inter text-xs text-text-secondary">22 33 44 55</p>
+                    <p className="font-inter text-xs text-text-secondary">+45 22 33 44 55</p>
                   </div>
 
                 </div>

@@ -5,12 +5,12 @@
  */
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronRight, List, LayoutGrid, Clock, Repeat, Factory, Scale, CloudRain } from 'lucide-react'
+import { List, LayoutGrid, Factory, Scale } from 'lucide-react'
 import { PeriodeNavigator } from '@shared/components/PeriodeNavigator'
 import { MOCK_ORDRER } from '@/mocks/ordrer'
 import { erGodkendt } from '@/mocks/disponeringState'
-import { formatDatoLang, formatDatoMedUgedag } from '@/utils/dato'
-import type { Ordre, DagDisponering } from '@/types/vognmand'
+import { formatDatoMedUgedag } from '@/utils/dato'
+import type { Ordre } from '@/types/vognmand'
 
 type Tab = 'alle' | 'aabne' | 'disponeret'
 // DATO-NOTE: Periode-labelen (fmtShort) bruger kortformat ("13. mar") da det er en komprimeret range-overskrift.
@@ -33,13 +33,6 @@ function getViewDays(mode: ViewMode): number {
 }
 
 type OrdreStatus = 'roed' | 'orange' | 'groen' | 'gul'
-
-function getDagStatus(dag: DagDisponering): OrdreStatus {
-  if (dag.ændretAfFormand) return 'gul'
-  if (dag.disponeredeBiler === dag.bestilteBiler) return 'groen'
-  if (dag.disponeredeBiler > 0) return 'orange'
-  return 'roed'
-}
 
 function getOrdreStatus(ordre: Ordre): OrdreStatus {
   const dage = ordre.dage
@@ -76,45 +69,20 @@ function sortOrdrer(ordrer: Ordre[]): Ordre[] {
   })
 }
 
-function førsteLæsAggregeret(dage: DagDisponering[]): string {
-  const synlige = dage.filter(d => d.bestilteBiler > 0)
-  if (synlige.length === 0) return '—'
-  // Regel: brug Nr. 1's startTid hvis formand HAR valgt start-rækkefølge med tid
-  // Fallback: førsteLæsPåPlads (formands planlagte ankomsttid)
-  const resolve = (d: DagDisponering): string | undefined =>
-    d.startRaekkefoelge?.[0] != null && d.startTider?.[0] != null
-      ? d.startTider![0]!
-      : d.førsteLæsPåPlads
-  const første = resolve(synlige[0])
-  if (!første) return '—'
-  const ensartet = synlige.every(d => resolve(d) === første)
-  return ensartet ? første : 'Varierer'
-}
 
-function intervalAggregeret(dage: DagDisponering[]): string {
-  const synlige = dage.filter(d => d.bestilteBiler > 0)
-  if (synlige.length === 0) return '—'
-  const første = synlige[0].intervalMinutter
-  if (første == null) return '—'
-  const ensartet = synlige.every(d => d.intervalMinutter === første)
-  return ensartet ? `+${første} min` : 'Varierer'
-}
-
-// Solid-tint pills uden border — matcher formand's status-pille-pattern (PATTERNS.md 1a)
-const STATUS_BADGE: Record<OrdreStatus, { cls: string; label: string }> = {
-  roed:   { cls: 'bg-bad/15 text-bad',                  label: 'Ikke disponeret' },
-  orange: { cls: 'bg-warn-bg text-deep-teal',           label: 'Delvist disponeret' },
-  groen:  { cls: 'bg-good-bg text-good',                label: 'Fuldt disponeret' },
-  gul:    { cls: 'bg-yellow/25 text-deep-teal',         label: 'Ændret af formand' },
-}
-
+// Disponer-knappen er foreløbig taget UD AF SCOPE (2026-06-19).
+// Vognmanden disponerer i sit eget system og leverer via fil-udveksling (SFTP/web-formular),
+// så drag-and-drop-disponeringen udgår sandsynligvis. Koden + ruten bevares bag dette flag,
+// så den nemt kan slås til igen hvis beslutningen ændrer sig.
+const SHOW_DISPONER = false
 
 interface OrdreKortProps {
   ordre: Ordre
   onDisponer: (id: string) => void
+  onKoersel: (id: string) => void
 }
 
-function OrdreKort({ ordre, onDisponer }: OrdreKortProps) {
+function OrdreKort({ ordre, onDisponer, onKoersel }: OrdreKortProps) {
   const status = getOrdreStatus(ordre)
   const erFuldt = status === 'groen'
 
@@ -136,26 +104,8 @@ function OrdreKort({ ordre, onDisponer }: OrdreKortProps) {
             <p className="font-poppins font-semibold text-sm text-deep-teal leading-snug">
               {ordre.adresse}
             </p>
-            {/* 4-celle metadata-grid */}
-            <div className="grid grid-cols-4 gap-xs mt-sm">
-              <div>
-                <p className="flex items-center gap-xxxs font-inter text-xxs text-text-muted uppercase tracking-wide">
-                  <Clock size={12} className="text-text-muted flex-shrink-0" />
-                  Første læs
-                </p>
-                <p className="font-inter text-sm font-semibold text-deep-teal">
-                  {førsteLæsAggregeret(ordre.dage)}
-                </p>
-              </div>
-              <div>
-                <p className="flex items-center gap-xxxs font-inter text-xxs text-text-muted uppercase tracking-wide">
-                  <Repeat size={12} className="text-text-muted flex-shrink-0" />
-                  Interval
-                </p>
-                <p className="font-inter text-sm font-semibold text-deep-teal">
-                  {intervalAggregeret(ordre.dage)}
-                </p>
-              </div>
+            {/* 2-celle metadata-grid */}
+            <div className="grid grid-cols-2 gap-xs mt-sm">
               <div>
                 <p className="flex items-center gap-xxxs font-inter text-xxs text-text-muted uppercase tracking-wide">
                   <Factory size={12} className="text-text-muted flex-shrink-0" />
@@ -183,124 +133,51 @@ function OrdreKort({ ordre, onDisponer }: OrdreKortProps) {
             <p className="font-inter text-xs text-text-primary">Jens Thorsager</p>
             <p className="font-inter text-xxs text-text-muted mt-xxxs">Ordrenummer {ordre.ordrenr}</p>
             <p className="font-inter text-xs text-text-secondary mt-xxxs">Formand: Lars Hansen</p>
-            <p className="font-inter text-xs text-text-secondary">22 33 44 55</p>
+            <p className="font-inter text-xs text-text-secondary">+45 22 33 44 55</p>
           </div>
 
         </div>
       </div>
 
-      {/* Dag-tabel */}
-      <div>
-        {/* Kolonneoverskrifter */}
-        <div className="px-5 py-2 flex items-center gap-3 bg-surface-2 border-b border-hairline">
-          <span className="font-inter text-[10px] font-semibold uppercase tracking-wide text-text-muted w-32 flex-shrink-0">
-            Dato for udlægning
-          </span>
-          <span className="font-inter text-[10px] font-semibold uppercase tracking-wide text-text-muted w-24 flex-shrink-0">
-            Bestilte biler
-          </span>
-          <span className="font-inter text-[10px] font-semibold uppercase tracking-wide text-text-muted w-24 flex-shrink-0">
-            Mødetid fabrik
-          </span>
-          <span className="font-inter text-[10px] font-semibold uppercase tracking-wide text-text-muted w-28 flex-shrink-0">
-            Tid fabrik til plads
-          </span>
-          <span className="font-inter text-[10px] font-semibold uppercase tracking-wide text-text-muted w-36 flex-shrink-0">
-            Status
-          </span>
-          <span className="font-inter text-[10px] font-semibold uppercase tracking-wide text-text-muted flex-1">
-            Kommentar
-          </span>
-        </div>
-
-        <div className="divide-y divide-hairline">
-          {visibleDage.map(dag => {
-            const dagStatus = getDagStatus(dag)
-            const dagBadge = STATUS_BADGE[dagStatus]
-            const erAnnulleret = dag.annulleretAarsag === 'vejr'
-            return (
-              <div
-                key={dag.dato}
-                className={`px-5 py-3 flex items-center gap-3 ${erAnnulleret ? 'bg-warn-bg' : ''}`}
-              >
-                {/* Dato for udlægning */}
-                <span className="font-inter text-xs font-medium text-text-secondary w-32 flex-shrink-0 capitalize">
-                  {formatDatoMedUgedag(dag.dato)}
-                </span>
-
-                {/* Bestilte biler */}
-                <span className="font-inter text-xs font-medium w-24 flex-shrink-0 text-text-secondary">
-                  {dag.bestilteBiler}
-                </span>
-
-                {/* Mødetid fabrik */}
-                <span className="font-inter text-xs text-text-secondary w-24 flex-shrink-0">
-                  {dag.mødetidFabrik ?? '—'}
-                </span>
-
-                {/* Tid fabrik til plads */}
-                <span className="font-inter text-xs text-text-secondary w-28 flex-shrink-0">
-                  {dag.tidFabrikTilPlads != null ? `${dag.tidFabrikTilPlads} min` : '—'}
-                </span>
-
-                {/* Status badge */}
-                <span className={`w-36 flex-shrink-0 text-xxs font-inter font-semibold px-xs py-xxxs rounded-full text-center ${dagBadge.cls}`}>
-                  {dagBadge.label}
-                </span>
-
-                {/* Kommentar fra formand — med vejr-annullerings-pille */}
-                <span className="flex-1 flex flex-col gap-xxxs">
-                  {erAnnulleret && (
-                    <span className="inline-flex items-center gap-xxxs px-xs py-xxs rounded-md bg-yellow text-deep-teal font-poppins font-semibold text-xs uppercase tracking-wide self-start">
-                      <CloudRain size={14} className="flex-shrink-0" aria-hidden="true" />
-                      Ordre annulleret pga. vejr
-                    </span>
-                  )}
-                  {dag.kommentar && (
-                    <span className={`font-inter text-text-muted italic ${erAnnulleret ? 'text-xxs mt-xxxs' : 'text-xs'}`}>
-                      {dag.kommentar}
-                    </span>
-                  )}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Disponer-knap */}
-      <div className="px-5 py-3 border-t border-box-outline flex justify-end">
-        <button
-          className="font-poppins text-xs font-semibold px-md py-xs rounded-full bg-deep-teal text-white inline-flex items-center gap-xxxs hover:bg-dark-teal transition-colors"
-          onClick={() => onDisponer(ordre.id)}
-        >
-          {erFuldt ? 'Se disponering' : 'Disponer'}
-        </button>
-      </div>
-
-      {/* Tidligere kørte */}
-      {ordre.tidligereKørte && ordre.tidligereKørte.length > 0 && (
-        <div className="px-5 py-3 border-t border-box-outline bg-soft-aqua/40">
-          {ordre.tidligereKørte.map((tk, i) => (
-            <button
-              key={i}
-              className="flex items-start gap-1 text-left hover:opacity-75 transition-opacity w-full"
-              onClick={() => {
-                // TODO: åbn historik for denne tidligere periode
-              }}
-            >
-              <span className="font-inter text-[11px] text-text-muted leading-relaxed">
-                Første del af ordre kørt på ordrenummer: {tk.ordrenr} ({formatDatoLang(tk.fraDato)}–{formatDatoLang(tk.tilDato)}):
-                {' '}
-                <span className="font-medium text-deep-teal">
-                  {tk.biler.map(b => `Bil ${b.reg} (${b.chauffør})`).join(', ')}
-                </span>
+      {/* Biler pr. dag — simpel oversigt (detaljer ligger i Kørsel & afregning) */}
+      <div className="px-5 py-3">
+        <p className="font-inter text-xxs font-semibold uppercase tracking-widest text-text-muted mb-xs">
+          Biler pr. dag
+        </p>
+        <div className="flex flex-col divide-y divide-hairline">
+          {visibleDage.map(dag => (
+            <div key={dag.dato} className="flex items-center justify-between py-xs">
+              <span className="font-inter text-sm text-text-secondary capitalize">
+                {formatDatoMedUgedag(dag.dato)}
               </span>
-              <ChevronRight size={11} className="text-deep-teal flex-shrink-0 mt-0.5" />
-            </button>
+              <span className="font-inter text-sm font-semibold text-deep-teal">
+                {dag.bestilteBiler} {dag.bestilteBiler === 1 ? 'bil' : 'biler'}
+              </span>
+            </div>
           ))}
         </div>
-      )}
+      </div>
+
+      {/* Handlinger */}
+      <div className="px-5 py-3 border-t border-box-outline flex justify-end gap-xs">
+        <button
+          className="font-poppins text-xs font-semibold px-md py-xs rounded-full bg-deep-teal text-white inline-flex items-center gap-xxxs hover:bg-dark-teal transition-colors"
+          onClick={() => onKoersel(ordre.id)}
+        >
+          Kørsel & afregning
+        </button>
+
+        {/* UD AF SCOPE pt. — se SHOW_DISPONER-noten øverst. Bevaret bag flag. */}
+        {SHOW_DISPONER && (
+          <button
+            className="font-poppins text-xs font-semibold px-md py-xs rounded-full bg-white border border-hairline text-text-secondary inline-flex items-center gap-xxxs hover:bg-surface-2 transition-colors"
+            onClick={() => onDisponer(ordre.id)}
+          >
+            {erFuldt ? 'Se disponering' : 'Disponer'}
+          </button>
+        )}
+      </div>
+
 
     </div>
   )
@@ -316,7 +193,6 @@ export function VognmandListeScreen() {
     if (t === 'aabne') return 'aabne'
     return 'aabne'
   })
-  const [søgning, setSøgning] = useState('')
 
   // Kalender-navigation state — uafhængig af Gantt-view (ingen synkronisering)
   const [viewMode, setViewMode] = useState<ViewMode>('14-dage')
@@ -361,18 +237,7 @@ export function VognmandListeScreen() {
     )
   )
 
-  const sortedOrdrer = sortOrdrer(periodeFilteredOrdrer)
-
-  const filteredOrdrer = søgning.trim()
-    ? sortedOrdrer.filter(o =>
-        o.adresse.toLowerCase().includes(søgning.toLowerCase()) ||
-        o.ordrenr.includes(søgning) ||
-        o.produktKode.toLowerCase().includes(søgning.toLowerCase())
-      )
-    : sortedOrdrer
-
-  const antalAabne = alleOrdrer.filter(o => !erGodkendt(o.id)).length
-  const antalDisponeret = alleOrdrer.filter(o => erGodkendt(o.id)).length
+  const filteredOrdrer = sortOrdrer(periodeFilteredOrdrer)
 
   return (
     <div className="bg-page min-h-full">
@@ -421,49 +286,29 @@ export function VognmandListeScreen() {
 
         {/* Filter-tabs */}
         <div className="flex items-center gap-1 mb-5 border-b border-hairline pb-0">
-          {([
-            { id: 'aabne',      label: 'Åbne',       count: antalAabne },
-            { id: 'disponeret', label: 'Disponeret',  count: antalDisponeret },
-            { id: 'alle',       label: 'Alle',        count: alleOrdrer.length },
-          ] as { id: Tab; label: string; count: number }[]).map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={[
-                'flex items-center gap-1.5 px-4 py-2.5 font-inter text-sm font-medium transition-colors border-b-2 -mb-px',
-                activeTab === tab.id
-                  ? 'border-deep-teal text-deep-teal'
-                  : 'border-transparent text-text-muted hover:text-text-secondary',
-              ].join(' ')}
-            >
-              {tab.label}
-              <span className={[
-                'font-inter text-[11px] font-semibold px-1.5 py-px rounded-full min-w-[18px] text-center',
-                activeTab === tab.id
-                  ? 'bg-deep-teal/10 text-deep-teal'
-                  : 'bg-surface-2 text-text-muted',
-              ].join(' ')}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {/* Søg */}
-        <div className="mb-5">
-          <input
-            type="search"
-            placeholder="Søg adresse, ordrenr eller produktkode…"
-            value={søgning}
-            onChange={e => setSøgning(e.target.value)}
-            className="w-full bg-white border border-box-outline rounded-lg px-4 py-2.5 font-inter text-sm text-text-secondary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-deep-teal/20 focus:border-deep-teal/40 transition"
-          />
+          {(['aabne', 'disponeret', 'alle'] as Tab[]).map(tab => {
+            const label = tab === 'aabne' ? 'Åbne' : tab === 'disponeret' ? 'Disponeret' : 'Alle'
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={[
+                  'px-4 py-2.5 font-inter text-sm font-medium transition-colors border-b-2 -mb-px',
+                  activeTab === tab
+                    ? 'border-deep-teal text-deep-teal'
+                    : 'border-transparent text-text-muted hover:text-text-secondary',
+                ].join(' ')}
+              >
+                {label}
+              </button>
+            )
+          })}
         </div>
 
         {/* Kort-liste */}
         {filteredOrdrer.length === 0 ? (
           <div className="py-20 text-center font-inter text-sm text-text-muted">
-            Ingen ordrer matcher søgningen
+            Ingen ordrer i den valgte periode
           </div>
         ) : (
           <div className="flex flex-col gap-4">
@@ -472,6 +317,7 @@ export function VognmandListeScreen() {
                 key={ordre.id}
                 ordre={ordre}
                 onDisponer={id => navigate(`/prototyper/disponering/${id}`)}
+                onKoersel={id => navigate(`/prototyper/koersel/${id}`)}
               />
             ))}
           </div>
