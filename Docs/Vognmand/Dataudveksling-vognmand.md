@@ -121,11 +121,91 @@ Samme felter og samme validering uanset indleveringsvej:
 
 Begge ender i samme `confirmed_vehicles[]` i Colas' DB. Der bygges aldrig to datamodeller — kun to indgange til den samme.
 
-### Parkeret til senere — edge-cases
+### Edge-cases på dagen (afklaret 2026-06-19)
 
-> Bevidst udskudt 2026-06-10. Den daglige fil løser den planlagte disponering; følgende sker i realtid på dagen og håndteres senere (foreløbig via telefon + manuel opdatering i portalen → ny SMS til ny chauffør):
+Den daglige fil løser den **planlagte** disponering. Følgende sker i realtid på dagen:
 
-- **Sygdom / nedbrud** — chaufførskift på dagen.
-- **Ekstra bil sat på undervejs** — flere biler end disponeret dagen før.
+- **Sygdom / nedbrud → erstatningsbil:** formand og vognmand taler sammen, og vognmanden sender erstatningsbilen **via filudvekslingen** (samme kanal/format, ad-hoc indlevering — ikke den planlagte dagsfil). Erstatningsbilen binder til samme bil-ordrenummer-slot. Se "Bil-identitet" nedenfor.
+- **Ekstra bil sat på undervejs** — flere biler end disponeret dagen før: håndteres som en ekstra ad-hoc indlevering via samme kanal.
 
-Disse skal **ikke** presses ind i den daglige fil — de designes som et separat, mindre flow når hovedmodellen står.
+---
+
+## Udvekslings-model — fire øjeblikke + vognmand-app (LÅST 2026-06-19)
+
+Udvekslingen mellem Colas og vognmand er **ikke** en løbende live-strøm. Den består af **fire diskrete øjeblikke**:
+
+| # | Øjeblik | Retning | Indhold |
+|---|---|---|---|
+| 1 | **Bestilling** (dagen før) | Colas → vognmand | Kørselsbestilling pr. ordre — jf. afsnit 1 |
+| 2 | **Ordrebekræftelse af biler** (disponering retur) | Vognmand → Colas | Pr. bil: bil-ordrenummer + biltype + chauffør + mobil + **reelt reg.nr** — jf. afsnit 2 |
+| 3 | **Dag afsluttet** (på dagen) | Begge veje, samme event | Besked om at en bil er færdig for dagen → kan disponeres andetsteds |
+| 4 | **Afregning** (efter dagen) | Colas → vognmand | Timer (app vs godkendt) + tons + vejesedler |
+
+Mellem disse øjeblikke er der **ingen** udveksling. Vejesedler/tons strømmer ikke live; de samles og leveres ved afregning (øjeblik 4).
+
+### Vognmand-app — spejler formandens 3-mode
+
+Vognmandens ordre-detalje får samme toggle som formanden: **Planlægning · Udførsel · Afregning**. Hvert felt mærkes med retning (`Modtaget fra Colas` / `Sendt retur` / `Besked`), så siden samtidig er den visuelle kontrakt over hvad der udveksles.
+
+- **🔵 Planlægning** = øjeblik 1 + 2. Modtaget bestilling + disponerings-retur (biltype, chauffør, mobil, reelt reg.nr) + materiel.
+- **🟠 Udførsel** = øjeblik 3. **Kun hændelses-beskeder** — ingen live-data:
+  - **Dag afsluttet** pr. bil — udløses ens uanset om chaufføren afslutter i app'en *eller* formanden frigiver bilen (samme `dag_afsluttet`-event). Bilen er fri → kan disponeres andetsteds.
+  - **Aflyst** (vejr m.m.)
+  - **Erstatning nødvendig**
+- **🟢 Afregning** = øjeblik 4. Vejesedler + akkumuleret tons pr. bil pr. ordre + timer pr. chauffør pr. dag.
+
+### Bil-identitet — fast match-nøgle, reelt reg.nr binder på (LÅST 2026-06-19)
+
+- **Bil-ordrenummeret** (`<ordrenr>-DDMMYY-NN`) er den **permanente match-nøgle**. Den ændrer sig aldrig og bæres gennem hele livscyklussen (bestilling → bekræftelse → fabrik → chauffør → afregning).
+- Vognmandens **reelle reg.nr** bindes til match-nøglen ved ordrebekræftelse (øjeblik 2) og er det, **al udførsels- og afregningsdata hænger på** (vejesedler, tons, timer). Indtil reg.nr er returneret, hænger data midlertidigt på bil-ordrenummeret.
+- **Erstatning (nedbrud, sygdom mv.):** formand og vognmand **taler sammen** om erstatningen, og vognmanden **sender erstatningsbilen via filudvekslingen** (samme kanal — CSV/SFTP eller web-formular, ikke en separat vej). Den nye bil binder sit reg.nr til **samme bil-ordrenummer-slot**. Den gamle markeres `Afsluttet`, den nye `Ny`. **Formandssiden røres ikke** — bilen ryger blot i flow og på "bekræftede biler" med markering. Den frigjorte bil kan disponeres andetsteds.
+
+### Ændrings-cutoff (LÅST 2026-06-19)
+
+- **Én fælles cutoff dagen før (fx kl. 18)** — samme tidspunkt som fil-deadline.
+- Efter cutoff kan **hverken formand eller vognmand** redigere disponeringen i app'en. Redigeringsforsøg viser en **ring-modal** ("Ændringer efter kl. 18 skal aftales telefonisk").
+- Adskilt fra **kl-11-fabriksdeadlinen** (formand → fabrik), som er en anden regel.
+
+### Afregning — felter Colas sender retur (LÅST 2026-06-19, opdateret)
+
+Afregningen vises **pr. chauffør pr. dag** og er afhængig af afregningstype (jf. FUNCTIONAL_FLOWS Trin 6b):
+
+| Felt | Indhold |
+|---|---|
+| **Afregningstype** | `time` eller `akkord` |
+| **Formand-godkendte timer** | `time` → køretid · ventetid · hviletid · `akkord` → **kun ventetid** (køretid/hviletid ikke relevant) |
+| **Chauffør-app rå-timer** | Køretid · ventetid · hviletid — chaufføren logger ALTID alle tre, uanset type. Vises så vognmanden kan se forskellen mod formandens godkendte tal (Færdselsstyrelse-dokumentation) |
+| **Årsag til ændrede timer** | Fritekst fra chauffør-app — chaufførens begrundelse hvis han har justeret timer (kan være tom) |
+| **Chauffør-kommentar** | Fritekstkommentar fra chaufføren (kan være tom) |
+| **Tons** | Akkumuleret pr. bil pr. ordre |
+| **Vejesedler** | Pr. læs: tidspunkt · produkt · tons (vises når chaufføren foldes ud) |
+
+Ingen "diff"-kolonne — vognmanden ser app- og formand-tal ved siden af hinanden og vurderer selv afvigelsen. Spejler formandens **Bil- og tonsafregning**.
+
+### Format-konventioner (LÅST 2026-06-19)
+
+Gælder både CSV-fil og web-formular. Følger `.claude/docs/DATOFORMAT.md` (storage-format i fil; lang-format kun til UI-visning).
+
+| Felttype | Format | Eksempel |
+|---|---|---|
+| **Dato** | ISO 8601 `yyyy-mm-dd` | `2026-03-17` |
+| **Tid** | `HH.mm` (24-timer, punktum) | `07.15` |
+| **Tons** | Heltal | `96` |
+| **Separator** | Semikolon | `;` |
+| **Tegnsæt** | UTF-8 (med BOM så Excel læser danske tegn) | — |
+
+> NB: Tider i CSV skrives som `HH.mm` med punktum jf. kontrakten — vær opmærksom på at felter kan kræve anførselstegn hvis et parser-system fejllæser punktum som decimal.
+
+### CSV-kolonner
+
+**Bestilling (Colas → vognmand):**
+`bil_ordrenummer; ordrenummer; dato; fabrik; produkt; forventet_tons; aflaesningssted; forventet_antal_biler; ankomst_plads; moedetid_fabrik; afregningsform; kommentar`
+
+**Disponering retur (vognmand → Colas), én række pr. bil:**
+`bil_ordrenummer; reg_nr; biltype; chauffoer_navn; chauffoer_mobil`
+
+**Match-nøgle:** `bil_ordrenummer` (`<ordrenr>-DDMMYY-NN`) er fælles i begge retninger og kobler bekræftet bil mod bestillingen.
+
+### Vognmand-app (prototype)
+
+`DataudvekslingScreen` (menupunkt "Dataudveksling") viser begge kontrakter felt-for-felt med format-eksempler, leverer **downloadbare CSV-eksempler** (bestilling + retur) og en **"Opdatér"-knap** der puller klar-data fra Colas (læser kun nuværende tilstand — trigger **ikke** server-generering on-demand; den automatiske SFTP-push står ved magt).

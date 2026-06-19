@@ -4,8 +4,23 @@
 > Opdateres løbende når nye sektioner bygges.
 > Formål: IT-leveranceliste over felter der skal leveres fra backend/PLAN-system.
 
-**Sidst opdateret:** 2026-05-12
+**Sidst opdateret:** 2026-06-19
 **Dækker:** Formand (komplet prototype), Chauffør (kommer), Vognmand (kommer)
+
+---
+
+## Globale format-konventioner
+
+Parallelt med datoformatet (`DATOFORMAT.md`) — storage vs. visning, konverteret i ÉN delt utility, aldrig spredt i komponenter.
+
+### Telefonnummer-format (LÅST 2026-06-19)
+
+| Kontekst | Format | Eksempel |
+|---|---|---|
+| **Storage / fil (DB, CSV via SFTP)** | E.164 uden mellemrum | `+4512121212` |
+| **UI-visning** | Landekode + cifre i par | `+45 12 12 12 12` |
+
+**Global utility:** `@shared/utils/phone` — `formatPhone(raw)` (→ visning) + `toE164(raw)` (→ storage) + `PHONE_COUNTRY_CODE`. Single source of truth på tværs af alle apps; byg aldrig en app-lokal kopi. Alle felter markeret "Telefonnr" i tabellerne nedenfor følger denne konvention.
 
 ---
 
@@ -43,15 +58,20 @@
 
 ### Sektion: Asfaltbestilling (Planlægning-tab)
 
-> **Status:** Interview-fase B — feltkortlægning pr. komponent
-> **Prototype-source:** `apps/formand/src/prototypes/ordre-plan/OrdrePlanScreen.tsx#L1440-L1634`
-> **Interview-rev:** 2026-05-26
-> **Cross-cutting:** Status-enums = `TransportOrderStatus` + `ProduktTilstand` + `AflysningsAarsag` (se STATUS_VOKABULAR.md). Dato-storage = ISO. Dato-display via `formatLongDate`/`formatLongDateWithDay`.
-> **Refactor-noter fra prototype:**
-> - `productSamlesFlags: Record<\`${productId}__${dayId}\`, boolean>` → flyttes ind på `DayPlan.samlesPaaEnBil: boolean`
-> - `weatherActive` (local useState i ProductBoxV2) → flyttes ind på `DayPlan.weatherActive: boolean` (persisteret)
-> - CancelReason `'regn' | 'frost' | 'underlag' | 'andet'` matcher allerede `AflysningsAarsag` 1:1 — ingen mapping nødvendig
-> - StatusPill `'sendt' | 'aflyst' | 'afventer'` er UI-derived — ikke en persisteret enum. Beregnes fra `day.cancelled` + `sentDayIds.has(day.id)` + `day.morgenTons != null`
+> **Status:** Interview-fase B — RE-SCOPED 2026-06-18 efter prototype-drift (~3 uger). Se `.claude/sections/formand/asfaltbestilling.md` "Drift-noter" + `Docs/Formand/asfaltbestilling/CONTRACT.md` (v2 DRAFT).
+> **Prototype-source (2026-06-18):** `apps/formand/src/prototypes/ordre-plan/OrdrePlanScreen.tsx` — Asfaltbestilling-blok `#L1994-L2136`, datovælger `#L1777-L1806`
+> **Interview-rev:** 2026-06-18 (oprindeligt 2026-05-26)
+> **Cross-cutting:** Status-enums = `TransportOrderStatus` + `AflysningsAarsag` (se STATUS_VOKABULAR.md). Dato-storage = ISO. Dato-display via `formatLongDate` (prototype bruger UDEN ugedag — se B-5).
+>
+> **⚠️ RE-SCOPE-ÆNDRINGER 2026-06-18 (drift siden v1):**
+> - **`EkstraBestilling`-konstruktet FJERNET** (FF Flow 9b, LÅST 2026-06-03). Formand opretter ikke længere ekstra-bestillinger. `EkstraBestillingCTA` + `useEkstraBestilling` slettet. `ekstra_bestillinger`-tabellen udgår.
+> - **`day.ekstraTons`** (NY) = read-only delta-tons pushet fra PLAN (Flow 9b). Vist i `EkstraBestillingBox` (read-only) + `StatusPill kind='ekstra-bekraeftet'`. Totalen beregnes via `getEffectiveTons(d) = d.tonsPlanned + (d.ekstraTons?.tons ?? 0)`.
+> - **`bestillingForSent`** (NY, Flow 9c LÅST 2026-06-18) = "for sent"-flag (deadline kl 11 dagen før udlægning). For sent ≠ blokeret. Persist-flag = **B-6** åben; konfigurerbar pr. fabrik = **B-7** åben.
+> - **Aflysning flyttet** til ny delt `AflysningCell` i Ordredetaljer-grid (unified alle modes). ProductBoxV2's X-knap/reason-picker er dead path.
+> - **`productSamlesFlags: Record<\`${productId}__${dayId}\`, boolean>`** bruges STADIG som map i prototype — IKKE `DayPlan.samlesPaaEnBil`. Placering = **B-2** åben (map vs. DayPlan-felt).
+> - **`weatherActive`** er rent lokal `useState` i ProductBoxV2 — persisterer intet, fyrer intet. Persist + cross-app (ABE-8) = **B-1** åben.
+> - CancelReason `'regn' | 'frost' | 'underlag' | 'andet'` matcher `AflysningsAarsag` 1:1 — ingen mapping nødvendig.
+> - StatusPill `'sendt' | 'aflyst' | 'afventer' | 'ekstra-bekraeftet'` er UI-derived — ikke persisteret enum.
 
 ---
 
@@ -69,8 +89,9 @@
 | `morgenTons` | `number \| undefined` | ❌ | `undefined` | ≥ 0, heltal, typisk ≤ `tonsPlanned` (advarsel ikke blocker) | Formand | → fabrik (faktisk bestilling), → udfoersel-dagsoverblik (default for "faktisk udlagt") |
 | `cancelled` | `boolean` | ✅ | `false` | — | Formand | → vognmand, → fabrik |
 | `cancelReason` | `AflysningsAarsag \| undefined` | ❌ | `undefined` | Kun hvis `cancelled === true`. Enum: `'regn' \| 'frost' \| 'underlag' \| 'andet'` | Formand | → fabrik (info) |
-| `samlesPaaEnBil` | `boolean` | ✅ | `false` | — | Formand | → fabrik, → vognmand, → chauffør (multi-produkt-loading-flow) |
-| `weatherActive` | `boolean` | ✅ | `false` | — | Formand | → fabrik, → vognmand (info — kan påvirke "minus regn"-fradrag) |
+| `samlesPaaEnBil` | `boolean` (**B-2**) | ✅ | `false` | **B-2:** prototype bruger `productSamlesFlags[\`${pid}__${did}\`]`-map; v1 antog felt på DayPlan. Afklar placering før build. | Formand | → fabrik, → vognmand, → chauffør (multi-produkt-loading-flow) |
+| `weatherActive` | `boolean` (**B-1**) | ✅ | `false` | **B-1:** prototype = rent lokal `useState` i ProductBoxV2 (persisterer intet, fyrer intet). Afklar: persist + cross-app (ABE-8) i Fase 1, eller rent visuelt? | Formand | → fabrik, → vognmand (info — "minus regn") — **kun hvis B-1 = persist** |
+| `ekstraTons` | `{ tons: number; bekraeftetAf: 'fabrik'; tidspunkt: string } \| undefined` | ❌ | `undefined` | **READ-ONLY — pushet fra PLAN (Flow 9b).** Indeholder KUN delta-mængden, ikke totalen. Vist i `EkstraBestillingBox`. `tidspunkt` = ISO 8601. | PLAN (push) | ← PLAN. Total via `getEffectiveTons()` → alle downstream |
 
 **Beregnet/derived state (ikke gemt på DayPlan, kun i UI):**
 
@@ -91,64 +112,50 @@ day_plans (
   morgen_tons int null,
   cancelled boolean not null default false,
   cancel_reason text check (cancel_reason in ('regn','frost','underlag','andet')) null,
-  samles_paa_en_bil boolean not null default false,
-  weather_active boolean not null default false,
+  samles_paa_en_bil boolean not null default false,   -- afventer B-2 (map vs. DayPlan-felt)
+  weather_active boolean not null default false,       -- afventer B-1 (persist vs. rent visuelt)
+  ekstra_tons int null,                                -- read-only delta pushet fra PLAN (Flow 9b)
+  ekstra_tons_bekraeftet_tidspunkt timestamptz null,   -- PLAN-bekræftelses-tidspunkt
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 )
 ```
 
+> **NB (Flow 9b):** `ekstra_tons` modelleres pt. som PLAN→Colas push. Om data allerede ligger i PLAN eller om Colas skal sende dem op til Asfalttavlen = retnings-afstemning til PLAN-kickoff (ABE-2b, FF L2509). I app'en er feltet uanset **read-only**.
+
 ---
 
-#### Type: `EkstraBestilling`
+#### ~~Type: `EkstraBestilling`~~ — FJERNET 2026-06-03 (FF Flow 9b)
 
-> Drip-bestilling oprettet løbende på dagen ud over morgen-bestillingen. Persisteret pr. ekstra-ordre.
-
-| Felt | Type | Required | Default | Validation | Kilde | Cross-app |
-|---|---|---|---|---|---|---|
-| `id` | `string` | ✅ | server-genereret | UUID | System | — |
-| `orderId` | `string` | ✅ | parent | FK → order | System | — |
-| `date` | `string` (ISO) | ✅ | `selectedPlanDate` | Lovligt ISO, samme dag som morgen-bestilling | Formand | → fabrik, → vognmand |
-| `productId` | `string` | ✅ (ved send) | `''` (placeholder) | Skal være sat før `sent`-kald | Formand | → fabrik |
-| `tons` | `number` | ✅ | 0 | > 0 ved `sent` (validation gate) | Formand | → fabrik |
-| `samlesPaaEnBil` | `boolean` | ✅ | `false` | — | Formand | → fabrik, → vognmand, → chauffør |
-| `puljelaes` | `boolean` | ✅ | `false` | Data-flag bevaret for vejeseddel-kompatibilitet — IKKE vist i UI. **Spørgsmål B6: Beholdes på Supabase eller dropper vi det helt?** | System | → vejesedler (afregning) |
-| `multilaes` | `boolean` | ✅ | `false` | Data-flag bevaret for vejeseddel-kompatibilitet — IKKE vist i UI. **Spørgsmål B6: Beholdes på Supabase eller dropper vi det helt?** | System | → vejesedler (afregning) |
-| `andreOrdrer` | `string[]` | ✅ | `[]` | Cross-ordre fordeling — pt. tomt array. **Spørgsmål B7: Hører dette på `EkstraBestilling` eller på `Samleordre`?** | Derived/Formand | → afregning |
-| `sent` | `boolean` | ✅ | `false` | — | System (sættes ved Send til fabrik) | → fabrik |
-
-**Supabase mapping (TODO):**
-```sql
--- TODO: Erstat med Supabase når klar
-ekstra_bestillinger (
-  id uuid pk,
-  order_id uuid fk,
-  product_id uuid fk null,            -- nullable indtil productId er valgt
-  date date not null,
-  tons int not null default 0,
-  samles_paa_en_bil boolean not null default false,
-  puljelaes boolean not null default false,  -- afventer B6
-  multilaes boolean not null default false,  -- afventer B6
-  sent boolean not null default false,
-  sent_at timestamptz null,
-  created_at timestamptz default now()
-)
-```
+> **🔴 KONSTRUKT FJERNET.** Formand-oprettede ekstra-bestillinger (`EkstraBestilling`-interface + `ekstra_bestillinger`-tabel + `useEkstraBestilling`-hook + `EkstraBestillingCTA`) er **slettet** fra prototype + datamodel (LÅST 2026-06-03, jf. FF L2167 + L2699).
+>
+> **Erstatning:** Ekstra tons håndteres nu udelukkende som **PLAN→Colas push** via `DayPlan.ekstraTons` (read-only, se DayPlan-tabellen ovenfor). Telefon-flowet er uændret: formand ringer fabrik → fabrik indfører i PLAN → app pull'er → `EkstraBestillingBox` viser delta read-only.
+>
+> **Konsekvens for tidligere felter:**
+> - `productId`/`tons`/`sent` → erstattet af `DayPlan.ekstraTons.{tons, tidspunkt}`
+> - `samlesPaaEnBil` på ekstra → bortfaldet ("Samles på en bil" lever nu KUN på produkter, FF L2176)
+> - `puljelaes` / `multilaes` (tidligere B6) → vejeseddel-flags lever nu på afregnings-/vejeseddel-domænet, ikke her
+> - `andreOrdrer` (tidligere B7) → cross-ordre-fordeling er afregnings-domæne, ikke bestilling
+>
+> **⚠️ ABE-konsistens (E-1):** ABE-1/ABE-2-payloads (FF L2442-L2455) refererer stadig `kind='ekstra'`-rows. Dette modsiger fjernelsen og `transport_orders.kind`-kollaps til `'morgen'` (FF L2699). Afklares før build — se CONTRACT v2 §9 E-1.
 
 ---
 
 #### Type: `TransportOrder` (UI-derived per produkt+dag — sendt til fabrik)
 
 > Repræsenterer afsendt bestilling. UI læser status via `sentDayIds: Set<string>` i prototypen, men i produktion er det en row i Supabase.
+>
+> **⚠️ E-1 (ABE-konsistens):** Felterne `ekstraBestillingId` + `kind='ekstra'` nedenfor er **arvegods fra v1**. FF L2699 siger `kind` er kollapset til kun `'morgen'` efter EkstraBestilling-fjernelsen. Tabellen her er IKKE opdateret — den afventer E-1-afklaring (se CONTRACT v2 §9). Felterne markeret **[E-1]** kan udgå.
 
 | Felt | Type | Required | Default | Validation | Kilde | Cross-app |
 |---|---|---|---|---|---|---|
 | `id` | `string` | ✅ | server-genereret | UUID | System | — |
-| `dayPlanId` | `string \| null` | conditional | — | Required for morgen-bestilling; null for ekstra-bestilling | System | — |
-| `ekstraBestillingId` | `string \| null` | conditional | — | Required for ekstra-bestilling; null for morgen | System | — |
+| `dayPlanId` | `string` | ✅ | — | FK → day_plans (kind er nu altid 'morgen') | System | — |
+| `ekstraBestillingId` **[E-1]** | `string \| null` | — | `null` | Arvegods — udgår hvis kind-kollaps bekræftes | System | — |
 | `orderId` | `string` | ✅ | parent | FK → order | System | — |
 | `date` | `string` (ISO) | ✅ | — | Lovligt ISO | Derived | → fabrik, → vognmand, → udfoersel-dagsoverblik |
-| `kind` | `'morgen' \| 'ekstra'` | ✅ | — | — | Derived | — |
+| `kind` **[E-1]** | `'morgen'` (`\| 'ekstra'`?) | ✅ | `'morgen'` | FF L2699: kollapset til 'morgen'. Union bevares kun hvis E-1 åbner for fremtidig udvidelse | Derived | — |
+| `sentLate` **[B-6]** | `boolean` | ❌ | `false` | **B-6:** skal "for sent"-afsendelse (efter kl-11-deadline) bære persistent flag videre til vognmand/fabrik/Asfalttavlen? | Formand/Derived | → vognmand, → fabrik (hvis B-6 = ja) |
 | `tons` | `number` | ✅ | — | `morgenTons` for kind='morgen', `tons` for kind='ekstra'. > 0 | Derived | → fabrik |
 | `productId` | `string` | ✅ | — | FK → product | Derived | → fabrik |
 | `status` | `TransportOrderStatus` | ✅ | `'afventer'` | Enum: `'afventer' \| 'bekraeftet'` (se STATUS_VOKABULAR.md §5) | System | → vognmand, → fabrik, → udfoersel-dagsoverblik |
@@ -272,7 +279,7 @@ transport_orders (
 
 #### Komponent: `AsfaltbestillingSection` (Container)
 
-**Ejer state via hooks** — importerer `useAsfaltbestilling` + `useEkstraBestilling`. Modtager kun ordre-context som props udefra.
+**Ejer state via hook** — importerer `useAsfaltbestilling` (én hook; `useEkstraBestilling` er fjernet). Modtager kun ordre-context som props udefra.
 
 **Props ind (fra parent — OrdrePlanScreen):**
 
@@ -289,19 +296,22 @@ transport_orders (
 > **Designvalg:** `activeProductId` og `selectedPlanDate` er **controlled fra parent** fordi andre sektioner (Ordredetaljer-spec-grid, Kørsel) også reagerer på dem. Container ejer ikke disse — den propagerer kun.
 
 **Lokal container-state (kun visuelt — ikke persisteret):**
-- `cancellingDayId: string | null` — hvilken dag er i "vælg aflysnings-årsag"-mode
+- `aflysPickerDayId: string | null` (+ `aflysPickerProductId`) — driver `AflysningCell`-pickeren i Ordredetaljer-grid (NB: aflysning sker IKKE længere inde i ProductBoxV2)
 - `showConfirmSend: boolean` — modal-visibility
+- `bestillingForSent: boolean` — "for sent"-flag (Flow 9c; hardkodet `true` i prototype, reel beregning `nu > deadline` ved Supabase)
 
-**Children rendret:**
-1. `<DatePillsRow>` med dato-piller
+**Children rendret (2026-06-18):**
+1. Datovælger (unified, øverst — `formatLongDate`, ingen sent-state-pille). Ekstraheres til `<DatePillsRow>`.
 2. Empty-state-besked `"Ingen produkter denne dag"` (når `productsForSelectedDate.length === 0`)
 3. `<ProductBoxV2>` × n
 4. `<StatusPill>` under hver ProductBoxV2
-5. `<EkstraBestillingBox>` × m
-6. `<StatusPill>` under hver EkstraBestillingBox
-7. `<EkstraBestillingCTA>` (dashed-border "+ Ekstra"-knap)
-8. `<SendTilFabrikCTA>` (gul "Send til fabrik"-knap m. kommentar-tooltip)
-9. `<SendBekraeftelsesModal>` (conditional på `showConfirmSend`)
+5. `<EkstraBestillingBox>` × m (KUN når `day.ekstraTons` findes — read-only PLAN-data)
+6. `<StatusPill kind="ekstra-bekraeftet">` under hver EkstraBestillingBox
+7. `<SendTilFabrikCTA>` (gul "Send til fabrik"-knap m. permanent kl-11-tekst + kommentar-tooltip)
+8. `<SendBekraeftelsesModal>` (conditional på `showConfirmSend`)
+9. `<AflysningCell>` — rendres inde i Ordredetaljer-grid'et (6. celle), ikke i selve bestillings-rækken
+
+> **FJERNET:** `<EkstraBestillingCTA>` (formand opretter ikke ekstra-bestillinger længere).
 
 ---
 
@@ -311,9 +321,11 @@ transport_orders (
 
 | Felt | Type | Required | Default | Validation | Beskrivelse |
 |---|---|---|---|---|---|
-| `dates` | `string[]` (ISO) | ✅ | — | Array af lovlige ISO-datoer, sorteret ASC | Datoer der har mindst ét ikke-aflyst produkt |
+| `dates` | `string[]` (ISO) | ✅ | — | Array af lovlige ISO-datoer, sorteret ASC | Hele ordrens dag-spænd (`planDays`) |
 | `selectedDate` | `string` (ISO) | ✅ | — | Skal være i `dates` | Den aktuelt valgte dato |
-| `sentStateByDate` | `Record<string, 'all-sent' \| 'partial' \| 'none'>` | ✅ | `{}` | — | Per-dato status — om alle/nogen/ingen produkter er sendt |
+| `today` | `string` (ISO) | ✅ | — | — | Til "passeret dag"-styling (gennemstreget) |
+
+> **RE-SCOPE 2026-06-18:** `sentStateByDate`-prop **fjernet**. Den unified datovælger (D-D) har INGEN grøn afsendt-state på pillerne — kun selected / passeret (hvid+gennemstreget) / default. Per-pille send-status findes ikke længere i prototypen.
 
 **Callbacks ud:**
 
@@ -322,9 +334,9 @@ transport_orders (
 | `onSelect` | `(date: string) => void` | Bruger klikker en pille |
 
 **Display:**
-- Hver pille viser `formatLongDate(date)` — fx `16. marts 2026`
-- `aria-label` = `formatLongDate(date)` + (hvis sendt) `" (afsendt)"`
-- 3 visuelle tilstande: `selected` (deep-teal bg), `all-sent` (good/grøn bg + check-ikon), `default` (hvid m. border)
+- Hver pille viser `formatLongDate(date)` — fx `16. marts 2026` (**B-5:** ugedag-prefix ja/nej?)
+- `aria-label` = `formatLongDate(date)` + (hvis passeret) `" (overstået)"`
+- 3 visuelle tilstande: `selected` (deep-teal bg), `passeret` (hvid + `line-through`), `default` (hvid m. border)
 
 > **Empty state** flyttes ud af denne komponent (Fase A-beslutning). Container håndterer `productsForSelectedDate.length === 0`-tilfældet selv.
 
@@ -337,11 +349,11 @@ transport_orders (
 | Felt | Type | Required | Default | Validation | Beskrivelse |
 |---|---|---|---|---|---|
 | `product` | `MockProduct` | ✅ | — | — | Hele produkt-objektet (læser `recipeName`, `recipeCode`, `thicknessMm`) |
-| `day` | `DayPlan` | ✅ | — | — | Hele dag-objektet (læser `tonsPlanned`, `morgenTons`, `cancelled`, `cancelReason`, `samlesPaaEnBil`, `weatherActive`) |
+| `day` | `DayPlan` | ✅ | — | — | Hele dag-objektet (læser `tonsPlanned`, `morgenTons`, `cancelled`, `cancelReason`). Viser KUN originalt `tonsPlanned` (ekstra vises i nabo-EkstraBestillingBox) |
 | `isFocused` | `boolean` | ✅ | — | — | Visuel fokus-ring (dark-teal border) |
-| `isSelectingReason` | `boolean` | ✅ | — | — | Visning af aflysnings-årsags-picker |
-| `isSent` | `boolean` | ✅ | — | — | Låser Forventet + Morgen tons + checkbox (read-only) |
+| `isSent` | `boolean` | ✅ | — | — | Låser Forventet + Morgen tons + samles-checkbox (read-only) |
 | `ordreTagLabels` | `string[] \| undefined` | ❌ | `undefined` | Hver label max 30 tegn | Samleordre: ordre-tags vist under produkt-navn |
+| `samlesPaaEnBil` | `boolean \| undefined` (**B-2**) | ❌ | `false` | Prototype: fra `productSamlesFlags`-map (ikke `day`) | "Samles på en bil"-checkbox state |
 
 **Callbacks ud:**
 
@@ -350,24 +362,22 @@ transport_orders (
 | `onFocus` | `() => void` | Bruger klikker produkt-header (driver Spec-grid) |
 | `onUpdateTons` | `(v: number) => void` | Forventet tons ændret. v ≥ 0, heltal |
 | `onUpdateMorgenTons` | `(v: number \| undefined) => void` | Morgen tons ændret. `undefined` = ryddet |
-| `onToggleWeather` | `(active: boolean) => void` | Vejr-toggle skiftet (A4-beslutning: bobler ud, ikke local) |
-| `onToggleSamlesPaaEnBil` | `(samles: boolean) => void` | "Samles på en bil"-checkbox skiftet (A5: `day.samlesPaaEnBil`) |
-| `onCancel` | `() => void` | "X" øverst højre klikket — åbn årsags-picker |
-| `onAbortCancel` | `() => void` | Luk årsags-picker uden at aflyse |
-| `onConfirmCancel` | `(reason: AflysningsAarsag) => void` | Årsag valgt — bekræft aflysning |
-| `onRestore` | `() => void` | "Fortryd" på aflyst-tilstand klikket |
+| `onSamlesPaaEnBilChange` | `(v: boolean) => void` | "Samles på en bil"-checkbox skiftet (**B-2**) |
 
-**7 visual modes:**
-1. **Aflyst** (`day.cancelled`) — opacity-60, bad-border, recipe-name + "Aflyst" + årsag + "Fortryd"-link
-2. **Reason-picker** (`isSelectingReason`) — 4 årsags-knapper + X-fortryd
-3. **Default** (alle andre) — hvid kort med 7 sub-elementer:
-   - X-aflys-knap (top right)
-   - Vejr-toggle (bottom right, z-10) — 2 modes: inactive (`#F5F5F5`) / active (`bg-dark-teal`)
+> **🔴 DEAD ift. v1 (D-C):** `onCancel` / `onAbortCancel` / `onConfirmCancel` / `isSelectingReason` er **dead** — aflysning sker nu via `AflysningCell` i Ordredetaljer-grid. ProductBoxV2's interne reason-picker-mode er ikke længere nåbar (X-knap fjernet). `onRestore` bevares (Fortryd-link i Aflyst-mode vises stadig i ProductBoxV2).
+> **⚠️ B-1 (vejr):** Prototype har `weatherActive` som rent lokal `useState` + ingen `onToggleWeather`-prop. Hvis B-1 = persist, genintroduceres `onToggleWeather: (active: boolean) => void` + `day.weatherActive`. Hvis B-1 = rent visuelt Fase 1, forbliver det lokal state uden cross-app.
+
+**Visual modes (2026-06-18):**
+1. **Aflyst** (`day.cancelled`) — opacity-60, bad-border, recipe-name + "Aflyst" + `cancelReason` + "Fortryd"-link (`onRestore`)
+2. **Default** — hvid kort med sub-elementer:
+   - Vejr-toggle (bottom right, z-10) — 2 modes: inactive (`#F5F5F5`) / active (`bg-dark-teal`) — **lokal state, B-1**
    - Produkt-header (klikbar) m. evt. ordre-tags
    - Forventet tons input (locked når `isSent`)
    - Morgen tons input m. 2 modes: empty (rød-bg) / udfyldt (grøn-bg). Locked når `isSent`
-   - "Samles på en bil"-checkbox (locked når `isSent`)
-4. **Sent + aktiv** (`isSent === true`) — alle inputs locked, dropper sub-tilstand af mode 3
+   - "Samles på en bil"-checkbox (locked når `isSent`) — **B-2**
+3. **Sent + aktiv** (`isSent === true`) — Forventet/Morgen/samles locked; vejr-toggle forbliver aktiv
+
+> **DEAD mode:** Reason-picker (`isSelectingReason`) — kode findes (`#L3501-L3531`) men entry point fjernet. Builder bygger den IKKE.
 
 > **Validation rules:**
 > - `tonsPlanned` ≥ 0 (clamped via `Math.max(0, ...)`)
@@ -376,30 +386,24 @@ transport_orders (
 
 ---
 
-#### Komponent: `EkstraBestillingBox` (Presenter)
+#### Komponent: `EkstraBestillingBox` (Presenter — READ-ONLY, omskrevet 2026-06-18)
+
+> **🔄 ÆNDRET (D-B):** Fra interaktiv drip-bestilling → **read-only PLAN-visning**. Viser KUN `day.ekstraTons` (delta-tons pushet fra PLAN, Flow 9b). Ingen write-callbacks, ingen dropdown, ingen slet. Rendres KUN når `day.ekstraTons` findes. Dimensioner matcher `ProductBoxV2` så de aligner i rækken.
 
 **Props ind:**
 
 | Felt | Type | Required | Default | Validation | Beskrivelse |
 |---|---|---|---|---|---|
-| `ekstra` | `EkstraBestilling` | ✅ | — | — | Hele ekstra-objektet |
-| `products` | `MockProduct[]` | ✅ | — | Min. 1 element | Til produkt-dropdown |
+| `product` | `MockProduct` | ✅ | — | — | Til header (recipeName + thicknessMm) |
+| `day` | `DayPlan` | ✅ | — | `day.ekstraTons` skal findes (ellers returnerer null) | Læser `day.ekstraTons.{tons, tidspunkt}` |
 
-**Callbacks ud:**
+**Callbacks ud:** Ingen — pure read-only visning.
 
-| Callback | Signatur | Beskrivelse |
-|---|---|---|
-| `onUpdate` | `(patch: Partial<EkstraBestilling>) => void` | Partial-update af felt (tons, productId, samlesPaaEnBil) |
-| `onRemove` | `() => void` | Slet ekstra-bestilling |
+**Visning:**
+- Gul (`bg-warning`) boks, header (recipeName + mm), "Ekstra: +N tons", "Bekræftet: kl. HH:MM"
+- Ledsages af `<StatusPill kind="ekstra-bekraeftet">` ("Bekræftet fabrik")
 
-**2 visual modes:**
-1. **Sendt** (`ekstra.sent`) — read-only m. E-badge, produkt-navn, tons + evt. "Samles på en bil"-indikator
-2. **Default** — X-slet, E-badge, tons-input, produkt-dropdown, "Samles på en bil"-checkbox
-
-> **Validation rules:**
-> - `tons` ≥ 0 (clamped via `Math.max`)
-> - `productId` må være `''` (placeholder "Vælg") indtil send-trigger; så er det validation-blocker
-> - I "sent"-mode er alt locked
+> **DEAD ift. v1:** `ekstra`-prop, `onUpdate`, `onRemove`, products-dropdown, "Samles på en bil" på ekstra, sent-mode — alt fjernet.
 
 ---
 
@@ -409,37 +413,22 @@ transport_orders (
 
 | Felt | Type | Required | Default | Validation | Beskrivelse |
 |---|---|---|---|---|---|
-| `kind` | `'sendt' \| 'aflyst' \| 'afventer'` | ✅ | — | Enum | UI-derived state |
-| `afventerLabel` | `string \| undefined` | ❌ | `'Afventer'` | — | Vises kun ved kind='afventer'. Typiske værdier: `'Indtast morgen'`, `'Klar til afsendelse'`, `'Indtast tons'` |
+| `kind` | `'sendt' \| 'aflyst' \| 'afventer' \| 'ekstra-bekraeftet'` | ✅ | — | Enum (4 kinds — D-E) | UI-derived state |
+| `afventerLabel` | `string \| undefined` | ❌ | `'Afventer'` | — | Vises kun ved kind='afventer'. Typiske værdier: `'Indtast morgen'`, `'Klar til afsendelse'` |
 
 **Callbacks ud:** Ingen — pure visual.
 
-**3 visual modes:**
+**4 visual modes:**
 1. `sendt` — `bg-good-bg`, dot + "Sendt til fabrik"
 2. `aflyst` — `bg-bad/10`, "Aflyst"
 3. `afventer` — dashed border, dynamisk label
+4. `ekstra-bekraeftet` (NY) — `bg-good-bg`, dot + "Bekræftet fabrik" (til EkstraBestillingBox)
 
-> **Vigtigt:** `kind` er **ikke** en persisteret enum. Den beregnes per render i container fra `day.cancelled` + `sentDayIds` + `morgenTons`. Bruges ikke i Supabase.
+> **Vigtigt:** `kind` er **ikke** en persisteret enum. Beregnes per render. **🌍 Shared-kandidat:** `StatusPill` findes ikke i `COMPONENT_REGISTRY.md` — architect skal grep'e på tværs af apps og overveje `shared/components/StatusPill` (vognmand/fabrik har lignende status-piller).
 
 ---
 
-#### Komponent: `EkstraBestillingCTA` (Presenter — NY ift. prototype)
-
-> Ekstrakteret fra inline-JSX L1565-L1580 — den dashed-border "+ Ekstra"-boks.
-
-**Props ind:**
-
-| Felt | Type | Required | Default | Validation | Beskrivelse |
-|---|---|---|---|---|---|
-| (ingen) | — | — | — | — | Komponenten har ingen reelle props. Kunne tage en `disabled?: boolean` hvis vi vil deaktivere når dagen er fuldt aflyst — **B8** |
-
-**Callbacks ud:**
-
-| Callback | Signatur | Beskrivelse |
-|---|---|---|
-| `onClick` | `() => void` | Opretter ny tom ekstra-bestilling |
-
-> **Højde-alignment:** Skal matche ProductBoxV2's højde (160px × min-h-172px) + tom 24px placeholder under (matcher StatusPill-højden).
+> **🔴 FJERNET: `EkstraBestillingCTA`** — formand opretter ikke ekstra-bestillinger længere (D-A). Komponenten bygges IKKE.
 
 ---
 
@@ -449,8 +438,8 @@ transport_orders (
 
 | Felt | Type | Required | Default | Validation | Beskrivelse |
 |---|---|---|---|---|---|
-| `disabled` | `boolean` | ✅ | — | — | True når intet er klar til at sende |
-| `totalIkkeSendt` | `number` | ✅ | — | ≥ 0 | Tæller til knap-tekst ("3 bestillinger klar") |
+| `disabled` | `boolean` | ✅ | — | — | True når intet er klar til at sende (viser "Intet at sende") |
+| `factoryLabel` | `string` | ✅ | — | — | Fabriksnavn, bottom-aligned (fx "PROD A EAST KØGE PH") |
 | `sentKommentar` | `string \| null` | ❌ | `null` | Max 500 tegn | Kommentar gemt fra forrige send (vist som tooltip under knap) |
 
 **Callbacks ud:**
@@ -459,7 +448,8 @@ transport_orders (
 |---|---|---|
 | `onClick` | `() => void` | Åbn `SendBekraeftelsesModal` (sætter `showConfirmSend=true` i container) |
 
-> **Bemærk:** Selve "Send"-logikken sker ikke her — den udløses af modal'ens "Send til fabrik"-knap. CTA'ens job er at åbne modalen + vise tooltip med tidligere kommentar.
+> **RE-SCOPE (D-G):** Status-linjen viser **permanent** `"Bestilling skal ske inden kl 11"` (Flow 9c) når enabled — IKKE `totalIkkeSendt`-tælling (v1-prop `totalIkkeSendt` udgår). Disabled-state viser `"Intet at sende"`.
+> **B-4:** Prototype har INGEN `isInFlight`-spinner. Hvis B-4 = "med i Fase 1" genintroduceres `isInFlight: boolean`.
 
 ---
 
@@ -472,6 +462,7 @@ transport_orders (
 | Felt | Type | Required | Default | Validation | Beskrivelse |
 |---|---|---|---|---|---|
 | `open` | `boolean` | ✅ | — | — | Modal-visibility |
+| `bestillingForSent` | `boolean` | ✅ | — | — | Flow 9c — driver conditional brødtekst (rød advarsel vs. neutral) |
 
 **Callbacks ud:**
 
@@ -483,10 +474,43 @@ transport_orders (
 **Lokal state (ikke prop):**
 - `kommentar: string` — local useState; reset til `''` ved open/close
 
+**Conditional brødtekst (D-G, Flow 9c):**
+- `bestillingForSent === true` → rød advarselsboks (`bg-bad-bg border-bad/30 text-bad`): _"Bestillingen er lavet efter kl 11. Du skal derfor ringe til fabrikken for at sikre produktionskapacitet."_
+- `bestillingForSent === false` → neutral: _"Ordren afsendes til fabrikken nu."_
+
 **Validation rules:**
-- `kommentar.length ≤ 500` (UI-soft-limit; backend håndhæver)
-- Trim før `onConfirm` kaldes
-- Tom string er gyldigt (= ingen kommentar gemt)
+- `kommentar.length ≤ 500` (UI-soft-limit)
+- Trim før `onConfirm`; tom string er gyldigt
+> **B-4:** Prototype har INGEN sum-warning (`sumWarning`-prop i v1). Hvis B-4 = "med i Fase 1" genintroduceres `sumWarning: { sum, total } | null`.
+
+---
+
+#### Komponent: `AflysningCell` (Presenter — NY 2026-06-18)
+
+> Aflysning flyttet hertil fra ProductBoxV2 (D-C). 6. celle i Ordredetalje-grid'et. Unified — identisk adfærd i alle 3 modes. Picker-flow: vælg dato → vælg årsag → OK (Fortryd annullerer). Default-valgt dag = aktuelt valgt dato hvis aktiv, ellers første aktive.
+
+**Props ind:**
+
+| Felt | Type | Required | Default | Validation | Beskrivelse |
+|---|---|---|---|---|---|
+| `product` | `MockProduct` | ✅ | — | — | Læser `product.days[]` (sorteret, filtreret aflyst/aktiv) |
+| `udfoerselSelectedDate` | `string \| undefined` | ❌ | `undefined` | ISO | Default-dato i pickeren |
+| `pickerOpenForDayId` | `string \| null` | ✅ | `null` | — | dayId pickeren er åben for (controlled fra container) |
+
+**Callbacks ud:**
+
+| Callback | Signatur | Beskrivelse |
+|---|---|---|
+| `onOpenPicker` | `(defaultDayId: string) => void` | Åbn picker |
+| `onClosePicker` | `() => void` | Luk picker (Fortryd) |
+| `onCancelDay` | `(dayId: string, reason: AflysningsAarsag) => void` | Bekræft aflysning (OK) |
+
+**3 tilstande:**
+1. Ingen aflyste dage → "Aflys dag"-knap
+2. 1+ aflyste, flere tilbage → liste af aflyste (dato + årsag) + "Aflys flere"-knap
+3. Alle aflyst → liste, ingen knap
+
+> **Note:** Pickeren har lokal state (`selectedDayId`, `selectedReason`). 4 årsags-knapper bruger `CANCEL_REASONS` (= `AflysningsAarsag` 1:1). Datoer vises med `formatLongDate`.
 
 ---
 
@@ -509,12 +533,12 @@ transport_orders (
 | `isDaySent` | `(dayId: string) => boolean` | Query: er denne dag sendt? |
 | `updateTons` | `(productId, dayId, tons: number) => void` | Action: opdater tonsPlanned |
 | `updateMorgenTons` | `(productId, dayId, tons: number \| undefined) => void` | Action: opdater morgenTons |
-| `cancelDay` | `(productId, dayId, reason: AflysningsAarsag) => void` | Action: aflys dag |
-| `restoreDay` | `(productId, dayId) => void` | Action: fortryd aflysning |
-| `toggleWeather` | `(productId, dayId, active: boolean) => void` | Action: A4 — sæt `day.weatherActive` |
-| `toggleSamlesPaaEnBil` | `(productId, dayId, samles: boolean) => void` | Action: A5 — sæt `day.samlesPaaEnBil` |
-| `sendAlleForSelectedDate` | `(kommentar: string) => Promise<void>` | Action: send alle ikke-sendte morgen-bestillinger + ikke-sendte ekstra-bestillinger for `selectedPlanDate`. Persisterer `kommentar` på dagens transport_orders |
-| `kommentarForDate` | `(date: string) => string \| null` | Query: returnér gemt kommentar for sendt dato |
+| `cancelDay` | `(productId, dayId, reason: AflysningsAarsag) => void` | Action: aflys dag (kaldes fra `AflysningCell`) |
+| `restoreDay` | `(dayId) => void` | Action: fortryd aflysning. **D-K:** prototype bruger fortsat `activeProductId` til self-lookup (bug) → fix til ren `(dayId)`-self-lookup i build |
+| `setProductSamles` | `(productId, dayId, value: boolean) => void` (**B-2**) | Action: prototype-signatur. Bliver `toggleSamlesPaaEnBil` på `day.samlesPaaEnBil` HVIS B-2 = DayPlan-felt |
+| `toggleWeather` (**B-1**) | `(productId, dayId, active: boolean) => void` | **Findes IKKE i prototype** — vejr er lokal state. Genintroduceres kun hvis B-1 = persist |
+| `sendAlleForSelectedDate` | `() => void` (prototype) / `(kommentar: string) => Promise<...>` (mål) | **D-J:** prototype tager INGEN arg + ingen rollback/timeout. Kommentar gemmes separat via `sentKommentarer`-map. Mål-signatur (atomic batch + kommentar) afhænger af B-4 |
+| `kommentarForDate` | `(date: string) => string \| null` | Query: gemt kommentar for sendt dato (`sentKommentarer`) |
 | `loading` | `boolean` | Standard data-hook contract |
 | `error` | `Error \| null` | Standard data-hook contract |
 
@@ -529,23 +553,7 @@ transport_orders (
 
 ---
 
-#### Hook: `useEkstraBestilling(orderId, selectedDate)`
-
-**Returnerer:**
-
-| Felt | Type | Beskrivelse |
-|---|---|---|
-| `ekstraForSelectedDate` | `EkstraBestilling[]` | Filtreret til `selectedDate` |
-| `addEkstra` | `() => void` | Action: opret tom ekstra med default-values |
-| `updateEkstra` | `(id: string, patch: Partial<EkstraBestilling>) => void` | Action: partial update |
-| `removeEkstra` | `(id: string) => void` | Action: slet |
-| `isEkstraSent` | `(id: string) => boolean` | Query: er denne sendt? |
-| `loading` | `boolean` | Standard data-hook contract |
-| `error` | `Error \| null` | Standard data-hook contract |
-
-> **Bemærk:** `useEkstraBestilling.sendAll` findes IKKE som separat action. `useAsfaltbestilling.sendAlleForSelectedDate` håndterer både morgen- og ekstra-bestillinger atomisk (samme batch, samme kommentar).
-
-> **Spørgsmål B9:** Skal de to hooks slås sammen til én `useAsfaltbestilling`-hook? Argumenter for: send-action er på tværs af morgen + ekstra. Argumenter mod: scope-separation, ekstra-bestilling kan testes isoleret.
+> **🔴 FJERNET: `useEkstraBestilling`** — ekstra-bestilling-konstruktet er slettet (D-A). `day.ekstraTons` er read-only PLAN-data; ingen hook nødvendig. v1's B9 (slå hooks sammen) er bortfaldet — der er nu kun ÉN hook.
 
 ---
 
@@ -554,7 +562,7 @@ transport_orders (
 | Prototype-string | Persisteret enum | Notes |
 |---|---|---|
 | `CancelReason = 'regn' \| 'frost' \| 'underlag' \| 'andet'` | `AflysningsAarsag` (STATUS_VOKABULAR §8) | 1:1 match, ingen refactor nødvendig |
-| StatusPill `kind = 'sendt' \| 'aflyst' \| 'afventer'` | UI-derived — IKKE persisteret | Beregnes per render |
+| StatusPill `kind = 'sendt' \| 'aflyst' \| 'afventer' \| 'ekstra-bekraeftet'` | UI-derived — IKKE persisteret | Beregnes per render (4 kinds — D-E) |
 | `transport_order.status = 'afventer' \| 'bekraeftet'` | `TransportOrderStatus` (STATUS_VOKABULAR §5) | Bruges af vognmand/fabrik til at vise om bestillingen er bekræftet |
 | `product.state` (implicit i prototype) | `ProduktTilstand` (STATUS_VOKABULAR §7) | Refactor: i shared/types skal `Product.state` være `'afventer' \| 'aktiv' \| 'afsluttet'` (eksisterer ikke på MockProduct i prototype — afventer Supabase-mapping) |
 
@@ -565,13 +573,13 @@ transport_orders (
 | Felt | Storage | Display-helper |
 |---|---|---|
 | `DayPlan.date` | ISO `yyyy-mm-dd` | `formatLongDate` i dato-piller |
-| `EkstraBestilling.date` | ISO `yyyy-mm-dd` | (vises ikke direkte — implicit fra container's `selectedPlanDate`) |
+| `DayPlan.ekstraTons.tidspunkt` | ISO 8601 + TZ | `formatTime` ("kl. HH:MM") i EkstraBestillingBox |
 | `TransportOrder.date` | ISO `yyyy-mm-dd` | `formatLongDate` (vises i fabrik-kø + vognmand-disponering) |
 | `TransportOrder.sentAt` | ISO 8601 + TZ (`2026-03-16T07:42:00+01:00`) | `formatDateTime` for audit-trail |
 | `TransportOrder.confirmedAt` | ISO 8601 + TZ | `formatDateTime` |
 | `product.startDate`, `product.endDate` | ISO `yyyy-mm-dd` | `formatDateRange` i Spec-grid |
 
-> **Ingen af felterne bruger ugedag-on i denne sektion** — dato-piller er allerede dag-orienterede pga. pille-format. **Spørgsmål B10:** Skal pillerne vise ugedag-prefix (fx `mandag 16. marts`)? DATOFORMAT siger "Planlægnings-view = ugedag PÅ", men prototypen viser uden. Beslut: Følg DATOFORMAT-reglen (ugedag PÅ) eller behold prototype-form?
+> **B-5 (var B10):** Prototypens datovælger bruger `formatLongDate` UDEN ugedag (fx `16. marts 2026`). DATOFORMAT.md siger "Planlægnings-view = ugedag PÅ". Konflikt — Carsten afgør om DATOFORMAT-reglen trumfer (ugedag PÅ) eller prototypen beholdes (uden ugedag). Påvirker `DatePillsRow` + `AflysningCell` dato-labels.
 
 ---
 
@@ -579,14 +587,15 @@ transport_orders (
 
 | Trigger | Modtager | Hvad sendes |
 |---|---|---|
-| `sendAlleForSelectedDate(kommentar)` | fabrik | Per produkt+dag: `productId`, `recipeCode`, `recipeName`, `tons`, `date`, `factory.code`, `kommentar`, `samlesPaaEnBil`, `weatherActive` |
-| `sendAlleForSelectedDate(kommentar)` | vognmand | Aggregeret per dato: `date`, `factory`, biltype-behov (afventer kørsels-beregner — særskilt sektion) |
-| `cancelDay(productId, dayId, reason)` | fabrik + vognmand | Notification + `cancelReason` |
-| `toggleSamlesPaaEnBil` | chauffør (via vognmand → chauffør-app) | Multi-produkt-loading-flow-indikator |
-| `toggleWeather` | fabrik + vognmand | "Minus regn"-status — kan påvirke afregning/leverings-prioritet |
-| `morgenTons`-update (efter send) | — | **Locked** — kun via telefon til fabrik. Ingen automatisk re-send. |
+| `sendAlleForSelectedDate(kommentar)` | fabrik + vognmand + PLAN/Asfalttavlen | Per produkt+dag (kind='morgen'): `productId`, `recipeCode`, `recipeName`, `tons`, `date`, `factory.code`, `kommentar`, `samlesPaaEnBil` (B-2), `weatherActive` (B-1), `sentLate` (B-6) — ABE-1/2/2b |
+| `cancelDay(productId, dayId, reason)` | fabrik + vognmand | Notification + `cancelReason` (ABE-5/6) |
+| `setProductSamles` (B-2) | chauffør (via vognmand → chauffør-app) | Multi-produkt-loading-flow-indikator (ABE-7) |
+| `toggleWeather` (B-1) | fabrik + vognmand | "Minus regn"-status (ABE-8) — **kun hvis B-1 = persist** |
+| `morgenTons`-update (efter send) | — | **Locked** — kun via telefon til fabrik |
+| `day.ekstraTons` | ← PLAN (IND) | Flow 9b: read-only delta-push fra PLAN → EkstraBestillingBox |
 
-> Cross-app flows skal opdateres i `FUNCTIONAL_FLOWS.md` af architect i dev-fasen. Interview-output (denne fil) er kilde.
+> **⚠️ E-1:** ABE-1/2-tabeller i FF refererer stadig `kind='ekstra'`-rows fra det fjernede ekstra-konstrukt. Architect SKAL afklare/rette FF i dev-fasen (E-1).
+> Cross-app flows opdateres i `FUNCTIONAL_FLOWS.md` af architect. Interview-output (denne fil) er kilde.
 
 ---
 

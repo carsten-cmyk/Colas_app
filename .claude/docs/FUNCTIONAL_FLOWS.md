@@ -10,6 +10,8 @@ Opdateres manuelt når forretningsregler beskrives der ikke fremgår af kode.
 
 > **Interim** — afventer kickoff **mandag 15.6.2026** hvor detaljeret dataindhold defineres. Kilde: Abraham (DB-ansvarlig, Colas France). Kanonisk uddybning: memory `project_plan_integration_architecture` + `.claude/docs/MEETING_PLAN_ORACLE_FR.md`.
 
+> **📊 Ægte data-eksport modtaget (2026-06-16):** 14 Excel-filer fra PLAN/MAUS i `Docs/Datafiler/` (gitignored — kundedata). **Kilde-feltnavnene** er dokumenteret i `Docs/Datafiler/INVENTORY.md` (committet) — brug det som facit når app-felter mappes mod kilden. `plan_app_2_dage` (51 kol.) er kerneobjektet for OrdrePlan. Mapping kilde-felt → app-felt bygges i `Docs/Datafiler/MAPPING.md` (TODO).
+
 **Systemlandskab (Colas France, Oracle):**
 - **APPS** — Oracle DB-instans der hoster skemaer: **PLAN** (system of record: ordrer, hold, materiel, recepter, forundersøgelser) + **DataHub** (integrations-spine; materialiserer jævnligt data lokalt i APPS så andre systemer kan læse via db-connectivity uden eget REST; bygger bro til Zephyr via REST). Vores nye **app-skema** lægges i APPS med GRANT til PLAN/DataHub-objekter, tilgået read-only (views).
 - **Zephyr** — centralt system (REST) der modtager transaktioner fra DataHub/PLAN/MAUS.
@@ -133,6 +135,8 @@ Når vognmanden trækker biler ind i drop-zonen, får hver placeret bil automati
 }
 ```
 Disse felter sendes retur til formand (Trin 7) og til chauffør (Trin 8) — hver chauffør får KUN sin egen mødetid_fabrik. **`bil_ordre_nr` bærer ønske-bilens nummer videre**, så formand/fabrik/chauffør kan matche bekræftet bil mod den oprindelige ønske-bil (og opdage afvigelser i antal/type/tid).
+
+**Leverancevej — fil-udveksling, ikke drag-and-drop (LÅST 2026-06-19):** Vognmanden disponerer i **sit eget system** og leverer disponeringen via **fil-udveksling** (CSV via SFTP for store / web-formular for små). Drag-and-drop-`VognmandDisponeringsScreen` er derfor **ud af scope** — bevaret bag `SHOW_DISPONER`-flag i prototypen, men UI-en udgår sandsynligvis. `confirmed_vehicles[]` populeres uændret fra fil/formular. Fil-kontrakten (CSV-kolonner + format-konventioner: ISO-dato `yyyy-mm-dd`, tid `HH.mm`, semikolon-separator, UTF-8) + de fire udvekslings-øjeblikke er kanonisk dokumenteret i `Docs/Vognmand/Dataudveksling-vognmand.md` § "Udvekslings-model". Vognmand-app'en (`DataudvekslingScreen`) viser kontrakten + downloadbare CSV-eksempler (bestilling + retur) og en "Opdatér"-pull af klar-data (ikke on-demand-generering).
 
 ### Trin 5 — Vognmand bekræfter
 **App:** vognmand
@@ -758,7 +762,7 @@ Næste-læs-kortet i appen får visuelt update: ny farve på produkt-pille, nyt 
 
 I alle tilfælde: formand + chauffør taler sammen → chauffør afslutter opgaven i app → formand ser "Dag afsluttet" i "Kørsel"-sektionen (Udførsel).
 
-**Vognmand-notifikation:** 🟡 ÅBENT — vognmanden skal også vide at hans bil er færdig for dagen, men kanalen er ikke fastlagt. **Afklares når vognmands-app'en defineres.** Indtil da sker den koordinering fysisk/telefonisk.
+**Vognmand-notifikation (LÅST 2026-06-19):** Vognmanden får en **"Dag afsluttet"-besked** i vognmand-app'ens Udførsel-mode — udløses af samme `dag_afsluttet`-event uanset om chaufføren afslutter i app'en eller formanden frigiver bilen. Bilen markeres fri → kan disponeres andetsteds. Ét af de fire udvekslings-øjeblikke. Se `Docs/Vognmand/Dataudveksling-vognmand.md` § "Udvekslings-model".
 
 **Flow:**
 
@@ -801,11 +805,9 @@ Hvis en chauffør er på produkt A og produkt B venter, kører han videre på pr
 
 ---
 
-### Variant: Hviletids-reminder ved længere hviletid (LÅST 2026-06-08, omdøbt 2026-06-09)
+### Variant: Hviletid — interval-valg og auto-afslut (OPDATERET 2026-06-18)
 
-**Terminologi (LÅST 2026-06-09):** Vi bruger ordet **"hviletid"** for chaufførens lovpligtige hvile (køre-/hviletidsloven). Ordet **"pause"** er reserveret til opgave-pause (opgave-skift via opgavelisten — frosset ur). Konsistent terminologi forhindrer forvirring mellem de to begreber, der har fundamentalt forskellig data-konsekvens.
-
-**Forretningsregel:** Når en chauffør trykker **"Hviletid"** på sin aktive opgave, kører en intern 30-minutters timer. Når timeren udløber, vises en blokerende modal i chauffør-appen der spørger om han stadig holder hviletid. Formålet er at fange tilfælde hvor chaufføren har glemt at trykke "Genoptag opgave" efter en reel hviletid er slut — så ventetiden ikke fortsætter med at tælle.
+**Terminologi (LÅST 2026-06-09):** Vi bruger ordet **"hviletid"** for chaufførens lovpligtige hvile (køre-/hviletidsloven). Ordet **"pause"** er reserveret til opgave-pause (opgave-skift via opgavelisten — frosset ur).
 
 **Vigtig skelnen — hviletid vs opgave-skift (LÅST 2026-06-09):**
 
@@ -814,37 +816,27 @@ Hvis en chauffør er på produkt A og produkt B venter, kører han videre på pr
 | Trigger: "Hviletid"-knap på TaskDetailScreen for AKTIV opgave | Trigger: "Skift til denne opgave"-knap i opgavelisten |
 | Opgavens `TaskState` forbliver `active` (sub-state: hviletids-segment åbnes) | Forrige opgaves `TaskState` skifter til `paused`, ny opgave bliver `active` |
 | Uret kører videre på opgaven, kategori = Hviletid | Uret på forrige opgave **fryser helt** — ingen tid logges |
-| 30-min reminder-modal triggeres (denne variant) | Ingen reminder |
+| Auto-afslut efter valgt interval (se nedenfor) | Ingen timer |
 | Hviletid tæller med i `pause_minutter` i timereg | Tæller IKKE som hviletid i timereg — kun et kontekstskift |
 
-> **Note om data-felter:** Datafelter `pause_minutter`, `task_pause_log[]`, `pause_start`, `pause_slut` beholder deres tekniske navne for nu — de er valgt før omdøbningen og refererer i dag til hviletids-segmenter. Felterne kan omdøbes til `hviletid_*` ved Supabase-skema-design hvis ønsket.
+> **Note om data-felter:** Datafelter `pause_minutter`, `task_pause_log[]`, `pause_start`, `pause_slut` beholder deres tekniske navne for nu. Felterne kan omdøbes til `hviletid_*` ved Supabase-skema-design.
 
-Hviletids-reminder-flowet nedenfor gælder **kun for hviletid** på en aktiv opgave.
+**Interval-model (LÅST 2026-06-18):** Chaufføren vælger varighed ved hviletid-start — **15 minutter / 30 minutter / 45 minutter**. Efter den valgte tid slår hviletiden automatisk fra igen (`TaskState` tilbage til `active`). Manuel "Genoptag"-knap er tilgængelig hele tiden så chauffør kan afslutte hviletid før timer udløber. Den gamle auto-prompt-model (blokerende "Er du stadig på hviletid?"-modal efter 30 min) er fjernet.
 
-**Trigger:** Chauffør trykker "Hviletid"-knap på TaskDetailScreen. Hviletids-segment åbnes i `task_pause_log[]`. Hviletids-timer starter (30 minutter). `TaskState` forbliver `active`.
-
-**Modal-indhold:**
-- Titel: "Er du stadig på hviletid?"
-- Beskrivelse: "Du har haft hviletid i 30 minutter. Bekræft venligst om du stadig er på hviletid, eller genoptag opgaven."
-- Knap 1 (sekundær): "Ja, stadig på hviletid" → modal lukkes, timer nulstilles og kører igen i 30 min
-- Knap 2 (primær): "Genoptag opgave" → hviletids-segment lukkes, modal lukkes, timer stoppes. `TaskState` forbliver `active` (var det hele tiden).
+**Flow:**
+1. Chauffør trykker "Hviletid" på aktiv opgave → interval-picker åbnes
+2. Chauffør vælger 15 / 30 / 45 minutter
+3. `onPause()` kaldes, nedtælling starter — skærmen viser MM:SS resterende tid
+4. Ved udløb: `onStart()` kaldes automatisk — `TaskState` = `active` igen
+5. Alternativt: chauffør trykker "Genoptag" manuelt → stopper timer, `onStart()` kaldes
 
 **Forretningsregler:**
 
 | Scenario | Adfærd |
 |---|---|
-| Chauffør trykker "Ja, stadig på hviletid" | Timer nulstilles → ny 30-min cyklus. Hviletid fortsætter med at tælle i timereg. |
-| Chauffør trykker "Genoptag opgave" | Hviletids-segment lukkes (hviletid bevares i timereg). `TaskState` uændret = `active`. |
-| Chauffør genoptager opgaven manuelt INDEN 30 min er gået | Timer cancelles. Ingen modal vises. |
+| Timer udløber | Auto-genoptag: `TaskState` → `active`. Hviletid-perioden bevares i timereg. |
+| Manuel Genoptag før udløb | Timer cancelles. `TaskState` → `active`. Perioden bevares i timereg. |
 | Chauffør afslutter opgaven mens på hviletid | Timer cancelles ved opgave-afslutning. Eksisterende afslut-flow gælder. |
-| App er lukket / telefon er låst når timer udløber | Push-notifikation sendes (Fase 2). I Fase 1 vises modalen blot næste gang chauffør åbner appen mens hviletids-segment stadig er åbent. |
-
-**Data-konsekvens:** Hviletids-perioder logges som tidligere. Tid mellem to "Ja, stadig på hviletid"-bekræftelser tæller stadig som hviletid i timereg. Reglen ændrer IKKE afregningsmodellen — den er en UX-sikring mod at glemt-hviletid forurener tids-logikken.
-
-**🟡 Fase 2-udvidelser:**
-- Push-notifikation når app er i baggrunden
-- Auto-afslut-hviletid hvis chauffør ikke svarer på modal inden N minutter (konfigurerbart)
-- Formand kan se i Udførelse-mode hvilke biler der har haft hviletid længere end X minutter
 
 ---
 
@@ -917,7 +909,7 @@ Gælder: TaskListScreen-kort, TaskDetailScreen-info, DashboardScreen-aktiv-opgav
 - Native app med background-GPS for præcisions-validering
 - Lokal kø + offline-sync af state-changes
 - Global "aktiv opgave"-banner med tap-to-return navigation
-- Hviletids-reminder push-notifikation (se [[pause-reminder]])
+- Hviletids push-notifikation ved interval-udløb (app i baggrunden)
 
 ---
 
@@ -947,7 +939,7 @@ Frigivelsen sker IKKE via en digital kanal. Den følger den kanoniske **"Chauff�
 
 Formanden får altså bekræftelsen via `dag_afsluttet` i "Kørsel"-sektionen — ikke via push og ikke via en vognmand-bekræftelse. Reserve-bilen frigives på samme måde (formand ringer) når sidste-læs er udlagt.
 
-**Vognmand-notifikation:** 🟡 ÅBENT — vognmanden skal også vide at bilen er færdig for dagen, men kanalen er ikke fastlagt. **Afklares når vognmands-app'en defineres.** Indtil da koordineres det fysisk/telefonisk.
+**Vognmand-notifikation (LÅST 2026-06-19):** Vognmanden får en **"Dag afsluttet"-besked** i vognmand-app'ens Udførsel-mode (samme `dag_afsluttet`-event som chauffør-afslutning/formands-frigivelse). Bilen markeres fri → kan disponeres andetsteds. Se `Docs/Vognmand/Dataudveksling-vognmand.md` § "Udvekslings-model".
 
 **Tidsregistrering / afregning:**
 - Chauffør får løn for tid frem til **opgaven afsluttes i app** ("Afslut dag"-tidspunktet)
@@ -957,7 +949,7 @@ Formanden får altså bekræftelsen via `dag_afsluttet` i "Kørsel"-sektionen �
 **🟡 Fase 2 (fremtidig automatisering — udskudt):** App-driven frigivelse hvor systemet computer-foreslår de overflødige biler (`frigivelses_forslag`-tabel), vognmand bekræfter i en `FrigivelsesModal`, og chauffør får push + auto reserve-frigivelse når sidste-læs er udlagt. Hele dette digitale apparat (push, FrigivelsesModal, frigivelses_forslag, auto-frigivelse) er IKKE Fase 1 — det er erstattet af den verbale model ovenfor. Bevaret her som retning for senere automatisering.
 
 **🟡 ÅBNE SPØRGSMÅL (ved implementering):**
-- **Vognmand-notifikation:** Hvordan/hvornår får vognmanden besked om at bilen er frigivet? Afklares med vognmands-app-definitionen.
+- **Vognmand-notifikation:** ✅ LØST 2026-06-19 — "Dag afsluttet"-besked i vognmand-app'ens Udførsel-mode. Se `Docs/Vognmand/Dataudveksling-vognmand.md`.
 - **Reserve-bil-valg:** Hvilken bil holdes i reserve-buffer — sidste i køen (default), tættest på fabrik, eller chauffør-præference?
 - **Allerede-på-vej-til-fabrik chauffør:** Hvis en frigivet chauffør allerede har taget næste læs på fabrik → retur-flow trigges (se "Retur-flow for biler i transit ved aflysning").
 
@@ -1781,6 +1773,9 @@ Edit-tilstand (inde i samme screen)
 **Forretningsregel (time vs. tons):** Chaufføren logger ALTID de samme timer (kørsel/ventetid/hviletid) uanset afregningstype. Ved **akkord/tons** betales per tons, så formanden godkender **kun ventetid** — kørsel + hviletid dækkes implicit af tons-raten. Ved **time** godkendes alle tre.
 **Mock:** `apps/vognmand/src/mocks/afregning.ts` (NY) modellerer begge linjer + `afregning_type`. Aligner med `ChauffoerAfregning` (`koretimer`/`ventetid`/`pause` — bemærk teknisk `pause`-felt-navn rummer hviletids-data).
 **Adskilt fra Trin 6:** Trin 6 (godkendte afregninger til reklamation/faktura) er en ANDEN side med andet formål. Trin 6b er dag-dokumentation per chauffør.
+**Også implementeret i (2026-06-19):** `VognmandKoerselScreen` Afregning-mode (prototype) viser samme regel pr. chauffør pr. dag — `time` → Køretid·Ventetid·Hviletid, `akkord` → kun Ventetid (køretid/hviletid = "—"), Tons for begge. Diff-kolonnen fjernet. Rækken er **ekspanderbar** og viser: (1) timer-sammenligning **Chauffør app vs Formand** (afvigelser markeres diskret), (2) **årsag til ændrede timer** + **chauffør-kommentar** (begge fritekst-felter fra chauffør-app, kan være tomme), (3) chaufførens vejesedler (tidspunkt · produkt · tons).
+
+**Nye chauffør-app-felter (sendes retur til vognmand i afregning):** `aarsag` (chaufførens begrundelse hvis han justerer timer) + `chauffoer_kommentar` (fri kommentar). Begge optional. Kontrakt: `Docs/Vognmand/Dataudveksling-vognmand.md` § "Afregning — felter Colas sender retur".
 **Issue:** #14
 
 ### Afregningstype-styring
@@ -2164,10 +2159,10 @@ hvor `densitet_kg_per_m3` er heltal fra `recepter[receptkode].densitet` (fx 2400
 Knappen i `OrdrePlanScreen` Asfaltbestilling-rækken udvides med fabriksnavnet nederst — bottom-aligned, lille font (`text-xxs`). Tekst-hierarki bliver:
 ```
 [Truck-ikon]
-Send til fabrik          ← font-poppins text-sm
-N bestillinger klar      ← font-inter text-xxs (eksisterende status)
+Send til fabrik              ← font-poppins text-sm
+Bestilling skal ske inden kl 11  ← font-inter text-xxs (permanent deadline-påmindelse)
 [mt-auto spacer]
-PROD A EAST KØGE PH      ← font-inter text-xxs (ny — bottom-aligned)
+PROD A EAST KØGE PH          ← font-inter text-xxs (ny — bottom-aligned)
 ```
 
 Fabriksnavnet hentes fra **ordrens tildelte standard-fabrik**. I prototypen hardcodes til "PROD A EAST KØGE PH" (samme værdi som mock-vejesedlerne bruger), eller læses fra `ordre.fabrik` hvis det findes på top-niveau.
@@ -2186,6 +2181,28 @@ Fabriksnavnet hentes fra **ordrens tildelte standard-fabrik**. I prototypen hard
 "Samles på en bil"-checkbox forbliver **kun på PRODUKTER** (`ProductBoxV2`). Den fjernes fra ekstra-bestilling-konstruktet (som ikke længere findes). Brugs-mønstret er uændret: typisk små ordrer hvor flere produkter hentes på samme bil — trigges multi-produkt-loading-flow i chauffør-appen (9-trins fabrik-script, se `[[project_samles_paa_en_bil_marker]]` og Flow 12).
 
 **🟢 Implementerings-status:** Spec LÅST 2026-06-03 + OPDATERING LÅST 2026-06-09. EkstraBestillingBox + "Bekræftet fabrik"-pille implementeret i `apps/formand/src/prototypes/ordre-plan/OrdrePlanScreen.tsx` (prototype). Banner-rendering arkiveret til `v1/TonsOpdateretBanner.v1.tsx`.
+
+---
+
+### Flow 9c: Bestillings-deadline kl 11 — "for sent"-flow (LÅST 2026-06-18)
+
+**Forretningsregel:** En asfaltbestilling skal sendes til fabrik **inden kl 11 DAGEN FØR udlægningsdagen**, så fabrikken kan planlægge næste-dags produktion. Deadline beregnes relativt til udlægningsdagen (`selectedPlanDate`): `deadline = selectedPlanDate − 1 dag, kl 11:00`.
+
+**For sent ≠ blokeret:** Efter deadline kan bestillingen **fortsat sendes** — den blokeres ikke. Men formanden skal **ringe til fabrikken** for at sikre produktionskapacitet. Systemet automatiserer ikke opkaldet (jf. samme telefon-workaround-princip som ved glemt morgen-bestilling).
+
+**UI-konsekvenser (`OrdrePlanScreen` → Asfaltbestilling-rækken):**
+
+1. **"Send til fabrik"-knappen** viser permanent status-linjen `"Bestilling skal ske inden kl 11"` (erstatter den tidligere `"N bestillinger klar"`-tælling) — fast påmindelse om deadlinen uanset om man er for sent. Disabled-state (intet at sende) viser fortsat `"Intet at sende"`.
+2. **Bekræftelses-modalen** (`SendBekraeftelsesModal` / inline `showConfirmSend`) viser conditional brødtekst styret af `bestillingForSent`-flag. Bemærk: modalen vises FØR afsendelse, så teksten er formuleret i fremtid (ikke "er afsendt"):
+   - **For sent:** `"Bestillingen er lavet efter kl 11. Du skal derfor ringe til fabrikken for at sikre produktionskapacitet."` — vises i **lys rød advarselsboks** (`bg-bad-bg border-bad/30 text-bad`) for at markere udfordringen tydeligt.
+   - **Til tiden:** `"Ordren afsendes til fabrikken nu."` (neutral)
+   - Den tidligere lock-tekst ("Når den er afsendt kan morgen tons og forventede tons ikke længere rettes...") er **fjernet**.
+
+**Prototype-note:** `bestillingForSent` er hardkodet `true` i prototypen, så "for sent"-varianten vises pr. default uden tidssimulering. Reel beregning (`nu > deadline`) tilføjes ved Supabase/PLAN-integration.
+
+**🟡 ÅBENT (afklares med kunde):**
+- Skal en "for sent"-afsendt bestilling bære et persistent flag (fx `sent_late: true` / `needs_capacity_call`) der følger med til vognmand/fabrik/Asfalttavlen, så de ved at kapacitet ikke er bekræftet?
+- Skal deadlinen være konfigurerbar pr. fabrik (forskellige fabrikker kan have forskellige cut-off-tider), eller er kl 11 global?
 
 ---
 
