@@ -20,6 +20,8 @@ export interface FremdriftInputRowProps {
   onSave: (values: FremdriftInputRowValues) => void
   /** Valgfri disable — fx hvis dagen er afsluttet */
   disabled?: boolean
+  /** Valgfri referencer der vises øverst i boksen, fx 4A-registrerede værdier */
+  referenceLines?: string[]
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -60,6 +62,7 @@ export function FremdriftInputRow({
   initial,
   onSave,
   disabled = false,
+  referenceLines,
 }: FremdriftInputRowProps) {
   const m2Id = useId()
   const tonsId = useId()
@@ -103,6 +106,16 @@ export function FremdriftInputRow({
 
   return (
     <div className="flex flex-col gap-xs px-sm py-sm rounded-xl border border-hairline bg-surface">
+      {/* 4A-reference-linjer — vises kun når prop er sat og ikke-tom */}
+      {referenceLines && referenceLines.length > 0 && (
+        <div className="flex flex-col gap-xxxs border-b border-hairline pb-xs mb-xs">
+          {referenceLines.map((line) => (
+            <span key={line} className="font-inter text-xs text-text-secondary">
+              {line}
+            </span>
+          ))}
+        </div>
+      )}
       {/* Input-række */}
       <div className="flex items-end gap-sm flex-wrap">
         {/* m²-felt */}

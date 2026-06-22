@@ -71,6 +71,8 @@ Transport_Løsning/
 
 # Playwright MCP verifikations-artefakter (ephemeral)
 .playwright-mcp/
+# Verifikations-screenshots i repo-roden (artefakter, ikke kildekode)
+/*.png
 
 # Rådata fra PLAN/MAUS — kundedata, må IKKE committes (kun afledte .md)
 Docs/Datafiler/*.xlsx

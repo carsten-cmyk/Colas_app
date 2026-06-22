@@ -17,7 +17,7 @@ export interface BottomTabBarProps {
 }
 
 const TABS: { name: TabName; label: string }[] = [
-  { name: 'mine-opgaver',   label: 'Opgave oversigt'   },
+  { name: 'mine-opgaver',   label: 'Kalenderoversigt'  },
   { name: 'dagens-opgaver', label: 'Dagens opgaver' },
   { name: 'beskeder',       label: 'Beskeder'       },
   { name: 'kontakt',        label: 'Kontakt'        },

@@ -53,8 +53,7 @@ export interface VejesedlerTableProps {
  * 2. undervejs — kortest etaMinutter øverst (ASC). null/undefined i bunden af gruppen.
  * 3. paa_fabrik — ved fabrik, indvejning/læsning aktiv
  * 4. paa_vej_til_fabrik — disponeret, afventer afhentning (længst fra færdig)
- * 5. dag_afsluttet — bilens næste-tur overflødiggjort (gråtonet i listen, IKKE bag collapsible)
- * 6. udlagt — afsluttede læs (nyeste modtagetTidspunkt øverst, DESC) — bag collapsible
+ * 5. udlagt + dag_afsluttet — afsluttede kørsler (nyeste modtagetTidspunkt øverst, DESC) — bag collapsible
  *
  * Ren funktion — kan testes isoleret.
  */
@@ -69,10 +68,8 @@ export function sorterVejesedler(vejesedler: Vejeseddel[]): Vejeseddel[] {
 
   const paaVej = vejesedler.filter((v) => v.status === 'paa_vej_til_fabrik')
 
-  const dagAfsluttet = vejesedler.filter((v) => v.status === 'dag_afsluttet')
-
-  const udlagte = vejesedler
-    .filter((v) => v.status === 'udlagt')
+  const afsluttede = vejesedler
+    .filter((v) => v.status === 'udlagt' || v.status === 'dag_afsluttet')
     .sort((a, b) => {
       const ta = a.modtagetTidspunkt ? new Date(a.modtagetTidspunkt).getTime() : 0
       const tb = b.modtagetTidspunkt ? new Date(b.modtagetTidspunkt).getTime() : 0
@@ -80,7 +77,7 @@ export function sorterVejesedler(vejesedler: Vejeseddel[]): Vejeseddel[] {
     })
 
   // TODO: v2 — overvej separator-rækker mellem statusgrupper for visuel klarhed
-  return [...aflaesning, ...undervejs, ...paaFabrik, ...paaVej, ...dagAfsluttet, ...udlagte]
+  return [...aflaesning, ...undervejs, ...paaFabrik, ...paaVej, ...afsluttede]
 }
 
 const HEADER_KOLONNER = [
@@ -120,13 +117,13 @@ export function VejesedlerTable({
   vejeseddelUdlaeggerPerOrdre,
 }: VejesedlerTableProps) {
   void fabriksNavne
-  // Collapsible state for udlagte rækker — sammenfoldet som default
+  // Collapsible state for afsluttede rækker — sammenfoldet som default
   const [udlagteExpanded, setUdlagteExpanded] = useState(false)
 
   const sorterteVejesedler = sorterVejesedler(vejesedler)
-  // Split i aktive (vises altid) + udlagte (bag collapsible)
-  const aktive = sorterteVejesedler.filter((v) => v.status !== 'udlagt')
-  const udlagte = sorterteVejesedler.filter((v) => v.status === 'udlagt')
+  // Split i aktive (vises altid) + afsluttede (bag collapsible)
+  const aktive = sorterteVejesedler.filter((v) => v.status !== 'udlagt' && v.status !== 'dag_afsluttet')
+  const udlagte = sorterteVejesedler.filter((v) => v.status === 'udlagt' || v.status === 'dag_afsluttet')
 
   return (
     <div className="overflow-hidden rounded-lg border border-hairline bg-surface">
@@ -197,7 +194,7 @@ export function VejesedlerTable({
                   className={`text-text-muted transition-transform ${udlagteExpanded ? 'rotate-90' : ''}`}
                 />
                 <span className="font-inter text-xs font-semibold text-text-secondary">
-                  Udlagt + temp-målt ({udlagte.length})
+                  Afsluttede kørsler
                 </span>
               </button>
               {udlagteExpanded && (

@@ -148,32 +148,12 @@ function isInRange(day: Date, order: GanttOrder): boolean {
   return day >= start && day <= end
 }
 
-function getBarColorClass(order: GanttOrder, day: Date): string {
-  if (!isInRange(day, order)) return ''
-  // Aflyst overrider alt — rød markering (UDEN årsag i Gantt, jf. FF aflysnings-markeringer 2026-06-15)
-  if (order.state === 'cancelled') return 'bg-bad/10 border border-bad/30'
-  // Nat: tidsvindue-farve overrider state-farve på hele baren
+function getBarColorClass(order: GanttOrder): string {
+  // Aflyst overrider alt — ensartet rød markering (jf. FF aflysnings-markeringer 2026-06-15)
+  if (order.state === 'cancelled') return 'bg-bad'
   if (order.tidsvindue === 'nat') return 'bg-deep-teal'
-  // Weekend-ordrer og ordrer uden tidsvindue: brug state-farve
-  if (order.state === 'completed') return 'bg-light-aqua'
-  if (day < TODAY && !sameDay(day, TODAY)) return 'bg-light-aqua'
-  if (sameDay(day, TODAY) && order.state === 'active') return 'bg-good'
-  return 'bg-good-bg border border-good/30'
-}
-
-const STATE_LABEL: Record<GanttOrder['state'], string> = {
-  active: 'I gang',
-  planned: 'Planlagt',
-  completed: 'Afsluttet',
-  cancelled: 'Aflyst',
-}
-
-// LÅST 2026-06-05: active=mørkegrøn (bg-good), planned=lysegrøn (bg-good-bg), completed=uændret
-const STATE_BADGE: Record<GanttOrder['state'], string> = {
-  active: 'bg-good text-white',
-  planned: 'bg-good-bg text-good',
-  completed: 'bg-light-aqua text-deep-teal',
-  cancelled: 'bg-bad/10 text-bad',
+  if (order.tidsvindue === 'weekend') return 'bg-warning'
+  return 'bg-good'
 }
 
 function getViewDays(mode: ViewMode): number {
@@ -235,7 +215,7 @@ export function GanttScreen() {
           <div className="mb-sm pl-sm flex items-center justify-between flex-wrap gap-sm">
             <div>
               <p className="font-inter text-xs font-medium text-text-muted uppercase tracking-wide">
-                Opgaveoversigt
+                Kalenderoversigt
               </p>
               <h1 className="font-poppins font-semibold text-2xl text-deep-teal leading-tight">
                 Holdnummer 10541 – Jens Thorsager
@@ -301,7 +281,6 @@ export function GanttScreen() {
                       Ordre
                     </p>
                   </div>
-                  <div style={{ width: 90, flexShrink: 0 }} className="border-r border-box-outline" />
                   {days.map((day, i) => {
                     const isToday = i === todayIndex
                     const weekend = isWeekend(day)
@@ -362,37 +341,16 @@ export function GanttScreen() {
                       </p>
                     </div>
 
-                    {/* Status col */}
-                    <div
-                      style={{ width: 90, flexShrink: 0 }}
-                      className="px-xs py-xs flex flex-col justify-center gap-xxxs border-r border-box-outline"
-                    >
-                      <span
-                        className={`inline-block px-[6px] py-[2px] rounded-sm font-inter font-semibold text-[9px] leading-none w-fit ${STATE_BADGE[order.state]}`}
-                      >
-                        {STATE_LABEL[order.state]}
-                      </span>
-                      <span className="font-inter text-xxs text-text-muted">
-                        {order.tonsDelivered > 0
-                          ? `${order.tonsDelivered} / ${order.tonsTotal}t`
-                          : `${order.tonsTotal}t`}
-                      </span>
-                    </div>
-
                     {/* Day cells */}
                     {days.map((day, di) => {
                       const inRange = isInRange(day, order)
-                      const colorClass = getBarColorClass(order, day)
+                      const barColorClass = inRange ? getBarColorClass(order) : ''
                       const isToday = sameDay(day, TODAY)
                       const weekend = isWeekend(day)
                       const start = parseDate(order.startDate)
                       const end = parseDate(order.endDate)
                       const isFirst = inRange && (sameDay(day, start) || di === 0)
                       const isLast = inRange && (sameDay(day, end) || di === days.length - 1)
-                      // Tilgang B: weekend-overlay kun på weekend-celler inden for bar-spanet
-                      const showWeekendOverlay = inRange && weekend && order.tidsvindue === 'weekend'
-                      // Tekstfarve på nat-ordrer for kontrast
-                      const textColorClass = order.tidsvindue === 'nat' ? 'text-white' : ''
 
                       return (
                         <div
@@ -401,36 +359,33 @@ export function GanttScreen() {
                             flex: 1, minWidth: 0,
                             ...(isToday ? { backgroundColor: 'rgba(46, 158, 101, 0.05)' } : {}),
                           }}
-                          className={`flex items-center relative${weekend && !isToday ? ' bg-surface-2' : ''}`}
+                          className={`flex flex-col items-center justify-start pt-4 relative${weekend && !isToday ? ' bg-soft-gray' : ''}`}
                         >
                           {isToday && (
                             <div className="absolute inset-y-0 left-0 w-[2px] pointer-events-none" style={{ zIndex: 1, backgroundImage: 'repeating-linear-gradient(to bottom, rgba(11,57,80,0.5) 0px, rgba(11,57,80,0.5) 5px, transparent 5px, transparent 10px)' }} />
                           )}
-                          {inRange && colorClass && (
-                            <div className="relative w-full">
+                          {inRange && (
+                            order.id === '1' ? (
                               <button
-                                onClick={() => order.id === '1' ? navigate('/prototyper/ordre-plan') : undefined}
+                                onClick={() => navigate('/prototyper/ordre-plan')}
                                 aria-label={`Åbn ordre ${order.orderNumber}`}
                                 className={[
-                                  'h-[14px] w-full transition-opacity',
-                                  order.id === '1' ? 'cursor-pointer hover:opacity-75' : 'cursor-not-allowed opacity-50',
-                                  colorClass,
-                                  textColorClass,
-                                  isFirst ? 'rounded-l-sm ml-[3px]' : '',
-                                  isLast ? 'rounded-r-sm mr-[3px]' : '',
-                                ]
-                                  .filter(Boolean)
-                                  .join(' ')}
+                                  'h-[6px] w-full cursor-pointer hover:opacity-75 transition-opacity',
+                                  barColorClass,
+                                  isFirst ? 'rounded-l-full ml-[3px]' : '',
+                                  isLast ? 'rounded-r-full mr-[3px]' : '',
+                                ].filter(Boolean).join(' ')}
                               />
-                              {/* Tilgang B: weekend-overlay — bg-bad på lø/sø-celler inden for bar */}
-                              {showWeekendOverlay && (
-                                <span
-                                  className="absolute inset-0 bg-bad pointer-events-none"
-                                  style={{ zIndex: 2 }}
-                                  aria-label="Weekend-udførelse"
-                                />
-                              )}
-                            </div>
+                            ) : (
+                              <div
+                                className={[
+                                  'h-[6px] w-full',
+                                  barColorClass,
+                                  isFirst ? 'rounded-l-full ml-[3px]' : '',
+                                  isLast ? 'rounded-r-full mr-[3px]' : '',
+                                ].filter(Boolean).join(' ')}
+                              />
+                            )
                           )}
                         </div>
                       )
@@ -443,27 +398,18 @@ export function GanttScreen() {
           </div>
 
           {/* Legend */}
-          <div className="flex items-center flex-wrap gap-sm mt-sm pl-sm">
+          <div className="flex items-center flex-wrap gap-4 mt-4 pl-1">
             {[
-              { cls: 'bg-good', label: 'I gang' },
-              { cls: 'bg-good-bg border border-good/30', label: 'Planlagt' },
-              { cls: 'bg-light-aqua', label: 'Afsluttet' },
-              { cls: 'bg-bad/10 border border-bad/30', label: 'Aflyst' },
+              { cls: 'bg-good',      label: 'Normal udførsel' },
+              { cls: 'bg-deep-teal', label: 'Nat' },
+              { cls: 'bg-warning',   label: 'Weekend' },
+              { cls: 'bg-bad',       label: 'Aflyst' },
             ].map(({ cls, label }) => (
-              <div key={label} className="flex items-center gap-xxxs">
-                <div className={`w-[20px] h-[10px] rounded-sm ${cls}`} />
+              <div key={label} className="flex items-center gap-1.5">
+                <div className={`w-5 h-2.5 rounded-full ${cls}`} />
                 <span className="font-inter text-xxs text-text-muted">{label}</span>
               </div>
             ))}
-            {/* Tidsvindue-forklaringer */}
-            <div className="flex items-center gap-xxxs">
-              <div className="w-[20px] h-[10px] rounded-sm bg-deep-teal" />
-              <span className="font-inter text-xxs text-text-muted">Nat</span>
-            </div>
-            <div className="flex items-center gap-xxxs">
-              <div className="w-[20px] h-[10px] rounded-sm bg-bad" />
-              <span className="font-inter text-xxs text-text-muted">Weekend-udførelse</span>
-            </div>
           </div>
 
           {/* Sammenligning: andre regioner */}
@@ -511,7 +457,6 @@ export function GanttScreen() {
                           Ordre
                         </p>
                       </div>
-                      <div style={{ width: 90, flexShrink: 0 }} className="border-r border-box-outline" />
                       {days.map((day, i) => {
                         const isToday = i === todayIndex
                         const weekend = isWeekend(day)
@@ -555,48 +500,33 @@ export function GanttScreen() {
                           <p className="font-inter text-xxs text-text-muted leading-tight">Jobnummer {order.jobnummer}</p>
                           <p className="font-inter text-xxs text-text-muted leading-tight">Ordrenummer {order.orderNumber}</p>
                         </div>
-                        <div style={{ width: 90, flexShrink: 0 }} className="px-xs py-xs flex flex-col justify-center gap-xxxs border-r border-box-outline">
-                          <span className={`inline-block px-[6px] py-[2px] rounded-sm font-inter font-semibold text-[9px] leading-none w-fit ${STATE_BADGE[order.state]}`}>
-                            {STATE_LABEL[order.state]}
-                          </span>
-                          <span className="font-inter text-xxs text-text-muted">
-                            {order.tonsDelivered > 0 ? `${order.tonsDelivered} / ${order.tonsTotal}t` : `${order.tonsTotal}t`}
-                          </span>
-                        </div>
                         {days.map((day, di) => {
                           const inRange = isInRange(day, order)
-                          const colorClass = getBarColorClass(order, day)
+                          const barColorClass = inRange ? getBarColorClass(order) : ''
                           const isToday = sameDay(day, TODAY)
                           const weekend = isWeekend(day)
                           const start = parseDate(order.startDate)
                           const end = parseDate(order.endDate)
                           const isFirst = inRange && (sameDay(day, start) || di === 0)
                           const isLast = inRange && (sameDay(day, end) || di === days.length - 1)
-                          const showWeekendOverlay = inRange && weekend && order.tidsvindue === 'weekend'
-                          const textColorClass = order.tidsvindue === 'nat' ? 'text-white' : ''
                           return (
                             <div
                               key={di}
                               style={{ flex: 1, minWidth: 0, ...(isToday ? { backgroundColor: 'rgba(46, 158, 101, 0.05)' } : {}) }}
-                              className={`flex items-center relative${weekend && !isToday ? ' bg-surface-2' : ''}`}
+                              className={`flex flex-col items-center justify-start pt-4 relative${weekend && !isToday ? ' bg-soft-gray' : ''}`}
                             >
                               {isToday && (
                                 <div className="absolute inset-y-0 left-0 w-[2px] pointer-events-none" style={{ zIndex: 1, backgroundImage: 'repeating-linear-gradient(to bottom, rgba(11,57,80,0.5) 0px, rgba(11,57,80,0.5) 5px, transparent 5px, transparent 10px)' }} />
                               )}
-                              {inRange && colorClass && (
-                                <div className="relative w-full">
-                                  <div
-                                    className={[
-                                      'h-[14px] w-full opacity-50',
-                                      colorClass, textColorClass,
-                                      isFirst ? 'rounded-l-sm ml-[3px]' : '',
-                                      isLast ? 'rounded-r-sm mr-[3px]' : '',
-                                    ].filter(Boolean).join(' ')}
-                                  />
-                                  {showWeekendOverlay && (
-                                    <span className="absolute inset-0 bg-bad pointer-events-none" style={{ zIndex: 2 }} aria-label="Weekend-udførelse" />
-                                  )}
-                                </div>
+                              {inRange && (
+                                <div
+                                  className={[
+                                    'h-[6px] w-full',
+                                    barColorClass,
+                                    isFirst ? 'rounded-l-full ml-[3px]' : '',
+                                    isLast ? 'rounded-r-full mr-[3px]' : '',
+                                  ].filter(Boolean).join(' ')}
+                                />
                               )}
                             </div>
                           )
