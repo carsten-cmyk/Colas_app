@@ -64,6 +64,12 @@ bg-[#2E9E65] font-inter text-xs font-semibold text-white whitespace-nowrap
 Med inline `<CheckCircle2 size={11} />` ikon foran teksten.
 Set i: `OrdrePlanScreen.tsx:2204-2207`, `:1702-1705`.
 
+### 1f. Godkendt/bekræftet status-pille — konvention (låst 2026-06-22)
+
+**Solid grøn `bg-good text-white` UDEN ikon foran teksten.** Gælder alle "færdig/godkendt/bekræftet"-tilstande, fx "Bekræftet vognmand" (Udførsel/Asfaltkørsel) og "Afregning godkendt"/"Afregning auto-godkendt" (Afregning). Den gule `bg-yellow text-deep-teal` er forbeholdt handlings-CTA'er (fx "Send til vognmand", "Lav afregning"); grøn = afsluttet tilstand.
+
+Bemærk: 1b ovenfor dokumenterer den ældre variant med `bg-[#2E9E65]` + CheckCircle2 — den er superseded af `bg-good text-white` uden ikon.
+
 ### 1c. V3 ordre-kort status — `rounded-full` pill
 ```
 px-xs py-[2px] rounded-full font-inter font-semibold text-xs flex-shrink-0
@@ -447,6 +453,29 @@ Bemærk: dette er IDENTISK pattern som 7d (Ja/Nej-toggles) — samme styling.
 - Mellem sektioner i content: `<hr className="my-lg border-t border-hairline" />`
 - Inden for card: `border-t border-hairline pt-xs mt-xs` på child-wrapper.
 - Mellem kolonner i grids: `divide-x divide-hairline` (lyse korte) eller `divide-x divide-white/10` (på mørk bg).
+
+---
+
+## 14. Nummerplade-konvention
+
+Nummerplader vises som `XX 99 999` (2 bogstaver · mellemrum · 2 cifre · mellemrum · 3 cifre,
+fx `FF 40 345`) via `formatRegnr()` fra `@shared/utils/regnr`.
+Lagres kompakt/uppercase uden mellemrum (fx `FF40345`).
+Brug ALDRIG rå/uformateret regnr i UI — wrap altid i `formatRegnr(...)`.
+
+```tsx
+import { formatRegnr } from '@shared/utils/regnr'
+
+// Visning
+<td>{formatRegnr(b.regnr)}</td>
+
+// Ukendte formater returneres uændret — ingen crash
+// 'BL77331'    → 'BL 77 331'
+// 'ff40345'    → 'FF 40 345'
+// 'AB 12 345'  → 'AB 12 345'
+```
+
+Set i: `OrdrePlanScreen.tsx` — Udførsel bil-tabel, materiel-tabel, Afregning bil-tabel.
 
 ---
 
