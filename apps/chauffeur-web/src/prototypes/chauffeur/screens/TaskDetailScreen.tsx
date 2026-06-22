@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, MapPin, ArrowDown, ArrowUp } from 'lucide-react'
 import type { Task, TaskState } from '@/types/task'
-import { SAFE_AREA, FS } from '@/styles/spacing'
+import { SAFE_AREA, FS, SP } from '@/styles/spacing'
 
 // ─── Farver (Colas tokens) ────────────────────────────────────────────────────
 const C = {
@@ -40,6 +40,14 @@ export interface TaskDetailScreenProps {
   onGoToOtherTask?: (taskId: string) => void
   /** Åbn ankomst-bekræftelses-skærm for fabrik eller plads */
   onArrivalConfirm?: (destination: 'fabrik' | 'plads') => void
+  /** Åbn returlæs-flow */
+  onOpretReturlaes?: () => void
+  /**
+   * Returlæs er oprettet for denne opgave — løftet op fra ChauffoerPrototype så begge
+   * indgange (TaskDetailScreen + AnkommetUdfoerselsstedScreen) sætter samme tilstand.
+   * TODO: Erstat med Supabase når klar
+   */
+  returlaesOprettet?: boolean
 }
 
 export function TaskDetailScreen({
@@ -52,6 +60,8 @@ export function TaskDetailScreen({
   otherActiveTask,
   onGoToOtherTask,
   onArrivalConfirm,
+  onOpretReturlaes,
+  returlaesOprettet = false,
 }: TaskDetailScreenProps) {
   // Hviletid-interval-valg: null = modal lukket, tal = valgt varighed i sekunder (prototype bruger sekunder for hurtig demo)
   const [hviletidPickerOpen, setHviletidPickerOpen] = useState(false)
@@ -61,6 +71,8 @@ export function TaskDetailScreen({
   const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false)
   const [startConfirmOpen, setStartConfirmOpen] = useState(false)
   const [alreadyActiveOpen, setAlreadyActiveOpen] = useState(false)
+  // returlaesOprettet er løftet op til ChauffoerPrototype — prop, ikke lokal state
+  const [returlaesModalOpen, setReturlaesModalOpen] = useState(false)
   // Nedtællings-effekt: kører mens hviletid er aktiv (taskState === 'paused' og sekundstilbage > 0)
   useEffect(() => {
     if (hviletidSekundstilbage === null || taskState !== 'paused') return
@@ -377,6 +389,24 @@ export function TaskDetailScreen({
 
         {/* Locations */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {/* Returlæs-overskrift — vises kun i returlæs-tilstand, over pickup-boksen */}
+          {returlaesOprettet && (
+            <p
+              style={{
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: FS.xl,
+                color: C.textPrimary,
+                marginTop: SP.lg,
+                marginBottom: 2,
+                lineHeight: 1.2,
+                textAlign: 'center',
+              }}
+            >
+              Returlæs
+            </p>
+          )}
+
           {/* Pickup */}
           {pickup && (
             <div
@@ -421,7 +451,7 @@ export function TaskDetailScreen({
                       margin: '0 0 2px 0',
                     }}
                   >
-                    Afhenting
+                    {returlaesOprettet ? 'Retur til' : 'Afhenting'}
                   </p>
                   <p
                     style={{
@@ -498,7 +528,8 @@ export function TaskDetailScreen({
             </div>
           )}
 
-          {/* Transport icon */}
+          {/* Transport icon — skjules i returlæs-tilstand (ingen udførselssted at navigere fra/til) */}
+          {!returlaesOprettet && (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <div
               style={{
@@ -517,9 +548,10 @@ export function TaskDetailScreen({
               <ArrowDown size={12} color={C.textMuted} />
             </div>
           </div>
+          )}
 
-          {/* Delivery */}
-          {delivery && (
+          {/* Delivery — skjules i returlæs-tilstand (udførselssted er ikke relevant for returlæs) */}
+          {delivery && !returlaesOprettet && (
             <div
               style={{
                 backgroundColor: C.white,
@@ -742,41 +774,62 @@ export function TaskDetailScreen({
           </button>
         )}
         {taskState === 'active' && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => setHviletidPickerOpen(true)}
-              style={{
-                flex: 1,
-                height: 52,
-                backgroundColor: C.border,
-                color: C.textPrimary,
-                borderRadius: 12,
-                border: 'none',
-                cursor: 'pointer',
-                fontFamily: 'Poppins, sans-serif',
-                fontWeight: 600,
-                fontSize: FS.md,
-              }}
-            >
-              Hviletid
-            </button>
-            <button
-              onClick={() => setCompleteConfirmOpen(true)}
-              style={{
-                flex: 1,
-                height: 52,
-                backgroundColor: C.yellow,
-                color: C.deepTeal,
-                borderRadius: 12,
-                border: 'none',
-                cursor: 'pointer',
-                fontFamily: 'Poppins, sans-serif',
-                fontWeight: 600,
-                fontSize: FS.md,
-              }}
-            >
-              Afslut opgave
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => setHviletidPickerOpen(true)}
+                style={{
+                  flex: 1,
+                  height: 52,
+                  backgroundColor: C.border,
+                  color: C.textPrimary,
+                  borderRadius: 12,
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: FS.md,
+                }}
+              >
+                Hviletid
+              </button>
+              <button
+                onClick={() => setCompleteConfirmOpen(true)}
+                style={{
+                  flex: 1,
+                  height: 52,
+                  backgroundColor: C.yellow,
+                  color: C.deepTeal,
+                  borderRadius: 12,
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: FS.md,
+                }}
+              >
+                Afslut opgave
+              </button>
+            </div>
+            {/* Opret returlæs — sekundær outline-knap (visuelt underordnet happy path) */}
+            {!returlaesOprettet && (
+              <button
+                onClick={() => setReturlaesModalOpen(true)}
+                style={{
+                  height: 44,
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 12,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: FS.sm,
+                  color: C.textMuted,
+                }}
+              >
+                Opret returlæs
+              </button>
+            )}
           </div>
         )}
         {taskState === 'paused' && (
@@ -1031,6 +1084,82 @@ export function TaskDetailScreen({
                 }}
               >
                 Start opgave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Returlæs-modal — genbrug TaskDetailScreen modal-mønster præcist */}
+      {returlaesModalOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 24px',
+          }}
+          onClick={() => setReturlaesModalOpen(false)}
+        >
+          <div
+            style={{
+              backgroundColor: C.white,
+              borderRadius: 24,
+              padding: 20,
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 12,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: FS.md, color: C.deepTeal, textAlign: 'center' }}>
+              Ønsker du at oprette returlæs?
+            </span>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: FS.sm, color: C.textMuted, textAlign: 'center', lineHeight: 1.5 }}>
+              Rest-asfalt køres retur til fabrik. Bilen vejes ind fuld og ud tom.
+            </span>
+            <div style={{ display: 'flex', gap: 10, marginTop: 4, width: '100%' }}>
+              <button
+                onClick={() => setReturlaesModalOpen(false)}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  border: `1px solid ${C.deepTeal}`,
+                  borderRadius: 50,
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: FS.sm,
+                  color: C.deepTeal,
+                }}
+              >
+                Annullér
+              </button>
+              <button
+                onClick={() => {
+                  setReturlaesModalOpen(false)
+                  onOpretReturlaes?.()
+                }}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  backgroundColor: C.deepTeal,
+                  border: 'none',
+                  borderRadius: 50,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: FS.sm,
+                  color: C.white,
+                }}
+              >
+                Opret returlæs
               </button>
             </div>
           </div>

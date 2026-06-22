@@ -19,6 +19,8 @@ import { ConversationScreen } from './screens/ConversationScreen'
 import { AnkommetFabrikScreen } from './screens/AnkommetFabrikScreen'
 import { SamlesPaaEnBilScreen } from './screens/SamlesPaaEnBilScreen'
 import { AnkommetUdfoerselsstedScreen } from './screens/AnkommetUdfoerselsstedScreen'
+import { ReturlaesScreen } from './screens/ReturlaesScreen'
+import { ReturlaesMultiScreen } from './screens/ReturlaesMultiScreen'
 import { TimeRegistrationScreen } from './screens/TimeRegistrationScreen'
 import { TaskListScreen } from './screens/TaskListScreen'
 import { KontakterScreen } from './screens/KontakterScreen'
@@ -26,7 +28,7 @@ import { BottomTabBar } from './components/BottomTabBar'
 import type { TabName } from './components/BottomTabBar'
 
 type AppScreen = 'splash' | 'app'
-type PrototypeSubScreen = 'timereg' | 'samles-paa-en-bil' | null
+type PrototypeSubScreen = 'timereg' | 'samles-paa-en-bil' | 'returlaes' | 'returlaes-multi' | null
 
 const MESSAGE_COUNT = mockConversations.filter(
   c => !c.lastMessage.isRead && c.lastMessage.senderId !== 'me'
@@ -41,6 +43,9 @@ export function ChauffoerPrototype() {
   const [prototypeSubScreen, setPrototypeSubScreen] = useState<PrototypeSubScreen>(null)
   const [arrivalScreen, setArrivalScreen] = useState<'fabrik' | 'plads' | null>(null)
   const [viewingTimeregFor, setViewingTimeregFor] = useState<string | null>(null)
+  // Delt returlæs-state — sættes af begge indgange (TaskDetailScreen + AnkommetUdfoerselsstedScreen)
+  // TODO: Erstat med Supabase når klar
+  const [returlaesOprettetForTask, setReturlaesOprettetForTask] = useState<Record<string, boolean>>({})
 
   // ── Materiel-state (parallelt ID-rum — rører ikke asfalt-logik) ─────────────
   const [materielTasks, setMaterielTasks] = useState<MaterielTask[]>(MATERIEL_TASKS)
@@ -255,6 +260,8 @@ export function ChauffoerPrototype() {
             </p>
             {[
               { title: 'Samles på en bil (multi-produkt)', desc: 'Flow 12 — flere produkter på samme bil med vejning mellem hvert', screen: 'samles-paa-en-bil' as PrototypeSubScreen },
+              { title: 'Returlæs (enkelt)', desc: 'Flow 14 — rest-asfalt returneres til fabrik, spejlet vejeflow (enkelt produkt)', screen: 'returlaes' as PrototypeSubScreen },
+              { title: 'Returlæs (multiprodukt)', desc: 'Flow 14b — rest-asfalt returneres til fabrik, ét negativt vejebilag pr. produkt', screen: 'returlaes-multi' as PrototypeSubScreen },
             ].map((item) => (
               <button
                 key={item.title}
@@ -317,6 +324,12 @@ export function ChauffoerPrototype() {
       {isPrototyperTab && prototypeSubScreen === 'samles-paa-en-bil' && (
         <SamlesPaaEnBilScreen onClose={() => setPrototypeSubScreen(null)} messageCount={MESSAGE_COUNT} />
       )}
+      {prototypeSubScreen === 'returlaes' && (
+        <ReturlaesScreen onClose={() => setPrototypeSubScreen(null)} messageCount={MESSAGE_COUNT} />
+      )}
+      {prototypeSubScreen === 'returlaes-multi' && (
+        <ReturlaesMultiScreen onClose={() => setPrototypeSubScreen(null)} messageCount={MESSAGE_COUNT} />
+      )}
 
       {/* Task detail overlay (slides over dashboard) */}
       {selectedTask && (
@@ -330,6 +343,13 @@ export function ChauffoerPrototype() {
           otherActiveTask={otherActiveTask ? { id: otherActiveTask.id, orderNumber: otherActiveTask.orderNumber, produkt: otherActiveTask.produkt } : null}
           onGoToOtherTask={(id) => setSelectedTaskId(id)}
           onArrivalConfirm={(dest) => setArrivalScreen(dest)}
+          returlaesOprettet={selectedTask ? (returlaesOprettetForTask[selectedTask.id] ?? false) : false}
+          onOpretReturlaes={() => {
+            if (selectedTask) {
+              setReturlaesOprettetForTask(prev => ({ ...prev, [selectedTask.id]: true }))
+            }
+            setPrototypeSubScreen('returlaes')
+          }}
         />
       )}
 
@@ -339,7 +359,17 @@ export function ChauffoerPrototype() {
         <AnkommetFabrikScreen onClose={() => setArrivalScreen(null)} messageCount={MESSAGE_COUNT} />
       )}
       {arrivalScreen === 'plads' && (
-        <AnkommetUdfoerselsstedScreen onClose={() => setArrivalScreen(null)} messageCount={MESSAGE_COUNT} />
+        <AnkommetUdfoerselsstedScreen
+          onClose={() => setArrivalScreen(null)}
+          messageCount={MESSAGE_COUNT}
+          onOpretReturlaes={() => {
+            if (selectedTaskId) {
+              setReturlaesOprettetForTask(prev => ({ ...prev, [selectedTaskId]: true }))
+            }
+            setArrivalScreen(null)
+            setPrototypeSubScreen('returlaes')
+          }}
+        />
       )}
 
       {/* Se timeregistrering overlay — åbnes fra timereg-tab på afsluttede opgaver */}

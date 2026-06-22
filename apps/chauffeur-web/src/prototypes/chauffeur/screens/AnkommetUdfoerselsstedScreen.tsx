@@ -25,6 +25,8 @@ const MOCK = {
 export interface AnkommetUdfoerselsstedScreenProps {
   onClose: () => void
   messageCount?: number
+  /** Callback når chauffør bekræfter "Opret returlæs" i modalen */
+  onOpretReturlaes?: () => void
 }
 
 type SubScreen = 'udlaegger' | 'bekraeft'
@@ -43,10 +45,11 @@ const C = {
   textMuted: '#717182',
 }
 
-export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: AnkommetUdfoerselsstedScreenProps) {
+export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0, onOpretReturlaes }: AnkommetUdfoerselsstedScreenProps) {
   const [subScreen, setSubScreen] = useState<SubScreen>('udlaegger')
   const [activeTab] = useState<TabName>('prototyper')
   const [afslutOpgaveModalOpen, setAfslutOpgaveModalOpen] = useState(false)
+  const [returlaesModalOpen, setReturlaesModalOpen] = useState(false)
 
   return (
     <div
@@ -162,7 +165,7 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
               </p>
             </div>
 
-            {/* Bekræft aflæsning — gul pill */}
+            {/* Bekræft aflæsning — gul pill (happy path) */}
             <button
               onClick={() => setSubScreen('bekraeft')}
               style={{
@@ -179,6 +182,25 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
               }}
             >
               Bekræft aflæsning
+            </button>
+
+            {/* Opret returlæs — outline-knap (sekundær, IKKE gul) */}
+            <button
+              onClick={() => setReturlaesModalOpen(true)}
+              style={{
+                backgroundColor: 'transparent',
+                border: `1.5px solid ${C.deepTeal}`,
+                borderRadius: 50,
+                minHeight: 56,
+                cursor: 'pointer',
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                fontSize: FS.md,
+                color: C.deepTeal,
+                width: '100%',
+              }}
+            >
+              Opret returlæs
             </button>
           </div>
         )}
@@ -370,6 +392,98 @@ export function AnkommetUdfoerselsstedScreen({ onClose, messageCount = 0 }: Anko
                   }}
                 >
                   Afslut opgave
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* ── Modal: Opret returlæs ── */}
+        {returlaesModalOpen && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundColor: 'rgba(0,0,0,0.45)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '0 24px',
+              zIndex: 20,
+            }}
+            onClick={() => setReturlaesModalOpen(false)}
+          >
+            <div
+              style={{
+                backgroundColor: C.white,
+                borderRadius: 24,
+                padding: 20,
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 12,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span
+                style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  fontSize: FS.md,
+                  color: C.deepTeal,
+                  textAlign: 'center',
+                }}
+              >
+                Ønsker du at oprette returlæs?
+              </span>
+              <span
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: FS.sm,
+                  color: C.textMuted,
+                  textAlign: 'center',
+                  lineHeight: 1.5,
+                }}
+              >
+                Rest-asfalt køres retur til fabrik. Bilen vejes ind fuld og ud tom.
+              </span>
+              <div style={{ display: 'flex', gap: 10, marginTop: 4, width: '100%' }}>
+                <button
+                  onClick={() => setReturlaesModalOpen(false)}
+                  style={{
+                    flex: 1,
+                    height: 44,
+                    border: `1px solid ${C.deepTeal}`,
+                    borderRadius: 50,
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 600,
+                    fontSize: FS.sm,
+                    color: C.deepTeal,
+                  }}
+                >
+                  Annullér
+                </button>
+                <button
+                  onClick={() => {
+                    setReturlaesModalOpen(false)
+                    onOpretReturlaes?.()
+                  }}
+                  style={{
+                    flex: 1,
+                    height: 44,
+                    backgroundColor: C.deepTeal,
+                    border: 'none',
+                    borderRadius: 50,
+                    cursor: 'pointer',
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 600,
+                    fontSize: FS.sm,
+                    color: C.white,
+                  }}
+                >
+                  Opret returlæs
                 </button>
               </div>
             </div>
