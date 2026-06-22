@@ -52,6 +52,8 @@ Begge kræver: France åbner firewall App→backend; bruger-auth via AD/Azure (F
 
 **Kommentar til chauffør (LÅST 2026-05-22):** Feltet i bunden af bilbestillingen er omdøbt fra "Kommentar til formanden" → **"Kommentar til chauffør"**. Indholdet skal sendes sammen med ordren TIL CHAUFFØREN (synlig i chauffeur-appen — se Trin 8 / Flow 3). Formand bruger feltet til at give kørselsspecifikke instruktioner: "Brug bagvejen", "Lav støj-restriktion efter 22", "Aflæsningssted er flyttet 50m mod vest" osv.
 
+**Forventet tons er redigerbart FØR afsendelse (LÅST 2026-06-19):** Formanden kan justere de **forventede tons op og ned** direkte i bilbestillingen **inden ordren sendes til fabrik** (UI understøtter det). Det er formandens endelige tal der sendes — det driver bilbehovs-beregningen (Anbefalet antal biler / kapacitet-dækket) og fabrik-notifikationen (Trin 5b). **EFTER afsendelse** er tons-ændringer låst til **telefon til fabrik** (jf. DATA_FIELDS § "morgenTons-update (efter send)") — den frie redigering gælder altså kun i planlægnings-/før-send-fasen. Formandens manuelle justering er adskilt fra PLAN's ekstra-bestilling (`ekstraTons`, Flow 9b), som forbliver read-only push.
+
 **Skriver til:** `orders.asfalt_koersel[].planlagt = true`, `orders.asfalt_koersel[].kommentar_til_chauffoer`, `orders.asfalt_koersel[].foerste_laes_udlaegning_tid`, `orders.asfalt_koersel[].interval_minutter_mellem_laes`, `orders.asfalt_koersel[].biler[]` (ordnet array — index 0 = første læs).
 
 **`biler[]`-ønske-objekt (LÅST 2026-06-13):** Hver bil i ønskelisten er ét objekt — `antal`-stepperen i UI'en udfoldes til individuelle biler ved send:
@@ -92,13 +94,22 @@ Vognmanden modtager dette array (én ønske-bil pr. objekt, hver med sit `bil_or
 ### Trin 2 — Formand ser afventende status (badge-lifecycle, LÅST 2026-06-15)
 **App:** formand
 **Komponent:** `VognmandBekraeftelseBadge` (pille pr. dag på Asfalt kørsel)
-**Forretningsregel:** Pillen sættes til gult **"Afventer vognmand"** så snart formanden trykker **Gem/Send** på bilbestillingen (dvs. `planlagt = true`) — IKKE først når vognmanden har set/åbnet den. Den forbliver gul indtil vi får data RETUR fra vognmanden.
+**Forretningsregel (3-state lifecycle, LÅST 2026-06-19):** Pillen har TRE tilstande, ikke to — den eksplicitte send-gate gør forskel på "planlagt" og "sendt":
+1. **"Planlagt"** (neutral/grå) — formanden har planlagt dagens kørsel (`planlagt = true`), men har endnu IKKE sendt til vognmand.
+2. **"Afventer vognmand"** (gul) — formanden har trykket den eksplicitte **"Send til vognmand"-knap** (`sendt_til_vognmand = true`). Forbliver gul indtil data kommer RETUR.
+3. **"Bekræftet vognmand"** (grøn) — vognmandens retur-data er ankommet.
+
+Samme 3-state gælder **materiellevering** (pr. enhed) — se Flow 2 Trin 5.
+
+**Eksplicit afsendelses-gate — uafhængig "Send til vognmand"-knap PR. SEKTION (LÅST 2026-06-19):** Både **Asfaltkørsel** og **Materiellevering** har HVER sin egen "Send til vognmand"-knap i bunden af sin sektion. De sendes **uafhængigt** — asfaltkørsel-biler og materiellevering kan være klar på forskellige tidspunkter, og hver knap har sin egen per-dag send-state. Tilstand pr. sektion: gul **"Send til vognmand"** → grøn **"Sendt til vognmand"** (hele knappen grøn, intet ikon) + **"Ret"-link** der genåbner til redigering. Knapperne afløser den tidligere implicitte per-række "Gem/Send"-trigger: intet sendes før knappen trykkes, så formanden kan rette frit indtil da. Hver sektions 3-state-piller (Planlagt → Afventer → Bekræftet) drives af DEN sektions egen send-knap. **"Ret" er KUN muligt i "Afventer vognmand"-tilstanden (LÅST 2026-06-19):** Når bestillingen er **bekræftet af vognmand**, deaktiveres/skjules "Ret" — formanden kan ikke længere redigere en bekræftet bestilling i app'en; ændringer aftales i stedet telefonisk med vognmand (jf. ønskeliste-reglen). For asfaltkørsel er "låst" pr. dag (alle dagens rækker bekræftet), for materiel pr. enhed. **Send-tilstanden er PR. DAG, men ÉN afledt knap (LÅST 2026-06-19):** Send-state gemmes pr. dag (`day.date` i `sendtTilVognmandDates`), men der er ÉN section-level "Send til vognmand"-knap hvis tilstand er **afledt**: knappen er gul **"Send til vognmand"** hvis der findes mindst én **planlagt-men-usendt** dag; ellers grøn **"Sendt til vognmand"**. Formanden kan planlægge én eller flere dage ad gangen og sende dem samlet — et klik markerer ALLE usendte planlagte dage som sendt. Allerede-sendte dage **sendes ikke igen**. Planlægges flere dage senere, bliver knappen gul igen (de nye usendte dage). De enkelte dag-rækkers piller (Planlagt → Afventer → Bekræftet) viser fortsat individuel status pr. `day.date`. **Materiellevering bruger samme afledte knap, men keyet pr. ENHED (`resource-id`)** i stedet for dag (materiel er en flad enheds-liste): gul hvis der findes mindst én planlagt-men-usendt materiel-enhed → ét klik sender alle usendte enheder samlet → grøn når alle planlagte enheder er sendt; allerede-sendte enheder sendes ikke igen. Piller pr. enhed (Planlagt/Afventer/Bekræftet) i både normal- og samleordre-mode. Samme gul→grøn-mønster bruges på "Send til fabrik"- og afregnings-knapperne (konsistens). Egen bil → fortsat auto-bekræftet ved send (se Variant: Egen bil-flow).
 **Bekræftet-flip:** Når vognmandens retur-data ankommer (`confirmed_vehicles[]` populeres → `bekraeftet_af_vognmand = true`), skifter pillen til grønt **"Bekræftet af vognmand"** (Trin 6) — **samtidig** med at **Bilbestilling-tabellen under Udførsel** udfyldes med de bekræftede biler (Trin 7). Pille og Udførsel-tabel hænger sammen: samme retur-data driver begge på én gang.
 **Tilstande:**
-- `planlagt = true` + `bekraeftet_af_vognmand = false` → 🟡 "Afventer vognmand"
+- `planlagt = true` + `sendt_til_vognmand = false` → ⚪ "Planlagt" (neutral/grå — planlagt, ikke sendt endnu)
+- `sendt_til_vognmand = true` + `bekraeftet_af_vognmand = false` → 🟡 "Afventer vognmand"
 - `bekraeftet_af_vognmand = true` → 🟢 "Bekræftet af vognmand" + Udførsel-Bilbestilling-tabel udfyldt
+- "Ret" på den grønne "Send"-knap → tilbage til "Planlagt"
 - Egen bil → ingen vognmand-pille (auto-bekræftet ved send — se Variant: Egen bil-flow)
-**Læser:** `orders.asfalt_koersel[].planlagt` + `.bekraeftet_af_vognmand`
+**Læser:** `orders.asfalt_koersel[].planlagt` + `.sendt_til_vognmand` + `.bekraeftet_af_vognmand`
 
 ### Trin 3 — Vognmand ser bestilling med første-læs + interval
 **App:** vognmand
@@ -137,6 +148,16 @@ Når vognmanden trækker biler ind i drop-zonen, får hver placeret bil automati
 Disse felter sendes retur til formand (Trin 7) og til chauffør (Trin 8) — hver chauffør får KUN sin egen mødetid_fabrik. **`bil_ordre_nr` bærer ønske-bilens nummer videre**, så formand/fabrik/chauffør kan matche bekræftet bil mod den oprindelige ønske-bil (og opdage afvigelser i antal/type/tid).
 
 **Leverancevej — fil-udveksling, ikke drag-and-drop (LÅST 2026-06-19):** Vognmanden disponerer i **sit eget system** og leverer disponeringen via **fil-udveksling** (CSV via SFTP for store / web-formular for små). Drag-and-drop-`VognmandDisponeringsScreen` er derfor **ud af scope** — bevaret bag `SHOW_DISPONER`-flag i prototypen, men UI-en udgår sandsynligvis. `confirmed_vehicles[]` populeres uændret fra fil/formular. Fil-kontrakten (CSV-kolonner + format-konventioner: ISO-dato `yyyy-mm-dd`, tid `HH.mm`, semikolon-separator, UTF-8) + de fire udvekslings-øjeblikke er kanonisk dokumenteret i `Docs/Vognmand/Dataudveksling-vognmand.md` § "Udvekslings-model". Vognmand-app'en (`DataudvekslingScreen`) viser kontrakten + downloadbare CSV-eksempler (bestilling + retur) og en "Opdatér"-pull af klar-data (ikke on-demand-generering).
+
+**Webupload — "den anden dør" for små vognmænd (LÅST 2026-06-22):** Det er **fil hele vejen (CSV)** for alle vognmænd — forskellen er kun leveringskanalen: **store dropper automatisk via SFTP**, **små uploader CSV'en i vognmand-app'en** (ingen SFTP-klient at sætte op). Begge døre rammer **samme `confirmed_vehicles[]`-ingest og samme fil-kontrakt** — der er kun én kontrakt at vedligeholde. Begrundelse: små vognmænd har intet system at eksportere fra og håndlaver CSV'en i Excel → en upload i en app de allerede logger ind i er mindre arbejde (for dem og os) end SFTP-konto/-nøgle-provisionering + support, og webformularen giver straks-validering.
+
+**Krav til webupload (prototype: `DisponeringUpload.tsx` i `dataudveksling/`):**
+- **Format/parsing:** CSV, UTF-8 (BOM-tolerant), semikolon-separator, header-række. Citationstegn-håndtering (`""` = escapet `"`). Én datarække pr. bil.
+- **Forventede kolonner (header, navn er bindende):** `bil_ordrenummer; reg_nr; biltype; chauffoer_navn; chauffoer_mobil`. Manglende **påkrævet** kolonne i header = global blokering af hele filen.
+- **Påkrævede felter pr. række (blokerende):** `bil_ordrenummer`, `reg_nr`, `chauffoer_navn`, `chauffoer_mobil`. `biltype` = ikke-blokerende advarsel hvis tom (mappes mod Colas' biltyper).
+- **Felt-validering:** `bil_ordrenummer` skal matche `<ordrenr>-DDMMYY-NN` (match-nøgle, ekko af bestilling); `chauffoer_mobil` skal være E.164 (`/^\+\d{8,15}$/`).
+- **UX-flow:** vælg/træk fil → client-side parse + validering → preview-tabel med pr.-række-status (klar / advarsel / fejl) + fejltekst → opsummering (X klar · Y fejl) → "Indsend"-knap **disabled** hvis manglende kolonner, ≥1 fejlrække eller 0 gyldige rækker → success-state.
+- **Produktion (TODO Supabase/backend):** client-side validering er kun forhåndstjek; **backend skal re-validere** og binde `reg_nr` til `bil_ordrenummer`-slot (samme regel som SFTP-vejen). Upload-endpoint hører til samme fil-in/ud-kanal som diskuteres i arkitektur-oplægget (`ARKITEKTUR_OPLAEG_JESPER.md`) — åbent punkt: ligger fil-kanalen i `EXT_PLAN_APP` eller som separat kanal ved siden af.
 
 ### Trin 5 — Vognmand bekræfter
 **App:** vognmand
@@ -1132,6 +1153,21 @@ type Vejeseddel = {
 
 **🟡 Implementerings-status (2026-06-03):** Spec låst. **Kode-implementering venter til næste session.** Pille-rename ("Sidste læs" → "Forventet sidste læs") og returlæs-fjernelse er allerede gennemført i denne session som forberedelse.
 
+---
+
+**Variant: Chauffør-initieret returlæs på pladsen (🟡 PROTOTYPE-OPLÆG 2026-06-19)**
+
+Adskilt trigger fra ovenstående vejr-aflysning (som er formand-initieret, dag-niveau) og fra Flow 10 (fabrik-initieret tredjeparts-grus). Her beslutter **chaufføren selv på udførselsstedet** at køre rest-asfalt / ikke-udlagt last retur til afsender-fabrik.
+
+- **Trigger:** Chauffør opretter returlæs via knap på **"Ankommet til plads"-skærmen** (under "Bekræft aflæsning") og — for nem genfinding — via en knap på **Order details**. Begge åbner samme modal: *"Ønsker du at oprette returlæs?"*
+- **Mekanik = identisk med vejr-aflysning-returlæs ovenfor:** spejlet vejeflow — bilen **indvejes fuld** og **udvejes tom** (modsat normal: indvej tom → udvej fuld). Selve flow-strukturen (scan → bekræft → scan-udvejning → kvittering) er uændret, kun retningen vendes.
+- **Vejebilag:** Vi får **også her et vejebilag — blot med negativt fortegn** (`tons: − rest-tons`), kobles til original vejeseddel via `relateret_vejeseddel_id`, oprindelig bevares (audit-trail). Samme `type: 'retur-laesset'`-konvention som vejr-aflysning-returlæs.
+- **Multiprodukt-variant:** Hvis bilen har flere produkter på der skal retur, **vendes multiprodukt-flowet** (jf. `SamlesPaaEnBilScreen`): chauffør aflæsser pr. silo/produkt og får ét negativt vejebilag pr. produkt.
+- **Afregningsregel (NY, LÅST 2026-06-19):**
+  - **Timeløn → timeløn:** chauffør på timeløn afregnes normalt for køretiden (ud + retur).
+  - **Akkord → kun ventetid:** chauffør på akkord får **ikke** akkord for returlæsset (det blev jo aldrig udlagt) — kun **ventetid** afregnes.
+- **Status:** Prototype-oplæg bygges i `chauffeur-web` (enkelt + multiprodukt) tilgængeligt fra tools-/prototyper-menuen. UI-placering (Ankommet-til-plads + Order details) under iteration — visuelt sprog matcher eksisterende vejeflow-skærme. **TODO: Erstat mock med Supabase når klar** — negativt vejebilag skrives til `plan_vejebilag` på samme måde som vejr-aflysning-returen.
+
 **Badge-lifecycle — hvornår forsvinder "Ændret af formand"? (LÅST 2026-06-03)**
 
 Eksplicit bekræftelse fjerner badge — ingen "har set"-tracking. Hver app er ansvarlig for sit eget signal:
@@ -1282,6 +1318,7 @@ Formål: vognmanden får tilstrækkelig kontekst til at disponere korrekt blokvo
 - **Konsolideringsnøgle:** `confirmed_transport.chauffoer_tlf` inden for ordrens `materiel[]`. Flere materiel-linjer med samme chauffør-tlf → én SMS.
 - **Granularitet adskiller sig fra asfalt:** Asfalt-kørsel = én SMS pr. chauffør pr. **dag** (loop-kørsel, mange læs — Flow 1 Trin 7b). Materiel = én SMS pr. chauffør pr. **ordre** (diskret transport-opgave med fast afhentning/aflæsning).
 - **Debounce + bekræftelses-pille:** Samme afsendelses-timing (2 timer initial / 10 min sen erstatning) og "Sendt til chauffør"-pille (formand på materiel-bil-rækken, Trin 5 + vognmand — noteret, ikke bygget) som Flow 1 Trin 7b. Genbrug mekanikken.
+- **Én "Send nu"-knap pr. chauffør (LÅST 2026-06-19):** Den manuelle straks-/gensend-knap er ligesom SMS'en konsolideret — kører samme chauffør FLERE materiel-enheder (samme `chauffoer_tlf`), vises der KUN ÉN "Send nu"-knap for ham (ikke én pr. enhed), og ét klik sender den ene konsoliderede SMS. UI'et tjekker `chauffoer_tlf` på tværs af ordrens `materiel[]` og grupperer knap + pille pr. chauffør. **🟡 UI bygges nu i formand-prototypen** (var tidligere ikke dækket for materiel — kun asfalt havde Send-nu-knappen).
 
 **Asfalt + materiel samme dag = TO adskilte SMS (LÅST 2026-06-15):** Hvis samme chauffør har BÅDE asfalt-loop-kørsel OG en materiel-transport samme dag, sendes **to adskilte SMS** — én asfalt-dags-SMS (Flow 1 Trin 7b) + én materiel-ordre-SMS (denne regel). De konsolideres IKKE, fordi det er to forskellige opgavetyper med hvert sit deep-link/kontekst.
 
@@ -1523,6 +1560,44 @@ Produkt-QR (på silo) scannes ÉN gang mellem de to vej-scans for at bekræfte r
 **Trigger:** Chauffør afslutter dagens kørsel
 **Involverede apps:** chauffeur → formand → vognmand
 
+### Vejeseddel-vægte: Tara · Brutto · Netto — IDENTISK format på tværs af apps (🟢 LÅST 2026-06-22)
+Hver vejeseddel-linje viser **tre vægte for bilen**: **Tara · Brutto · Netto** (brutto = tara + netto). Vises **begge steder i nøjagtigt samme format**:
+- **Formand:** Afregning → "Bil- og tonsafregning" — pr. vejeseddel-linje.
+- **Vognmand:** Afregning → expand under chauffør — pr. vejeseddel-linje.
+
+**Kanonisk format (skal holdes identisk begge steder):** `Tara {x} · Brutto {y} · Netto {z} Tons` — hvert tal 1 decimal, dansk komma; enheden "Tons" én gang til sidst. Datakilde (mål): `plan_vejebilag` (tara/brutto/netto pr. vejning). Tara = bilens tomvægt, Brutto = vægt med last, Netto = udlagt mængde.
+
+**Vejesedlerne er DE SAMME på tværs af Udførsel/Kørsel og Afregning (🟢 LÅST 2026-06-22):** Vejesedlerne i Udførsel → **"Kørsel"**-sektionen og i Afregning → **"Bil- og tonsafregning"** er ÉT OG SAMME datasæt (samme `plan_vejebilag`-kilde) — blot vist i forskellige kontekster. Hver vejeseddel bærer **vejeseddel-nummer (felt `vejeseddelNr`)** + tara/brutto/netto. Vejeseddel-nummeret vises som **det første element til venstre** på vejeseddel-rækken i afregningen (fx `#1042801`), konsistent med `VejeseddelRow` i Kørsel. Felt-navnet `vejeseddelNr` holdes **ens på tværs** (camelCase) — ikke to navne for samme begreb.
+
+### Afregningsform pr. BILTYPE — blandede former + form-bevidst fordeling (🟢 LÅST 2026-06-22)
+
+**Baggrund:** Afregningsform (akkord/time) blev tidligere valgt **pr. dag/vognmand** (ét valg for alle biler). Det flyttes til **pr. biltype**.
+
+**Valg-hierarki:**
+- Toggle ved **vognmanden bevares** og fungerer som **default** for dagen.
+- Hver **biltype** har sin egen toggle der **arver** vognmand-defaulten men kan **overstyres** → fx "7 Aks" = akkord, "Sideudlægger" = time, samme dag/vognmand.
+- Hver bils `afregning_type` udledes af **dens biltypes** valg.
+- **Uændrede per-bil overrides til time:** 1,5-times-reglen (`aflæsset_efter_1_5t`) og materiel-biler (`er_materiel_bil`) — ligger ovenpå biltype-valget.
+
+**Konsekvens — blandede former i samme dag/vognmand er normalen.** Afregnings-expanderen er allerede per-bil og form-bevidst (time: køretimer+ventetid+pause; akkord: tons fra vejesedler+ventetid). NYT krav:
+- **Adskilte subtotaler pr. form** i afregnings-overblikket — vises **hver for sig**, aldrig summeret til ét tal, og med **separat total for HVER komponent**:
+  - **Akkord:** `{N} biler · {tons} Tons · Ventetid {timer} Timer`
+  - **Time:** `{M} biler · Køretimer {t} · Ventetid {t} · Hviletid {t} Timer`
+  - **Navngivning (🟢 LÅST 2026-06-22):** time-afregningens tredje komponent hedder **Hviletid** (ikke "Pause" — feltet `ChauffoerAfregning.pause` omdøbt til `hviletid`).
+
+**Form-bevidst fordeling (multilæs / samleordre, flere ordrer):**
+- **Akkord-bil** der spænder over flere ordrer: fordel **tons OG ventetid** pr. ordre. Ventetid-fordelings-felt placeres **til højre for "Fordel tons"**.
+- **Time-bil** på samleordre: fordel **køretimer OG ventetid** pr. ordre.
+- **Fordelingen er MANUEL — vognmanden fordeler selv** (ingen auto-proportional pre-fordeling fra formand). I prototypen er felterne manuelle input.
+
+**Build-rækkefølge:** Bygges **først på formandens afregning**; spejles til **vognmandens afregning** (expand pr. chauffør) senere — format/model holdes identisk på tværs (jf. vejeseddel-vægte ovenfor).
+
+**🟡 ÅBENT → retning (kunde-spørgsmål, 2026-06-22):** Det formanden sender i Planlægning er en **forespørgsel** — afregningsformen pr. biltype er ikke garanteret i de biler vognmanden disponerer retur. **Foreslået løsning (Carsten):** Afregningsformen kan **vælges/bekræftes pr. BEKRÆFTET BIL i Afregningen** — dér kendes den faktiske bil/chauffør. Dermed:
+- **Planlægnings-toggle** (pr. biltype) = forespørgsel/**default**.
+- **Afregnings-toggle** (pr. bekræftet bil) = **autoritativ endelig form** (override af default).
+- Materiel + 1,5-times-reglen forbliver tvungne overrides til time uanset.
+- Endelig aftale-model (fast pr. vognmand-aftale / pr. chauffør-bil / forhandlet pr. ordre) afklares stadig med kunden — men per-bil-valget i Afregningen gør modellen robust uanset svaret.
+
 ### Trin 0 — Formand ser status-overblik i toppen af Udførelse
 **App:** formand
 **Komponent:** **3 status-bokse i toppen af `UdfoerselContent`** (samme dimensioner som produkt-bokse i Planlægning: `flex-col gap-xxxs items-start min-w-[150px] px-sm py-xs rounded-xl border` + 4 stacked tekst-linjer)
@@ -1627,7 +1702,7 @@ Formand modtager både rå-værdier (auto-beregnet fra events) og chauffør-redi
 **Komponent:** TimeRegistrationScreen (afsluttes ved sidste "Afslut opgave"-tryk)
 **Handling:** Chauffør gennemgår dagens timer, tilføjer evt. kommentar, trykker "Send til formand"
 **Skriver til:** `time_registreringer` (én række per chauffør per dag) med `{ kørsel_minutter, ventetid_minutter, pause_minutter?, chauffør_kommentar, godkendt_af_formand = null, status: 'afsendt' }`
-**Note:** `tons_koert` skrives IKKE her — tons-data ligger i `plan_vejebilag` og join'es ind når formand åbner afregningen. Pause-feltet udfyldes kun ved asfalt-bil (ikke materiel).
+**Note:** `tons_koert` skrives IKKE her — tons-data ligger i `plan_vejebilag` og join'es ind når formand åbner afregningen. **Hviletid-feltet** (tidl. "Pause" i afregnings-expanderen — omdøbt 2026-06-22; jf. terminologi-skellet hviletid vs opgave-pause i Flow 1) udfyldes kun ved asfalt-bil (ikke materiel).
 
 ### Trin 2b — Chauffør ser og retter afsluttet timeregistrering (LÅST 2026-06-08)
 **App:** chauffeur
@@ -1734,6 +1809,22 @@ Edit-tilstand (inde i samme screen)
 - Eventuelt opdaterede timer-værdier hvis formand har redigeret
 **UI-skift:** Badge skifter til grøn "Afregning godkendt", felter låses (read-only i expander). Header viser ✓ + tidspunkt. "Godkend"-knap erstattes med **"Genåbn afregning"-link**.
 
+### Trin 5a — Auto-godkendelse af akkord uden ventetid (LÅST 2026-06-19)
+**App:** formand
+**Komponent:** `AfregningContent` / Bil- og tonsafregning
+**Forretningsregel:** En **akkord-afregning uden ventetid** auto-godkendes uden formand-klik. Begrundelse: ved akkord kommer tons objektivt fra vejesedlerne (`plan_vejebilag`), og kørsel + hviletid dækkes implicit af tons-raten. Når der **ikke er ventetid** (`ventetid === 0` / ikke angivet), er der **intet for formanden at vurdere manuelt** — afregningen er fuldt bestemt af vejesedlerne og kan godkendes automatisk.
+
+**Betingelser (ALLE skal være opfyldt):**
+- `effectiveType === 'akkord'` — ægte akkord, IKKE tvunget til `time` via 1,5-times-reglen (`aflæsset_efter_1_5t`) eller materiel-bil (`er_materiel_bil`).
+- `ventetid` er `0` eller ikke angivet.
+- Tons er endelige — ingen uafklaret multilæs-fordeling for bilen (auto-godkend må ikke låse forkerte tons).
+
+**Skriver til:** Samme felter som Trin 5 (`godkendt_af_formand = true`, `godkendt_tidspunkt = now()`) + markør `auto_godkendt = true`.
+
+**UI-skift:** Badge viser **"Afregning auto-godkendt"** (adskilt fra manuelt "Afregning godkendt" så formanden kan se at den ikke krævede handling). Formand kan stadig genåbne (Trin 5b).
+
+**Reaktivt:** Tilføjer formanden ventetid > 0 efter genåbning, falder rækken ud af auto-godkendt og kræver manuel godkendelse. Manuelt godkendte rækker (`auto_godkendt = false`) auto-genåbnes aldrig.
+
 ### Trin 5b — Formand genåbner afregning (hvis fejl/justering nødvendig)
 **App:** formand
 **Komponent:** "Genåbn afregning"-link i `BilAfregningExpander` / `MaterielAfregningExpander` (godkendt-tilstand)
@@ -1745,6 +1836,17 @@ Edit-tilstand (inde i samme screen)
 **UI-skift:** Badge skifter tilbage til gul "Lav afregning", felter editable igen. Lille muted-tekst "Genåbnet [tidspunkt]" gemmes til historik.
 
 **Note:** Ingen afvis-flow i v1 — formand kan kun godkende eller genåbne. Formel "Afvis"-knap kommer i senere iteration.
+
+### Trin 5c — Formand "Afslut dag" → dagen sendes til PLAN (LÅST 2026-06-19)
+**App:** formand
+**Komponent:** Grøn **"Afslut dag"-knap** i bunden af Afregning-moden (under Timeafregningen) — `AfregningContent` i `OrdrePlanScreen`.
+**Forretningsregel — send til PLAN er gated på "Afslut dag":** Afregnings-/dagsdata sendes **IKKE løbende** til PLAN. **Først når formanden trykker "Afslut dag"** — og ALLE påkrævede felter er udfyldt — sendes dagen til PLAN (via service-konto, jf. integrations-arkitektur øverst).
+**Validering ved klik (alt skal være udfyldt):**
+- **Bil- og tonsafregning (Timeafregning)** — alle chauffør-timer udfyldt (jf. `afregning_type`)
+- **Materielafregning** — alle materiel-timer udfyldt
+- **KS-rapporteringer** — påkrævede skemaer (A3/A4/MKS afhængigt af krav) skal udfyldes. **🟡 Under udvikling:** KS-skemaerne har endnu ikke en completion-state (uncontrolled inputs), så indtil felterne er klar indgår KS **ikke** i den hårde validering — i stedet vises en **husker** ("Husk KS-rapportering") i Afslut dag-flowet. Når KS-felterne er færdige, skal de med i den blokerende validering.
+**Mangler noget (bil-og-tons / materiel) →** modal **"Du mangler udfyldelse af …"** der konkret lister de manglende punkter; afsendelse til PLAN **blokeres**.
+**Når alt er udfyldt →** dagen markeres **"Afsluttet"** (= sendt til PLAN). En **"Ret"-knap** (genåbn) lader formanden korrigere hvis han har glemt noget; efter Ret skal dagen **afsluttes igen** for at gen-sende.
 
 ### Trin 6 — Vognmand ser godkendte afregninger i portal
 **App:** vognmand
@@ -1857,6 +1959,10 @@ Afregningstypen flyder ind på ordren via `confirmed_vehicles[].afregning_type`.
 - Default tab: `'mks'` (MKS er altid det første krav)
 - Collapsed-look matcher Forundersøgelse-pattern: hvid box-wrapper (`bg-surface border border-hairline rounded-2xl shadow-sm`) + "Mangler vurdering"-status-pille i højre side
 - Status-pille er pt. konstant "Mangler vurdering" (visuel mockup, ingen state-tracking endnu)
+- **A4 "Udlagt antal tons" → Afregning (🟢 LÅST 2026-06-22):** "Udlagt antal tons" registreret pr. produkt/lag i A4-skemaet (`OvrigeOplysningerSkema`) **overføres til Afregning → Udlægning → Registrer udlægning**, hvor det vises som referencetekst **"{tons} tons registreret i 4A"** ud for kvm/tons. Vises **kun ud for det produkt der er valgt** (følger Afregningens `aktivtProduktId`). Prototype: mock pr. produkt i `perProduktUdlaegning`; mål: ægte transfer fra A4-feltets per-produkt-værdi.
+- **Tillægsareal (m²) → Afregning (🟢 LÅST 2026-06-22):** På samme måde vises en note **"{m²} m² tillægsareal registreret i 4A"** ud for kvm/tons i Registrer udlægning — men **kun hvis der faktisk er udlagt tillægsareal** (> 0) for det valgte produkt. Står ved siden af "tons registreret i 4A"-noten.
+- **Udlægningsareal (m²) → Afregning (🟢 LÅST 2026-06-22):** Ligeledes overføres det udlagte areal fra 4A → note **"{m²} m² areal registreret i 4A"**, placeret under de to øvrige. Alle **tre referencer (tons · areal · tillægsareal)** grupperes samlet inde i Registrer udlægning-boksen hvor tons/areal angives — pr. valgt produkt.
+- **A3 (ØVR. 3.a) er en SELVSTÆNDIG blanket ≠ A4 (🟢 LÅST 2026-06-22):** 3a og 4a er to FORSKELLIGE PLAN-blanketter (separate komponenter — `OvrigeOplysningerSkema3a` vs `OvrigeOplysningerSkema`). **3a-felter** (1:1 kopi fra PLAN): Strækning · **Bygherre (præudfyldes med ordrens kundenavn)** · **"Strækning kontrolleret"** (Morgen/Aften Kl. + Nej) · Produktoplysninger (produkt-navigation) · sektion "Udfyldes af EL/DL": Bygherretilsyn + Prøve udtaget ved anlæg (tilsyn) + Komprimeringskontrol bestilt + Laboratoriekontrol bestilt (alle Ja/Nej-toggles) + Bemærkninger. **4a-felter:** Stationering · Udlagt antal tons · Udlægningsareal (l×b, live-beregner) · Tillægsareal · Areal i alt · Gennemsnitsforbrug · Skitse vedlagt (toggle) · Bemærkninger. **Begge:** produkt-navigation med **default lag 1 valgt** + "Vælg produkt"-label; Gem-knap gul→grøn.
 
 ---
 
@@ -1909,6 +2015,13 @@ Afregningstypen flyder ind på ordren via `confirmed_vehicles[].afregning_type`.
 - **PLAN modtager data retur:** underlag-vurdering, årsager, aftalt-med, forbehold, billeder, ekstraarbejde-linjer
 - **Projektleder notificeres** hvis der er tilføjet ekstraarbejde-linjer (notifikations-mekanisme TBD — email/in-app/SMS)
 **Skriver til:** `orders.forundersoegelse.afsluttet = true`, trigger `sync_to_plan` + `notify_projektleder`
+
+### Ekstraarbejde — kilde i PLAN, to indgange, gem-notifikation & Afregning-flag (🟢 LÅST 2026-06-22)
+
+- **Kilde/destination i PLAN:** Ekstraarbejde registreres i PLAN's fane **"Ydelser"**. Ekstraarbejde-typerne (dropdown-værdier) kommer herfra, og de registrerede linjer skrives retur hertil. Colas-appen er indtastnings-flade i marken; PLAN ejer ydelses-registret.
+- **To indgange, delt liste:** Ekstraarbejde kan tilføjes fra **både** Forundersøgelse **og** MKS-rapportering (Udførsel → KS-rapportering). De deler samme linje-liste (prototype: fælles `ekstraLinjer`-state hejst til `OrdrePlanScreen`-root; mål: `orders.forundersoegelse.ekstraarbejde[]`) — data ender samme sted uanset indgang.
+- **Notifikation ved gem:** Når formanden gemmer — **"Gem forundersøgelse"** ELLER **MKS-gem** — OG der er ≥1 ekstraarbejde-linje → `notify_projektleder` udløses (mekanisme TBD: email/in-app/SMS). Gem fra begge skemaer er ligestillet. (Bemærk: i Forundersøgelse er det separate ekstraarbejde-gem fjernet — "Gem forundersøgelse" gemmer også ekstraarbejdet.)
+- **Afregning-flag (cross-reference):** Når der ER registreret ekstraarbejde (betinget), vises flaget **"Der er ekstraarbejder under ydelser"** i **Afregning → Udlagt** — både som tekst ved kvm/tons-fremdriften og i et læs-only note-felt. Formål: den der afregner ved at der ligger ekstraarbejde under Ydelser i PLAN (påvirker økonomi/afregning).
 
 ---
 
@@ -3053,10 +3166,14 @@ afregninger                                   // fra Colas til vognmand
 - **ETA-forsinkelse er TREND-baseret, ikke instant speed** — `EtaBadge` farve-formattering baseres på `(etaMinutter − forventetEtaMinutter) / forventetEtaMinutter`. Tærskler: ≤25% = neutral (grå), 25–50% = warn (gul), >50% = bad (rød). Det fanger reel forsinkelse pålideligt og undgår falske positive fra GPS-noise (stoplys, kortvarige stop). Se Flow 8 Trin 5a for detaljer
 - **Dagsoverblik-registrering er en enkelt række per ordre/dato** — `dagsoverblik_registreringer` har én række per `(ordrenummer, dato)`. Hver "Gem" overskriver tidligere værdier; ingen historik gemmes i v1 (kan tilføjes ved Supabase-koblingen via en separat `dagsoverblik_historik`-tabel hvis nødvendigt)
 - **Aften-, nat- og weekend-udførelse er en ordre-attribut fra PLAN** — Nogle ordrer skal udføres uden for normal arbejdstid. Feltet `tidsvindue?: 'aften' | 'nat' | 'weekend'` sidder på `Ordre`-typen (cross-app: både formand og vognmand). Det kommer fra PLAN på samme måde som `jobnummer` og kan IKKE redigeres i Colas-apps. Visuelt mønster i Gantt (formand + vognmand bruger SAMME regler):
-  - `aften` → hele baren rendres `bg-warning` (gul) på tværs af bar-duration, uanset state (planlagt/aktiv/færdig)
-  - `nat` → hele baren rendres `bg-deep-teal` (mørk) på tværs af bar-duration
-  - `weekend` → bar'en beholder sin state-farve; `bg-bad` (rød) overlay rendres KUN på de cell-segmenter der falder på lørdag/søndag (ikke på hverdage indenfor bar-spanet)
-  - Legenden vises under Gantt-kortet sammen med state-forklaringerne
+  - **Ren tidsvindue+aflyst-model (LÅST 2026-06-19) — formand + vognmand er nu IDENTISKE:** stavene farves UDELUKKENDE efter tidsvindue + aflysning. **State-baserede markeringer (I gang / Planlagt / Afsluttet) er fjernet** fra formandens kalenderoversigt for renhed — så de to apps bruger præcis samme markeringer og farver.
+  - `normal udførsel` → `bg-good` (grøn)
+  - `nat` → `bg-deep-teal` (mørk)
+  - `weekend` → **hele baren** `bg-warning` (amber) — ikke længere et `bg-bad`-overlay
+  - `aflyst` → `bg-bad` (rød), én ensartet markering uden årsag i gantt (jf. aflysnings-markeringer ovenfor). Vognmand udleder aflyst **pr. dag** fra `DagDisponering.annulleretAarsag`; formand fra `order.state === 'cancelled'`.
+  - **Stav-stil:** tynd afrundet pille (`h-[6px] rounded-full`), identisk i begge apps. Ingen status-kolonne.
+  - **Legend (4 markeringer):** Normal udførsel · Nat · Weekend · Aflyst.
+  - **Formandens menupunkt + side-overskrift hedder "Kalenderoversigt"** (tidl. "Mine opgaver" / "Opgaveoversigt").
   - Chauffør-app surfacer feltet i fase 2 (TBD: badge på ordre-kort eller i task-detail). Vognmand bruger feltet til disponering — fx undgå chauffører der ikke vil/kan tage natarbejde
 - **Helligdage skal markeres som weekend i Gantt (produktion)** — Prototypens weekend-tint (`bg-surface-2`/`bg-good-bg` på dag-headers + cells) skal i produktion udvides til en dansk kalender med mærkedage: nytårsdag, skærtorsdag, langfredag, 2. påskedag, store bededag, Kr. himmelfartsdag, 2. pinsedag, juleaften, juledag, 2. juledag, nytårsaftensdag. Helligdage skal rendres med SAMME visuelle stil som weekender. Konsekvens for `tidsvindue: 'weekend'`-overlay: bør udvides til at dække helligdage også (TBD ved Supabase-kobling — kræver enten helligdagskalender-tabel eller server-side beregning)
 - **Chauffør-app erstatter Danvægt-vejekort via NFC HCE (antagelse, afventer kunde-bekræftelse)** — Den planlagte arkitektur er at chauffør-appen fungerer som virtuelt NFC-kort: chaufføren holder telefonen hen til Danvægt-læseren, der identificerer ham som med dagens fysiske kort. Teknik: **Host Card Emulation (HCE)** på Android, Apple Wallet-pass på iOS. **Forudsætning:** Danvægt-læseren skal bruge **13,56 MHz NFC (ISO 14443-A/B)**. "RFID" er bredt — kun NFC-frekvensen kan emuleres. Hvis læseren er 125 kHz LF-RFID eller UHF, virker det IKKE og kræver hardware-skift hos Danvægt. Konsekvenser ved positiv bekræftelse: (1) chauffør-app skal hver morgen hente et nyt "kort-ID" via PLAN-integration (svarer til dagens kort-omkodning), (2) backup-flow nødvendigt for glemt telefon/fladt batteri/NFC-fejl, (3) iOS-flåde kræver Apple Wallet-pass-integration eller standardisering på Android. Se `Docs/Formand/AFKLARING_Multi-produkt_og_Vejekort.md` Q23-29 for åbne spørgsmål.
