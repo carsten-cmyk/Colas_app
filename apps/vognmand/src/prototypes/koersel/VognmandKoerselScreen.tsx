@@ -62,7 +62,7 @@ interface DagsBesked {
 }
 
 type AfregningType = 'akkord' | 'time'
-interface VejeseddelLinje { tidspunkt: string; produkt: string; tons: number }
+interface VejeseddelLinje { tidspunkt: string; produkt: string; tons: number; tara: number }
 interface AfregningRow {
   chauffør: string
   reelReg: string
@@ -204,9 +204,9 @@ export function VognmandKoerselScreen() {
       appKoeretid: 5.5, appVentetid: 1.5, appHviletid: 0.75,
       aarsag: null, chauffoerKommentar: null,
       vejesedler: [
-        { tidspunkt: '07.20', produkt: 'AB 11t', tons: 32 },
-        { tidspunkt: '09.05', produkt: 'AB 11t', tons: 32 },
-        { tidspunkt: '10.40', produkt: 'AB 11t', tons: 32 },
+        { tidspunkt: '07.20', produkt: 'AB 11t', tons: 32, tara: 14.5 },
+        { tidspunkt: '09.05', produkt: 'AB 11t', tons: 32, tara: 14.5 },
+        { tidspunkt: '10.40', produkt: 'AB 11t', tons: 32, tara: 14.5 },
       ],
     },
     {
@@ -216,9 +216,9 @@ export function VognmandKoerselScreen() {
       aarsag: 'Ventetid justeret — kø ved fabrik talte ikke med',
       chauffoerKommentar: 'Lang kø på fabrik om morgenen',
       vejesedler: [
-        { tidspunkt: '07.35', produkt: 'AB 11t', tons: 30 },
-        { tidspunkt: '09.15', produkt: 'AB 11t', tons: 30 },
-        { tidspunkt: '10.55', produkt: 'AB 11t', tons: 30 },
+        { tidspunkt: '07.35', produkt: 'AB 11t', tons: 30, tara: 14.5 },
+        { tidspunkt: '09.15', produkt: 'AB 11t', tons: 30, tara: 14.5 },
+        { tidspunkt: '10.55', produkt: 'AB 11t', tons: 30, tara: 14.5 },
       ],
     },
     {
@@ -228,9 +228,9 @@ export function VognmandKoerselScreen() {
       aarsag: 'Køretid rettet til aftalt rute-tid',
       chauffoerKommentar: null,
       vejesedler: [
-        { tidspunkt: '07.50', produkt: 'AB 11t', tons: 28 },
-        { tidspunkt: '09.30', produkt: 'AB 11t', tons: 28 },
-        { tidspunkt: '11.10', produkt: 'AB 11t', tons: 28 },
+        { tidspunkt: '07.50', produkt: 'AB 11t', tons: 28, tara: 14.5 },
+        { tidspunkt: '09.30', produkt: 'AB 11t', tons: 28, tara: 14.5 },
+        { tidspunkt: '11.10', produkt: 'AB 11t', tons: 28, tara: 14.5 },
       ],
     },
   ]
@@ -581,15 +581,22 @@ function AfregningMode({ rows }: { rows: AfregningRow[] }) {
 
                   {/* c) Vejesedler */}
                   <div className="border-t border-hairline divide-y divide-hairline">
-                    {r.vejesedler.map((v, j) => (
-                      <div key={j} className="px-8 py-2 flex items-center gap-sm">
-                        <FileCheck2 size={12} className="text-text-muted flex-shrink-0" />
-                        <span className="font-inter text-xxs text-text-muted tabular-nums w-10">{v.tidspunkt}</span>
-                        <span className="font-inter text-xxs text-text-secondary">{v.produkt}</span>
-                        <span className="font-inter text-xxs text-text-muted">·</span>
-                        <span className="font-inter text-xxs font-semibold text-text-primary tabular-nums">{v.tons} Tons</span>
-                      </div>
-                    ))}
+                    {r.vejesedler.map((v, j) => {
+                      const netto = v.tons
+                      const brutto = v.tara + v.tons
+                      const fmt = (n: number) => n.toFixed(1).replace('.', ',')
+                      return (
+                        <div key={j} className="px-8 py-2 flex items-center gap-sm">
+                          <FileCheck2 size={12} className="text-text-muted flex-shrink-0" />
+                          <span className="font-inter text-xxs text-text-muted tabular-nums w-10">{v.tidspunkt}</span>
+                          <span className="font-inter text-xxs text-text-secondary">{v.produkt}</span>
+                          <span className="font-inter text-xxs text-text-muted">·</span>
+                          <span className="font-inter text-xxs font-semibold text-text-primary tabular-nums">
+                            Tara {fmt(v.tara)} · Brutto {fmt(brutto)} · Netto {fmt(netto)} Tons
+                          </span>
+                        </div>
+                      )
+                    })}
                   </div>
 
                 </div>

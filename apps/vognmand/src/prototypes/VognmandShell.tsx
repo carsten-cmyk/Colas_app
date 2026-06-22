@@ -15,7 +15,7 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'liste',         label: 'Aktive ordre',      icon: <List size={15} />,           path: '/prototyper/liste' },
-  { id: 'gantt',         label: 'Kalender oversigt', icon: <Calendar size={15} />,       path: '/prototyper/gantt' },
+  { id: 'gantt',         label: 'Kalenderoversigt', icon: <Calendar size={15} />,       path: '/prototyper/gantt' },
   { id: 'dataudveksling', label: 'Dataudveksling',   icon: <ArrowLeftRight size={15} />, path: '/prototyper/dataudveksling' },
   { id: 'arkiv',         label: 'Ordre arkiv',       icon: <List size={15} />,           path: '/prototyper/arkiv' },
 ]

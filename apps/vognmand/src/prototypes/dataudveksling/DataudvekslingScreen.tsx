@@ -9,6 +9,7 @@ import { useState } from 'react'
 import {
   ArrowDownLeft, ArrowUpRight, Server, Clock, ShieldCheck, RefreshCw, CheckCircle2, Download,
 } from 'lucide-react'
+import { DisponeringUpload } from './DisponeringUpload'
 
 // ── Felt-definitioner — TODO: Erstat med Supabase når klar ──────────────────────
 
@@ -258,6 +259,11 @@ export function DataudvekslingScreen() {
               en manuel genindlæsning.
             </p>
           </div>
+        </div>
+
+        {/* Den anden dør — webupload for små vognmænd uden SFTP */}
+        <div className="mt-md">
+          <DisponeringUpload />
         </div>
 
       </div>

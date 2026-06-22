@@ -118,7 +118,7 @@ export function VognmandGanttScreen() {
         {/* Page header */}
         <div className="mb-5 flex items-end justify-between gap-6 flex-wrap">
           <div>
-            <h1 className="font-poppins font-semibold text-2xl text-deep-teal leading-tight">Kalender oversigt</h1>
+            <h1 className="font-poppins font-semibold text-2xl text-deep-teal leading-tight">Kalenderoversigt</h1>
             <p className="font-inter text-xs text-text-muted mt-0.5">{fmtShort(windowStart)} – {fmtShort(windowEnd)}</p>
           </div>
 
@@ -135,7 +135,7 @@ export function VognmandGanttScreen() {
               className="px-3 py-2 font-inter text-xs font-medium bg-deep-teal text-white flex items-center gap-1.5"
             >
               <LayoutGrid size={14} />
-              Kalender oversigt
+              Kalenderoversigt
             </button>
           </div>
         </div>
@@ -270,9 +270,12 @@ export function VognmandGanttScreen() {
                       const isFirst = inRange && (sameDay(day, start) || di === 0)
                       const isLast = inRange && (sameDay(day, end) || di === days.length - 1)
 
-                      // Bar-farve drives udelukkende af ordre.tidsvindue
+                      // Bar-farve: aflyst dag (annulleretAarsag) overrider tidsvindue-farven
+                      const dagEntry = ordre.dage.find(d => sameDay(parseDate(d.dato), day))
+                      const erAflyst = !!dagEntry?.annulleretAarsag
                       const barColorClass = inRange
-                        ? ordre.tidsvindue === 'nat'     ? 'bg-deep-teal'
+                        ? erAflyst                        ? 'bg-bad'
+                        : ordre.tidsvindue === 'nat'     ? 'bg-deep-teal'
                         : ordre.tidsvindue === 'weekend' ? 'bg-warning'
                         : 'bg-good'
                         : ''
@@ -324,6 +327,7 @@ export function VognmandGanttScreen() {
             { cls: 'bg-good',      label: 'Normal udførsel' },
             { cls: 'bg-deep-teal', label: 'Nat' },
             { cls: 'bg-warning',   label: 'Weekend' },
+            { cls: 'bg-bad',       label: 'Aflyst' },
           ].map(({ cls, label }) => (
             <div key={label} className="flex items-center gap-1.5">
               <div className={`w-5 h-2.5 rounded-full ${cls}`} />
