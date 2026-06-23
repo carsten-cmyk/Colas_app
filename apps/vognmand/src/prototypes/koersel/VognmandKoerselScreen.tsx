@@ -3,15 +3,14 @@
  * ÉT skærmbillede pr. ordre: en lodret række af dag-kort.
  * Hvert dag-kort folder ud til bekræftede biler/kørsel; hver bil folder
  * yderligere ud til timer-sammenligning (app vs formand) + vejesedler.
- * Beskeder (dag afsluttet / aflyst / erstatning) vises inline pr. bil.
+ * Beskeder (dag afsluttet / aflyst / erstatning) vises inline pr. bil (fold-ud).
  * Kontrakt: Docs/Vognmand/Dataudveksling-vognmand.md § "Udvekslings-model".
  * Må ikke importeres i produktionskode.
  */
 import { useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import {
-  ChevronLeft, Factory, Scale, Clock, Truck, AlertTriangle,
-  CheckCircle2, CloudRain, RefreshCw, FileCheck2, ArrowDownLeft, ArrowUpRight,
+  ChevronLeft, Factory, Scale, Clock, Truck, FileCheck2,
   ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { MOCK_ORDRER } from '@/mocks/ordrer'
@@ -20,9 +19,6 @@ import { formatDatoMedUgedag } from '@/utils/dato'
 import { formatPhone } from '@shared/utils/phone'
 import { formatRegnr } from '@shared/utils/regnr'
 import type { DagDisponering } from '@/types/vognmand'
-
-// ── Cutoff-regel (LÅST 2026-06-19) ─────────────────────────────────────────────
-const CUTOFF_LABEL = 'kl. 18 dagen før'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -100,33 +96,6 @@ function bekraeftedeForDag(ordrenr: string, dag: DagDisponering): BekraeftetBil[
   return rows
 }
 
-// ── Retnings-mærkat — "felter frem/tilbage" ────────────────────────────────────
-type Retning = 'modtaget' | 'retur' | 'besked'
-const RETNING: Record<Retning, { cls: string; label: string; Icon: typeof ArrowDownLeft }> = {
-  modtaget: { cls: 'bg-soft-aqua/60 text-deep-teal border-light-aqua', label: 'Modtaget fra Colas', Icon: ArrowDownLeft },
-  retur:    { cls: 'bg-good-bg text-good border-good/20',              label: 'Sendt retur',        Icon: ArrowUpRight },
-  besked:   { cls: 'bg-warn-bg text-deep-teal border-yellow/30',       label: 'Besked',             Icon: RefreshCw },
-}
-
-function RetningsBadge({ retning, fixedWidth }: { retning: Retning; fixedWidth?: boolean }) {
-  const r = RETNING[retning]
-  return (
-    <span className={`inline-flex items-center gap-xxxs font-inter text-xxs font-semibold uppercase tracking-wide border px-xs py-xxs rounded-full whitespace-nowrap ${fixedWidth ? 'w-40 justify-center' : ''} ${r.cls}`}>
-      <r.Icon size={11} className="flex-shrink-0" />
-      {r.label}
-    </span>
-  )
-}
-
-function SektionsHeader({ titel, retning, transparent, fixedWidth }: { titel: string; retning: Retning; transparent?: boolean; fixedWidth?: boolean }) {
-  return (
-    <div className={`flex items-center justify-between px-5 py-3 border-b border-hairline ${transparent ? '' : 'bg-surface-2'}`}>
-      <p className="font-inter text-xs font-semibold uppercase tracking-widest text-text-muted">{titel}</p>
-      <RetningsBadge retning={retning} fixedWidth={fixedWidth} />
-    </div>
-  )
-}
-
 function Felt({ label, value, wide }: { label: string; value: string; wide?: boolean }) {
   return (
     <div className={wide ? 'col-span-2 md:col-span-4' : ''}>
@@ -136,29 +105,17 @@ function Felt({ label, value, wide }: { label: string; value: string; wide?: boo
   )
 }
 
-const BIL_STATUS: Record<BekraeftetStatus, { cls: string; label: string }> = {
-  aktiv:     { cls: 'bg-good-bg text-good',          label: 'Aktiv' },
-  afsluttet: { cls: 'bg-surface-2 text-text-muted',  label: 'Afsluttet' },
-  ny:        { cls: 'bg-yellow/25 text-deep-teal',   label: 'Ny (erstatning)' },
-}
-
-const AFREGNING_TYPE_BADGE: Record<AfregningType, { cls: string; label: string }> = {
-  akkord: { cls: 'bg-soft-aqua/60 text-deep-teal', label: 'Akkord' },
-  time:   { cls: 'bg-good-bg text-good',           label: 'Timekørsel' },
-}
-
 // ── Inline dag-besked (erstatter den tidligere Udførsel-fane) ────────────────────
-const BESKED_META: Record<DagsBesked['type'], { Icon: typeof CheckCircle2; iconCls: string; titel: string }> = {
-  dag_afsluttet: { Icon: CheckCircle2,  iconCls: 'text-good',      titel: 'Dag afsluttet' },
-  aflyst:        { Icon: CloudRain,     iconCls: 'text-deep-teal', titel: 'Aflyst' },
-  erstatning:    { Icon: AlertTriangle, iconCls: 'text-deep-teal', titel: 'Erstatning' },
+const BESKED_META: Record<DagsBesked['type'], { titel: string }> = {
+  dag_afsluttet: { titel: 'Dag afsluttet' },
+  aflyst:        { titel: 'Aflyst' },
+  erstatning:    { titel: 'Erstatning' },
 }
 
 function BeskedLinje({ besked }: { besked: DagsBesked }) {
   const m = BESKED_META[besked.type]
   return (
-    <div className="px-5 pb-2 -mt-xs flex items-start gap-xs">
-      <m.Icon size={13} className={`${m.iconCls} flex-shrink-0 mt-xxxs`} />
+    <div className="flex flex-col">
       <p className="font-inter text-xxs text-text-muted leading-relaxed">
         <span className="font-semibold text-text-secondary">{m.titel}:</span> {besked.tekst}{' '}
         <span className="text-text-muted">(Kilde: {besked.kilde === 'chauffør-app' ? 'Chauffør-app' : 'Formand'})</span>
@@ -167,12 +124,19 @@ function BeskedLinje({ besked }: { besked: DagsBesked }) {
   )
 }
 
-// ── Bil-detaljer (fold-ud niveau 2): timer-sammenligning + vejesedler ────────────
-function BilDetaljer({ afregning: r }: { afregning: AfregningRow }) {
+// ── Bil-detaljer (fold-ud niveau 2): beskeder + timer-sammenligning + vejesedler ──
+function BilDetaljer({ afregning: r, beskeder }: { afregning: AfregningRow; beskeder: DagsBesked[] }) {
   const erAkkord = r.afregningType === 'akkord'
   const fmt = (n: number) => n.toFixed(1).replace('.', ',')
   return (
-    <div className="bg-surface-2 border-t border-hairline">
+    <div className="border-t border-hairline pb-lg">
+
+      {/* 0) Beskeder — kun hvis der er nogen */}
+      {beskeder.length > 0 && (
+        <div className="px-8 py-3 border-b border-hairline flex flex-col gap-xxxs">
+          {beskeder.map(b => <BeskedLinje key={b.id} besked={b} />)}
+        </div>
+      )}
 
       {/* a) Timer-sammenligning */}
       <div className="px-8 py-3">
@@ -253,25 +217,22 @@ function BilDetaljer({ afregning: r }: { afregning: AfregningRow }) {
 }
 
 // ── Bil-række (fold-ud niveau 1) ─────────────────────────────────────────────────
-// gridTemplateColumns: bil-ordrenr · reg+biltype · chauffør · tons · status · chevron
-const BIL_GRID = '13rem 1fr 1fr 6rem 8rem 2rem'
+// gridTemplateColumns: bil-ordrenr · reg+biltype · chauffør · tons · chevron
+const BIL_GRID = '13rem 1fr 1fr 6rem 2rem'
 
 function BilRow({ bil, afregning, beskeder }: { bil: BekraeftetBil; afregning?: AfregningRow; beskeder: DagsBesked[] }) {
   const [open, setOpen] = useState(false)
-  const st = BIL_STATUS[bil.status]
-  const afsluttet = bil.status === 'afsluttet'
   const harAfr = !!afregning
-  const badge = afregning ? AFREGNING_TYPE_BADGE[afregning.afregningType] : null
 
   return (
-    <div className={afsluttet ? 'opacity-55' : ''}>
+    <div>
       {/* Hoved-række — klikbar hvis der findes afregning */}
       <button
         type="button"
         disabled={!harAfr}
         onClick={() => harAfr && setOpen(o => !o)}
         aria-expanded={harAfr ? open : undefined}
-        className={`w-full text-left px-5 py-3 grid items-center gap-sm ${harAfr ? 'hover:bg-surface-2 transition-colors cursor-pointer' : 'cursor-default'}`}
+        className={`w-full text-left px-5 py-3 grid items-center gap-sm ${harAfr ? 'hover:bg-surface-2 transition-colors cursor-pointer' : 'cursor-default'} ${open ? 'bg-surface-2' : ''}`}
         style={{ gridTemplateColumns: BIL_GRID }}
       >
         {/* Bil-ordrenummer (match-nøgle) */}
@@ -303,11 +264,6 @@ function BilRow({ bil, afregning, beskeder }: { bil: BekraeftetBil; afregning?: 
             <span className="font-inter text-sm text-text-muted">—</span>
           )}
         </div>
-        {/* Status + afregningstype */}
-        <div className="flex flex-col items-start gap-xxxs">
-          <span className={`font-inter text-xxs font-semibold px-xs py-xxxs rounded-full ${st.cls}`}>{st.label}</span>
-          {badge && <span className={`font-inter text-xxs font-semibold px-xs py-xxs rounded-full ${badge.cls}`}>{badge.label}</span>}
-        </div>
         {/* Chevron */}
         <span className="flex items-center justify-center text-text-muted">
           {harAfr && (open
@@ -316,11 +272,8 @@ function BilRow({ bil, afregning, beskeder }: { bil: BekraeftetBil; afregning?: 
         </span>
       </button>
 
-      {/* Inline beskeder for bilen (dag afsluttet / aflyst / erstatning) */}
-      {beskeder.map(b => <BeskedLinje key={b.id} besked={b} />)}
-
-      {/* Fold-ud niveau 2 */}
-      {harAfr && open && <BilDetaljer afregning={afregning!} />}
+      {/* Fold-ud niveau 2 — inkl. beskeder */}
+      {harAfr && open && <BilDetaljer afregning={afregning!} beskeder={beskeder} />}
     </div>
   )
 }
@@ -339,21 +292,22 @@ function DagKort({ dag, biler, afregning, beskeder }: {
         <p className="font-inter text-sm font-semibold text-deep-teal capitalize">{formatDatoMedUgedag(dag.dato)}</p>
       </div>
 
-      {/* Plan-felter + retning */}
-      <div className="px-5 py-3 flex items-start justify-between gap-md">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-sm flex-1 min-w-0">
+      {/* Plan-felter */}
+      <div className="px-5 py-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-sm">
           <Felt label="Bestilte biler" value={`${dag.bestilteBiler}`} />
           <Felt label="Mødetid fabrik" value={dag.mødetidFabrik ?? '—'} />
           <Felt label="Første læs på plads" value={dag.førsteLæsPåPlads ?? '—'} />
           <Felt label="Interval" value={dag.intervalMinutter ? `+${dag.intervalMinutter} Minutter` : '—'} />
           {dag.kommentar && <Felt label="Kommentar" value={dag.kommentar} wide />}
         </div>
-        <RetningsBadge retning="modtaget" fixedWidth />
       </div>
       <hr className="border-hairline" />
 
-      {/* Bekræftede biler / kørsel */}
-      <SektionsHeader titel="Bekræftede biler · kørsel" retning="retur" transparent fixedWidth />
+      {/* Bekræftede biler / kørsel — simpel header uden badge */}
+      <div className="px-5 py-3 border-b border-hairline">
+        <p className="font-inter text-xs font-semibold uppercase tracking-widest text-text-muted">Bekræftede biler · kørsel</p>
+      </div>
       <div className="divide-y divide-hairline">
         {biler.map((b, i) => (
           <BilRow
@@ -374,8 +328,9 @@ export function VognmandKoerselScreen() {
   const { ordreId } = useParams<{ ordreId: string }>()
   const navigate = useNavigate()
   const location = useLocation()
+  const navState = location.state as { from?: string; fromIso?: string; toIso?: string } | null
   // Tilbage fører til den visning man kom fra (liste el. kalender) — fallback: liste
-  const fromGantt = (location.state as { from?: string } | null)?.from === 'gantt'
+  const fromGantt = navState?.from === 'gantt'
 
   const ordre = MOCK_ORDRER.find(o => o.id === ordreId)
 
@@ -383,7 +338,13 @@ export function VognmandKoerselScreen() {
     return <div className="p-md"><p className="font-inter text-sm text-text-muted">Ordre ikke fundet.</p></div>
   }
 
-  const dage = ordre.dage.filter(d => d.bestilteBiler > 0).sort((a, b) => a.dato.localeCompare(b.dato))
+  // Ordrens fulde dage (med bestilte biler) — bruges til ordre-kortets "X dage"-tæller
+  const alleDage = ordre.dage.filter(d => d.bestilteBiler > 0).sort((a, b) => a.dato.localeCompare(b.dato))
+  // Dag-kort filtreres til det vindue man kom fra (samme dag som i listen). Fallback: alle dage.
+  const vinduesDage = navState?.fromIso && navState?.toIso
+    ? alleDage.filter(d => d.dato >= navState.fromIso! && d.dato <= navState.toIso!)
+    : alleDage
+  const dage = vinduesDage.length > 0 ? vinduesDage : alleDage
 
   // Bekræftede biler pr. dag — med én erstatning på første dag for at vise flowet
   const bekraeftet: Record<string, BekraeftetBil[]> = {}
@@ -402,9 +363,9 @@ export function VognmandKoerselScreen() {
     })
   }
 
-  // Dagens beskeder (inline pr. bil) — TODO: Erstat med Supabase når klar
+  // Dagens beskeder (inline pr. bil i fold-ud) — TODO: Erstat med Supabase når klar
   const beskeder: DagsBesked[] = [
-    { id: 'b1', type: 'dag_afsluttet', dato: dage[0]?.dato ?? '', reelReg: 'AB54231', chauffør: 'Brian Nielsen', kilde: 'chauffør-app', tekst: 'Chaufføren afsluttede dagen i app’en — bilen er fri og kan disponeres andetsteds.' },
+    { id: 'b1', type: 'dag_afsluttet', dato: dage[0]?.dato ?? '', reelReg: 'AB54231', chauffør: 'Brian Nielsen', kilde: 'chauffør-app', tekst: 'Chaufføren afsluttede dagen i app\'en — bilen er fri og kan disponeres andetsteds.' },
     { id: 'b2', type: 'dag_afsluttet', dato: dage[0]?.dato ?? '', reelReg: 'CV98012', chauffør: 'Mads Christensen', kilde: 'formand', tekst: 'Formanden frigav bilen (sidste læs taget) — bilen er fri og kan disponeres andetsteds.' },
     { id: 'b3', type: 'erstatning', dato: dage[0]?.dato ?? '', reelReg: 'XE32114', chauffør: 'Lars Pedersen', kilde: 'formand', tekst: 'Nedbrud aftalt telefonisk. Erstatningsbil TH11233 sendt via filudveksling på samme bil-ordrenummer.' },
   ]
@@ -487,7 +448,7 @@ export function VognmandKoerselScreen() {
                       <p className="flex items-center gap-xxxs font-inter text-xxs text-text-muted uppercase tracking-wide">
                         <Clock size={12} className="flex-shrink-0" /> Dage
                       </p>
-                      <p className="font-inter text-sm font-semibold text-deep-teal">{dage.length} dage</p>
+                      <p className="font-inter text-sm font-semibold text-deep-teal">{alleDage.length} dage</p>
                     </div>
                   </div>
                 </div>
@@ -502,13 +463,6 @@ export function VognmandKoerselScreen() {
 
           {/* ── Fusioneret tidslinje: ét dag-kort pr. dag ── */}
           <div className="flex flex-col gap-md">
-            {/* Cutoff-banner */}
-            <div className="bg-soft-aqua border border-light-aqua rounded-xl px-md py-xs">
-              <p className="font-inter text-xs text-deep-teal">
-                Ændringer kan laves frem til <span className="font-semibold">{CUTOFF_LABEL}</span>. Herefter kun telefonisk.
-              </p>
-            </div>
-
             {dage.map(dag => (
               <DagKort
                 key={dag.dato}

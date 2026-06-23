@@ -18,7 +18,6 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { id: 'liste',         label: 'Aktive ordre',     icon: <List size={15} />,           path: '/prototyper/liste' },
   { id: 'dataudveksling', label: 'Dataudveksling',   icon: <ArrowLeftRight size={15} />, path: '/prototyper/dataudveksling' },
-  { id: 'arkiv',         label: 'Ordre arkiv',       icon: <List size={15} />,           path: '/prototyper/arkiv' },
 ]
 
 export function VognmandShell() {
@@ -30,12 +29,6 @@ export function VognmandShell() {
       {/* Topbar */}
       <header className="sticky top-0 z-50 bg-deep-teal flex items-center justify-between px-sm flex-shrink-0" style={{ height: 52 }}>
         <img src="/colas-logo.png" alt="Colas" className="object-contain" style={{ height: 32 }} />
-        <div className="flex items-center gap-xs bg-white/10 rounded-[20px] px-xs py-xxxs">
-          <div className="w-[26px] h-[26px] rounded-full bg-dark-teal flex items-center justify-center flex-shrink-0">
-            <span className="font-inter font-bold text-xxs text-white">PJ</span>
-          </div>
-          <span className="font-inter text-xs text-white/85">Per Jakobsen · Vognmand</span>
-        </div>
       </header>
 
       {/* Body: sidebar + content */}

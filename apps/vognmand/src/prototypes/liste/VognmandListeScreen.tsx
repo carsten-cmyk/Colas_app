@@ -4,18 +4,16 @@
  * Må ikke importeres i produktionskode.
  */
 import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { List, LayoutGrid, Factory, Scale } from 'lucide-react'
 import { PeriodeNavigator } from '@shared/components/PeriodeNavigator'
 import { MOCK_ORDRER } from '@/mocks/ordrer'
-import { erGodkendt } from '@/mocks/disponeringState'
 import { formatDatoMedUgedag } from '@/utils/dato'
 import type { Ordre } from '@/types/vognmand'
 
-type Tab = 'alle' | 'aabne' | 'disponeret'
 // DATO-NOTE: Periode-labelen (fmtShort) bruger kortformat ("13. mar") da det er en komprimeret range-overskrift.
 // Kalender-celler vises ikke som fulde datoer — jf. DATOFORMAT.md.
-type ViewMode = 'uge' | '14-dage' | 'maaned'
+type ViewMode = 'dag' | 'uge' | '14-dage' | 'maaned'
 
 // Forankret prototype-dato — SAMME konstant som VognmandGanttScreen.tsx
 const TODAY = new Date('2026-03-16T00:00:00')
@@ -26,7 +24,16 @@ function addDays(base: Date, n: number): Date {
   return d
 }
 
+/** Lokal ISO-dato (YYYY-MM-DD) — IKKE toISOString(), der skifter til UTC og kan rykke dagen */
+function toIso(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 function getViewDays(mode: ViewMode): number {
+  if (mode === 'dag') return 1
   if (mode === 'uge') return 7
   if (mode === '14-dage') return 14
   return 31
@@ -78,16 +85,22 @@ const SHOW_DISPONER = false
 
 interface OrdreKortProps {
   ordre: Ordre
+  /** Vinduets start/slut (ISO) — kortet viser kun dage inden for vinduet */
+  windowStartIso: string
+  windowEndIso: string
   onDisponer: (id: string) => void
   onKoersel: (id: string) => void
 }
 
-function OrdreKort({ ordre, onDisponer, onKoersel }: OrdreKortProps) {
+function OrdreKort({ ordre, windowStartIso, windowEndIso, onDisponer, onKoersel }: OrdreKortProps) {
   const status = getOrdreStatus(ordre)
   const erFuldt = status === 'groen'
 
-  // Kun dage med bestilte biler (formand har disponeret)
-  const visibleDage = ordre.dage.filter(d => d.bestilteBiler > 0).sort((a, b) => a.dato.localeCompare(b.dato))
+  // Kun dage med bestilte biler (formand har disponeret) OG inden for det valgte vindue —
+  // så et kort i "Dag"-visning kun viser dagens række, ikke ordrens øvrige dage.
+  const visibleDage = ordre.dage
+    .filter(d => d.bestilteBiler > 0 && d.dato >= windowStartIso && d.dato <= windowEndIso)
+    .sort((a, b) => a.dato.localeCompare(b.dato))
 
   return (
     <div className="bg-white rounded-2xl border border-hairline shadow-sm overflow-hidden">
@@ -185,17 +198,10 @@ function OrdreKort({ ordre, onDisponer, onKoersel }: OrdreKortProps) {
 
 export function VognmandListeScreen() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-
-  const [activeTab, setActiveTab] = useState<Tab>(() => {
-    const t = searchParams.get('tab')
-    if (t === 'disponeret') return 'disponeret'
-    if (t === 'aabne') return 'aabne'
-    return 'aabne'
-  })
 
   // Kalender-navigation state — uafhængig af Gantt-view (ingen synkronisering)
-  const [viewMode, setViewMode] = useState<ViewMode>('14-dage')
+  // Default = 'dag' (i dag): listen åbner fokuseret på i dag — kun dagens ordrer.
+  const [viewMode, setViewMode] = useState<ViewMode>('dag')
   const [offset, setOffset] = useState(0)
 
   const viewDays = getViewDays(viewMode)
@@ -219,17 +225,11 @@ export function VognmandListeScreen() {
 
   const alleOrdrer = MOCK_ORDRER.filter(o => o.dage.some(d => d.bestilteBiler > 0))
 
-  const tabFilteredOrdrer = alleOrdrer.filter(o => {
-    if (activeTab === 'disponeret') return erGodkendt(o.id)
-    if (activeTab === 'aabne') return !erGodkendt(o.id)
-    return true
-  })
-
   // Periode-filter: kun ordrer med dage (med bestilte biler) inden for det valgte vindue
-  const windowStartIso = windowStart.toISOString().slice(0, 10)
-  const windowEndIso = windowEnd.toISOString().slice(0, 10)
+  const windowStartIso = toIso(windowStart)
+  const windowEndIso = toIso(windowEnd)
 
-  const periodeFilteredOrdrer = tabFilteredOrdrer.filter(o =>
+  const periodeFilteredOrdrer = alleOrdrer.filter(o =>
     o.dage.some(d =>
       d.bestilteBiler > 0 &&
       d.dato >= windowStartIso &&
@@ -250,7 +250,7 @@ export function VognmandListeScreen() {
               Aktive ordre
             </h1>
             <p className="font-inter text-xs text-text-muted mt-0.5">
-              {filteredOrdrer.length} {filteredOrdrer.length === 1 ? 'ordre' : 'ordrer'} · {fmtShort(windowStart)} – {fmtShort(windowEnd)}
+              {filteredOrdrer.length} {filteredOrdrer.length === 1 ? 'ordre' : 'ordrer'} · {viewMode === 'dag' ? fmtShort(windowStart) : `${fmtShort(windowStart)} – ${fmtShort(windowEnd)}`}
             </p>
           </div>
 
@@ -275,34 +275,13 @@ export function VognmandListeScreen() {
         {/* Periode-controls */}
         <div className="mb-5">
           <PeriodeNavigator
-            modes={['uge', '14-dage', 'maaned']}
+            modes={['dag', 'uge', '14-dage', 'maaned']}
             activeMode={viewMode}
             onModeChange={m => { setViewMode(m); setOffset(0) }}
             onNavigate={dir => setOffset(o => o + dir * viewDays)}
             onToday={() => setOffset(0)}
             ariaLabel="Periode-navigation"
           />
-        </div>
-
-        {/* Filter-tabs */}
-        <div className="flex items-center gap-1 mb-5 border-b border-hairline pb-0">
-          {(['aabne', 'disponeret', 'alle'] as Tab[]).map(tab => {
-            const label = tab === 'aabne' ? 'Åbne' : tab === 'disponeret' ? 'Disponeret' : 'Alle'
-            return (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={[
-                  'px-4 py-2.5 font-inter text-sm font-medium transition-colors border-b-2 -mb-px',
-                  activeTab === tab
-                    ? 'border-deep-teal text-deep-teal'
-                    : 'border-transparent text-text-muted hover:text-text-secondary',
-                ].join(' ')}
-              >
-                {label}
-              </button>
-            )
-          })}
         </div>
 
         {/* Kort-liste */}
@@ -316,8 +295,10 @@ export function VognmandListeScreen() {
               <OrdreKort
                 key={ordre.id}
                 ordre={ordre}
-                onDisponer={id => navigate(`/prototyper/koersel/${id}`, { state: { from: 'liste' } })}
-                onKoersel={id => navigate(`/prototyper/koersel/${id}`, { state: { from: 'liste' } })}
+                windowStartIso={windowStartIso}
+                windowEndIso={windowEndIso}
+                onDisponer={id => navigate(`/prototyper/koersel/${id}`, { state: { from: 'liste', fromIso: windowStartIso, toIso: windowEndIso } })}
+                onKoersel={id => navigate(`/prototyper/koersel/${id}`, { state: { from: 'liste', fromIso: windowStartIso, toIso: windowEndIso } })}
               />
             ))}
           </div>

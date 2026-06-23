@@ -113,7 +113,7 @@ export function VognmandGanttScreen() {
 
   return (
     <div className="bg-page min-h-full">
-      <main className="max-w-screen-xl mx-auto px-md pt-md pb-lg">
+      <main className="px-md pt-md pb-lg">
 
         {/* Page header */}
         <div className="mb-5 flex items-end justify-between gap-6 flex-wrap">
@@ -145,7 +145,7 @@ export function VognmandGanttScreen() {
           <PeriodeNavigator
             modes={['uge', '14-dage', 'maaned']}
             activeMode={viewMode}
-            onModeChange={(mode) => { setViewMode(mode); setOffset(0) }}
+            onModeChange={(mode) => { if (mode !== 'dag') { setViewMode(mode); setOffset(0) } }}
             onNavigate={(direction) => navigatePeriod(direction)}
             onToday={() => setOffset(0)}
           />

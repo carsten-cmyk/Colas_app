@@ -2,12 +2,13 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 // Mode-labels til visning i toggle
 const MODE_LABELS: Record<PeriodeNavigatorMode, string> = {
+  dag: 'Dag',
   uge: 'Uge',
   '14-dage': '14 dage',
   maaned: 'Måned',
 }
 
-export type PeriodeNavigatorMode = 'uge' | '14-dage' | 'maaned'
+export type PeriodeNavigatorMode = 'dag' | 'uge' | '14-dage' | 'maaned'
 
 export interface PeriodeNavigatorProps {
   /**
