@@ -260,14 +260,14 @@ export function VognmandListeScreen() {
               className="px-3 py-2 font-inter text-xs font-medium bg-deep-teal text-white flex items-center gap-1.5"
             >
               <List size={14} />
-              Aktive ordre
+              Liste
             </button>
             <button
               onClick={() => navigate('/prototyper/gantt')}
               className="px-3 py-2 font-inter text-xs font-medium text-text-muted hover:bg-surface-2 flex items-center gap-1.5 transition-colors"
             >
               <LayoutGrid size={14} />
-              Kalender view
+              Kalender
             </button>
           </div>
         </div>
@@ -316,8 +316,8 @@ export function VognmandListeScreen() {
               <OrdreKort
                 key={ordre.id}
                 ordre={ordre}
-                onDisponer={id => navigate(`/prototyper/disponering/${id}`)}
-                onKoersel={id => navigate(`/prototyper/koersel/${id}`)}
+                onDisponer={id => navigate(`/prototyper/koersel/${id}`, { state: { from: 'liste' } })}
+                onKoersel={id => navigate(`/prototyper/koersel/${id}`, { state: { from: 'liste' } })}
               />
             ))}
           </div>

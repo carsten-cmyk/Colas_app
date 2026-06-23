@@ -4,7 +4,7 @@
  * Må ikke importeres i produktionskode.
  */
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
-import { List, Calendar, ArrowLeftRight } from 'lucide-react'
+import { List, ArrowLeftRight } from 'lucide-react'
 
 type NavItem = {
   id: string
@@ -13,9 +13,10 @@ type NavItem = {
   path: string
 }
 
+// Liste + kalender er to visninger af samme sektion (toggle i selve headeren),
+// så "Aktive ordre" dækker liste, kalender OG koersel-detaljen — ét sidebar-punkt.
 const NAV_ITEMS: NavItem[] = [
-  { id: 'liste',         label: 'Aktive ordre',      icon: <List size={15} />,           path: '/prototyper/liste' },
-  { id: 'gantt',         label: 'Kalenderoversigt', icon: <Calendar size={15} />,       path: '/prototyper/gantt' },
+  { id: 'liste',         label: 'Aktive ordre',     icon: <List size={15} />,           path: '/prototyper/liste' },
   { id: 'dataudveksling', label: 'Dataudveksling',   icon: <ArrowLeftRight size={15} />, path: '/prototyper/dataudveksling' },
   { id: 'arkiv',         label: 'Ordre arkiv',       icon: <List size={15} />,           path: '/prototyper/arkiv' },
 ]
@@ -49,9 +50,9 @@ export function VognmandShell() {
           <nav className="flex flex-col gap-[2px] px-xs" style={{ paddingTop: 66 }} aria-label="Hovedmenu">
             {NAV_ITEMS.map(item => {
               const isActive = item.id === 'liste'
-                ? (pathname.startsWith('/prototyper/liste') || pathname.startsWith('/prototyper/disponering') || pathname.startsWith('/prototyper/koersel'))
-                : item.id === 'gantt'
-                ? pathname.startsWith('/prototyper/gantt')
+                ? (pathname.startsWith('/prototyper/liste')
+                    || pathname.startsWith('/prototyper/gantt')
+                    || pathname.startsWith('/prototyper/koersel'))
                 : pathname.startsWith(item.path)
               return (
                 <button

@@ -129,13 +129,13 @@ export function VognmandGanttScreen() {
               className="px-3 py-2 font-inter text-xs font-medium text-text-muted hover:bg-surface-2 flex items-center gap-1.5 transition-colors"
             >
               <List size={14} />
-              Aktive ordre
+              Liste
             </button>
             <button
               className="px-3 py-2 font-inter text-xs font-medium bg-deep-teal text-white flex items-center gap-1.5"
             >
               <LayoutGrid size={14} />
-              Kalenderoversigt
+              Kalender
             </button>
           </div>
         </div>
@@ -239,7 +239,7 @@ export function VognmandGanttScreen() {
                     <button
                       style={{ width: 280, flexShrink: 0 }}
                       className="px-4 py-3 flex flex-col justify-center gap-0.5 border-r border-hairline text-left cursor-pointer hover:bg-surface-2 transition-colors"
-                      onClick={() => navigate(`/prototyper/disponering/${ordre.id}`)}
+                      onClick={() => navigate(`/prototyper/koersel/${ordre.id}`, { state: { from: 'gantt' } })}
                     >
                       <p className="font-inter text-[10px] font-medium uppercase tracking-widest text-text-muted">
                         Udførselssted
@@ -270,13 +270,15 @@ export function VognmandGanttScreen() {
                       const isFirst = inRange && (sameDay(day, start) || di === 0)
                       const isLast = inRange && (sameDay(day, end) || di === days.length - 1)
 
-                      // Bar-farve: aflyst dag (annulleretAarsag) overrider tidsvindue-farven
+                      // Bar-farve sættes PR. DAG. Prioritet: aflyst dag > nat (ordre-egenskab)
+                      // > weekend-dag (afledt af kalenderen) > normal. En ordre der løber hen
+                      // over en weekend vises derfor grøn på hverdage og gul på lø/sø.
                       const dagEntry = ordre.dage.find(d => sameDay(parseDate(d.dato), day))
                       const erAflyst = !!dagEntry?.annulleretAarsag
                       const barColorClass = inRange
-                        ? erAflyst                        ? 'bg-bad'
-                        : ordre.tidsvindue === 'nat'     ? 'bg-deep-teal'
-                        : ordre.tidsvindue === 'weekend' ? 'bg-warning'
+                        ? erAflyst                    ? 'bg-bad'
+                        : ordre.tidsvindue === 'nat' ? 'bg-deep-teal'
+                        : we                          ? 'bg-warning'
                         : 'bg-good'
                         : ''
 
@@ -301,9 +303,12 @@ export function VognmandGanttScreen() {
                           )}
 
                           {inRange && (
-                            <div
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/prototyper/koersel/${ordre.id}`, { state: { from: 'gantt' } })}
+                              aria-label={`Åbn ordre — ${ordre.adresse}`}
                               className={[
-                                'h-[6px] w-full',
+                                'h-[6px] w-full cursor-pointer hover:opacity-75 transition-opacity',
                                 barColorClass,
                                 isFirst ? 'rounded-l-full ml-[3px]' : '',
                                 isLast ? 'rounded-r-full mr-[3px]' : '',
