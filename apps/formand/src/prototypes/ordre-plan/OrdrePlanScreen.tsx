@@ -35,7 +35,7 @@ import { useVejesedler } from '@/hooks/useVejesedler'
 import { useDagsoverblik } from '@/hooks/useDagsoverblik'
 import { INITIAL_RECEPTER } from '@/mocks/recepter'
 import { INITIAL_UDLAEGGERE } from '@/mocks/udlaeggere'
-import { formatWeekday, formatLongDate, formatDateRange } from '@/utils/date'
+import { formatWeekday, formatLongDate } from '@/utils/date'
 import { formatPhone, toE164 } from '@shared/utils/phone'
 import { formatRegnr } from '@shared/utils/regnr'
 import type { DagsoverblikRegistrering } from '@/types/order'
@@ -1285,10 +1285,12 @@ export function OrdrePlanScreen() {
   // null = ikke besvaret endnu, true = samme som første, false = nyt sted
   const [sammeAflæsning, setSammeAflæsning] = useState<Record<string, boolean | null>>({})
   const [kørselExpandedId, setKørselExpandedId] = useState<string | null>(null)
-  // TODO: Erstat med Supabase når klar — afsendelsesgate for ASFALT-biler til vognmand, keyed på selectedPlanDate (ISO-dato-streng)
-  const [sendtTilVognmandDates, setSendtTilVognmandDates] = useState<Set<string>>(new Set())
+  // TODO: Erstat med Supabase når klar — afsendelsesgate for ASFALT-biler til vognmand, keyed på selectedPlanDate (ISO-dato-streng).
+  // Seeder demo-dage som "Sendt til vognmand" (planlægnings-end-state: d2-1 = 16. marts, d2-2 = 17. marts).
+  const [sendtTilVognmandDates, setSendtTilVognmandDates] = useState<Set<string>>(new Set(['2026-03-16', '2026-03-17']))
   // TODO: Erstat med Supabase når klar — afsendelsesgate for MATERIELLEVERING til vognmand, keyed på resource-id. Uafhængig af asfalt-gate.
-  const [materielSendteEnhederIds, setMaterielSendteEnhederIds] = useState<Set<string>>(new Set())
+  // Seeder de tidligere bekræftede materiel-enheder som "Sendt til vognmand" (planlægnings-end-state).
+  const [materielSendteEnhederIds, setMaterielSendteEnhederIds] = useState<Set<string>>(new Set(INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE.items.map(it => it.resourceId)))
   // TODO: Erstat med Supabase når klar — fabrik-bestilling sendt pr. dag, keyed på selectedPlanDate (ISO-dato-streng)
   const [fabrikSendtDates, setFabrikSendtDates] = useState<Set<string>>(new Set())
   // TODO: Erstat med Supabase — d2-1 og d2-2 er forudfyldte til demo
@@ -1362,12 +1364,18 @@ export function OrdrePlanScreen() {
   const [dagAfregning, setDagAfregning] = useState<Record<string, 'time' | 'akkord'>>({}) // dayId -> 'time' | 'akkord'
 
   const [vognmandBekraeftelser] = useState<Record<string, VognmandBekraeftelse>>(INITIAL_VOGNMAND_BEKRAEFTELSER)
+  // TODO: Erstat med Supabase når klar — opdateres via Realtime når vognmand bekræfter pr. dag.
+  // Bekræftelse seedes IKKE i planlægnings-demoen — den er downstream (Udførsel).
+  // Planlægnings-end-state = "Sendt til vognmand". Badge-lifecycle: gem → "Sendt til vognmand", vognmand-retur → "Bekræftet vognmand".
+  const [bekraeftedeDagIds, setBekraeftedeDagIds] = useState<Set<string>>(
+    () => new Set<string>()
+  )
   const [vognmandMaterielBekraeftelse] = useState<VognmandMaterielBekraeftelse>(INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE)
   // TODO: Erstat med Supabase når klar — opdateres via Realtime når vognmand bekræfter pr. enhed.
-  // Seedes fra mock'en (r1, r2 er bekræftet i demo). Gem-handling fjerner en enhed fra sættet
-  // (spejler badge-lifecycle: gem → "Afventer vognmand", vognmand-retur → "Bekræftet vognmand").
+  // Bekræftelse seedes IKKE i planlægnings-demoen — den er downstream (Udførsel).
+  // Planlægnings-end-state = "Sendt til vognmand". Badge-lifecycle: gem → "Sendt til vognmand", vognmand-retur → "Bekræftet vognmand".
   const [bekraeftedeEnhederIds, setBekraeftedeEnhederIds] = useState<Set<string>>(
-    () => new Set(INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE.items.map(it => it.resourceId))
+    () => new Set<string>()
   )
 
   // Per-produkt kørselsfelter — key = `${productId}__${dayId}`
@@ -1525,13 +1533,32 @@ export function OrdrePlanScreen() {
     setResources(prev => prev.map(r =>
       r.id === id ? { ...r, status: 'planlagt' } : r
     ))
-    // Gem → sæt enhed til "Afventer vognmand" (fjern fra bekræftet-sæt).
+    // Gem → "Planlagt" (fjern fra bekræftet-sæt).
     // "Bekræftet vognmand" gensættes kun når vognmand returnerer bekræftelse via Supabase Realtime.
     setBekraeftedeEnhederIds(prev => {
       const next = new Set(prev)
       next.delete(id)
       return next
     })
+    // Rettelse efter afsendelse → tilbage til "Planlagt": sendt-status nulstilles, så enheden
+    // skal sendes igen (vognmandens kopi er forældet når formanden ændrer bestillingen).
+    setMaterielSendteEnhederIds(prev => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }
+
+  function gemKørsel(dayId: string) {
+    setKørselPlanlagtIds(prev => new Set([...prev, dayId]))
+    // Gem → "Planlagt" (fjern fra bekræftet-sæt). "Bekræftet vognmand" gensættes
+    // kun når vognmand returnerer bekræftelse via Supabase Realtime.
+    setBekraeftedeDagIds(prev => { const next = new Set(prev); next.delete(dayId); return next })
+    // Rettelse efter afsendelse → tilbage til "Planlagt": vognmandens kopi er forældet når
+    // formanden ændrer bestillingen, så sendt-status nulstilles og dagen skal sendes igen.
+    const dayDate = days.find(d => d.id === dayId)?.date
+    if (dayDate) setSendtTilVognmandDates(prev => { const next = new Set(prev); next.delete(dayDate); return next })
+    setKørselExpandedId(null)
   }
 
   const fjernModalResource = fjernModalId ? resources.find(r => r.id === fjernModalId) : null
@@ -1581,33 +1608,7 @@ export function OrdrePlanScreen() {
             const tabProduct = tabChild.isAnchor ? activeProduct : null
             return (
               <div className="flex-1 min-w-0">
-                <div className="grid grid-cols-6 auto-rows-fr divide-x divide-hairline bg-white items-stretch">
-                  {/* TODO: Erstat med Supabase når klar — child.start_date/end_date pr. ordre */}
-                  <div className="p-sm flex flex-col h-full min-h-[96px]">
-                    <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Udføres i perioden</span>
-                    <div className="mt-auto flex flex-col gap-xxxs">
-                      <span className="font-poppins font-semibold text-md text-text-primary tabular-nums">
-                        {tabProduct
-                          ? (tabProduct.startDate && tabProduct.endDate ? formatDateRange(tabProduct.startDate, tabProduct.endDate) : '–')
-                          : (orderStartDate && orderEndDate ? formatDateRange(orderStartDate, orderEndDate) : '–')}
-                      </span>
-                      {(() => {
-                        // Rød sub-tekst: alle aflyste dage på tabProduct (samleordre: kun anchor har days)
-                        const src = tabProduct ?? activeProduct
-                        const cancelledDays = src.days.filter(d => d.cancelled)
-                        if (cancelledDays.length === 0) return null
-                        return (
-                          <div className="flex flex-col gap-xxs">
-                            {cancelledDays.map(d => (
-                              <span key={d.id} className="font-inter text-xxs text-bad font-medium">
-                                {formatLongDate(d.date)} aflyst
-                              </span>
-                            ))}
-                          </div>
-                        )
-                      })()}
-                    </div>
-                  </div>
+                <div className="grid grid-cols-5 auto-rows-fr divide-x divide-hairline bg-white items-stretch">
                   <div className="p-sm flex flex-col h-full min-h-[96px]">
                     <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Mængde tons</span>
                     <span className="font-poppins font-semibold text-md text-text-primary tabular-nums mt-auto">
@@ -1705,31 +1706,7 @@ export function OrdrePlanScreen() {
       </div>
     ) : (
       <div className="bg-white rounded-xl border border-hairline overflow-hidden mb-lg">
-        <div className="grid grid-cols-6 auto-rows-fr divide-x divide-hairline bg-white items-stretch">
-          {/* TODO: Erstat med Supabase når klar — child.start_date/end_date pr. ordre */}
-          <div className="p-sm flex flex-col h-full min-h-[96px]">
-            <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Udføres i perioden</span>
-            <div className="mt-auto flex flex-col gap-xxxs">
-              <span className="font-poppins font-semibold text-md text-text-primary tabular-nums">
-                {activeProduct.startDate && activeProduct.endDate
-                  ? formatDateRange(activeProduct.startDate, activeProduct.endDate)
-                  : (orderStartDate && orderEndDate ? formatDateRange(orderStartDate, orderEndDate) : '–')}
-              </span>
-              {(() => {
-                const cancelledDays = activeProduct.days.filter(d => d.cancelled)
-                if (cancelledDays.length === 0) return null
-                return (
-                  <div className="flex flex-col gap-xxs">
-                    {cancelledDays.map(d => (
-                      <span key={d.id} className="font-inter text-xxs text-bad font-medium">
-                        {formatLongDate(d.date)} aflyst
-                      </span>
-                    ))}
-                  </div>
-                )
-              })()}
-            </div>
-          </div>
+        <div className="grid grid-cols-5 auto-rows-fr divide-x divide-hairline bg-white items-stretch">
           <div className="p-sm flex flex-col h-full min-h-[96px]">
             <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest block mb-xxxs">Mængde tons</span>
             <span className="font-poppins font-semibold text-md text-text-primary tabular-nums mt-auto">
@@ -1823,11 +1800,6 @@ export function OrdrePlanScreen() {
 
     if (!activeProduct) return null
 
-    // Dato-range: tabProduct/activeProduct har startDate/endDate; ellers fallback til ordre-niveau
-    const dateRange = tabProduct
-      ? (tabProduct.startDate && tabProduct.endDate ? formatDateRange(tabProduct.startDate, tabProduct.endDate) : '–')
-      : (orderStartDate && orderEndDate ? formatDateRange(orderStartDate, orderEndDate) : '–')
-
     // Mængde tons: effektiv total inkl. ekstra fra PLAN; ikke-anchor children → summer over products
     const totalTons = tabProduct
       ? getEffectiveProductTotalTons(tabProduct)
@@ -1842,10 +1814,6 @@ export function OrdrePlanScreen() {
       // Container-styling (bg-surface/border/rounded/shadow) ligger nu på OrdredetaljerSection's
       // <button>-wrapper, så vi returnerer KUN det indre indhold (3 felter).
       <div className="flex items-center justify-between px-md py-sm gap-md">
-        <div className="flex flex-col gap-xxxs items-start">
-          <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest">Udføres i perioden</span>
-          <span className="font-poppins font-semibold text-sm text-text-primary tabular-nums">{dateRange}</span>
-        </div>
         <div className="flex flex-col gap-xxxs items-start">
           <span className="font-inter text-xxs font-medium text-text-muted uppercase tracking-widest">Mængde tons</span>
           <span className="font-poppins font-semibold text-sm text-text-primary tabular-nums">{totalTons}</span>
@@ -2402,10 +2370,13 @@ export function OrdrePlanScreen() {
             <div className="mt-lg">
               <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Asfalt kørsel</h2>
               <div className="bg-white border border-hairline rounded-xl overflow-hidden">
-                {activeDays.map((day, i) => {
+                {activeDays.filter(day => day.date === selectedPlanDate).length === 0 && (
+                  <p className="font-inter text-xs text-text-muted px-sm py-sm">Ingen kørsel denne dag</p>
+                )}
+                {activeDays.filter(day => day.date === selectedPlanDate).map((day, i, shownDays) => {
                   const isExpanded = kørselExpandedId === day.id
                   const isPlanlagt = kørselPlanlagtIds.has(day.id)
-                  const bekraeftelse = vognmandBekraeftelser[day.id]
+                  const erBekraeftet = bekraeftedeDagIds.has(day.id)
                   const orders = kørselOrders[day.id] ?? []
                   const params = kørselParams[day.id] ?? DEFAULT_KØRSEL_PARAMS
                   const singleLoadCapacity = orders.reduce((sum, o) => {
@@ -2444,7 +2415,7 @@ export function OrdrePlanScreen() {
                   }
 
                   return (
-                    <div key={day.id} className={i < activeDays.length - 1 || isExpanded ? 'border-b border-hairline' : ''}>
+                    <div key={day.id} className={i < shownDays.length - 1 || isExpanded ? 'border-b border-hairline' : ''}>
                       {/* Hoved-række */}
                       <div className={`grid items-center gap-md px-sm py-sm transition-colors ${!isExpanded ? 'hover:bg-[#F5F5F5]' : ''}`}
                         style={{ gridTemplateColumns: '1fr auto' }}>
@@ -2481,14 +2452,15 @@ export function OrdrePlanScreen() {
                                   )
                                 })()}
                               </span>
-                              {/* Vognmand status badge — 3-state: Planlagt / Afventer / Bekræftet */}
-                              {bekraeftelse ? (
+                              {/* Vognmand status badge — 3-state: Planlagt / Sendt til vognmand / Bekræftet */}
+                              {erBekraeftet ? (
+                                // downstream/Udførsel-tilstand — ikke seedet i planlægnings-demoen
                                 <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good font-inter text-xs font-semibold text-white whitespace-nowrap">
                                   Bekræftet vognmand
                                 </span>
                               ) : sendtTilVognmandDates.has(day.date) ? (
                                 <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-yellow/25 font-inter text-xs font-semibold text-[#8A6A00] whitespace-nowrap">
-                                  Afventer vognmand
+                                  Sendt til vognmand
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-[#F5F5F5] font-inter text-xs font-semibold text-text-muted whitespace-nowrap">
@@ -2496,7 +2468,7 @@ export function OrdrePlanScreen() {
                                 </span>
                               )}
                               {/* Ret-knap skjules når dagen er bekræftet af vognmand (FUNCTIONAL_FLOWS Trin 2) */}
-                              {!bekraeftelse && (
+                              {!erBekraeftet && (
                                 <div className="flex">
                                   <button
                                     onClick={() => setKørselExpandedId(day.id)}
@@ -2512,8 +2484,7 @@ export function OrdrePlanScreen() {
                             <button
                               onClick={() => {
                                 if (isExpanded) {
-                                  setKørselPlanlagtIds(prev => new Set([...prev, day.id]))
-                                  setKørselExpandedId(null)
+                                  gemKørsel(day.id)
                                 } else {
                                   setKørselExpandedId(day.id)
                                   if ((kørselOrders[day.id] ?? []).length === 0) {
@@ -2976,9 +2947,9 @@ export function OrdrePlanScreen() {
                               className="font-inter text-xs text-text-muted hover:text-text-primary px-xs py-xxxs"
                             >Annullér</button>
                             <button
-                              onClick={() => { setKørselPlanlagtIds(prev => new Set([...prev, day.id])); setKørselExpandedId(null) }}
+                              onClick={() => gemKørsel(day.id)}
                               className="font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90"
-                            >Gem kørsel og send til vognmand</button>
+                            >Gem kørsel</button>
                           </div>
                         </div>
                       )}
@@ -3063,18 +3034,19 @@ export function OrdrePlanScreen() {
                                 </div>
                               </div>
                               <div>
-                                {/* Vognmand status badge — 3-state: Planlagt / Afventer vognmand / Bekræftet vognmand. Keyed på resource-id. */}
+                                {/* Vognmand status badge — 3-state: Planlagt / Sendt til vognmand / Bekræftet vognmand. Keyed på resource-id. */}
                                 {r.status !== 'planlagt' ? (
                                   <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-lg font-inter text-xs font-semibold whitespace-nowrap bg-[#F5F5F5] text-text-muted">
                                     Ikke planlagt
                                   </span>
                                 ) : bekraeftedeEnhederIds.has(r.id) ? (
+                                  // downstream/Udførsel-tilstand — ikke seedet i planlægnings-demoen
                                   <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good font-inter text-xs font-semibold text-white whitespace-nowrap">
                                     Bekræftet vognmand
                                   </span>
                                 ) : materielSendteEnhederIds.has(r.id) ? (
                                   <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-yellow/25 font-inter text-xs font-semibold text-[#8A6A00] whitespace-nowrap">
-                                    Afventer vognmand
+                                    Sendt til vognmand
                                   </span>
                                 ) : (
                                   <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-[#F5F5F5] font-inter text-xs font-semibold text-text-muted whitespace-nowrap">
@@ -3123,14 +3095,15 @@ export function OrdrePlanScreen() {
                       <div className="flex items-center gap-xs">
                         {r.status === 'planlagt' && !isExpanded ? (
                           <>
-                            {/* Vognmand status badge — 3-state: Planlagt / Afventer vognmand / Bekræftet vognmand. Keyed på resource-id. */}
+                            {/* Vognmand status badge — 3-state: Planlagt / Sendt til vognmand / Bekræftet vognmand. Keyed på resource-id. */}
                             {bekraeftedeEnhederIds.has(r.id) ? (
+                              // downstream/Udførsel-tilstand — ikke seedet i planlægnings-demoen
                               <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good font-inter text-xs font-semibold text-white whitespace-nowrap">
                                 Bekræftet vognmand
                               </span>
                             ) : materielSendteEnhederIds.has(r.id) ? (
                               <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-yellow/25 font-inter text-xs font-semibold text-[#8A6A00] whitespace-nowrap">
-                                Afventer vognmand
+                                Sendt til vognmand
                               </span>
                             ) : (
                               <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-[#F5F5F5] font-inter text-xs font-semibold text-text-muted whitespace-nowrap">
@@ -5365,7 +5338,7 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
       {detailsExpanded && (
       <>
       <div className="flex flex-col gap-xs -mt-[48px]">
-        <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight mb-sm">Bilbestilling</h2>
+        <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight mb-sm">Bekræftede biler</h2>
         {/* Alle 7 bokse i ét fælles grid — samme bredde og højde via auto-rows-fr */}
         {(() => {
           // Per-child værdier når i samleordre-mode — fallback til global state for enkelt-ordre

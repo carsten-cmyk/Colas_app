@@ -38,6 +38,8 @@ Begge kræver: France åbner firewall App→backend; bruger-auth via AD/Azure (F
 **Komponent:** `OrdrePlanScreen` → asfalt-kørsel sektion
 **Handling:** Formand udfylder km, **kommentar til chauffør**, **forventet tidspunkt for første læs på udlægning** OG **interval mellem læs på pladsen** (minutter) per dag. Første-læs + interval er kritisk for både fabrik-notifikation (se Trin 5b) og vognmandens disponering (se Trin 3).
 
+**"Udføres i perioden" = kun PLAN-planlagte dage (LÅST 2026-06-23):** Datovælgeren "Udføres i perioden" øverst på ordren viser **kun de dage der er planlagt på ordren i PLAN** — ikke hele ordrens teoretiske udførelsesvindue. En ordre kan sagtens udføres over **flere omgange/perioder** (jf. multi-produkt split-perioder — ét produkt kan fx udlægges i marts, et andet i maj), men dagene dukker først op i formands-appen **når de er planlagt i PLAN**. Planlægges nye dage senere, udvides datovælgeren tilsvarende. **Konsekvens for app'en:** `planDays`-listen vokser over tid og er **ikke nødvendigvis sammenhængende** — huller mellem perioder er normalt og skal vises som adskilte perioder, ikke som ét sammenhængende interval. Alle planlægnings-/udførsels-/afregnings-sektioner spejler den valgte dag i denne vælger.
+
 **Pinnede opstarts-læs (LÅST 2026-06-10 — erstatter Første-læs-reglen 2026-05-22):** Formanden sætter eksplicit ankomsttid på pladsen for de **første 1-3 læs pr. produkt** (typisk kun produkt 1). Antallet er formandens valg (1-3, som angivet i Asfalt kørsel-rækken). Disse "pinnede" opstarts-læs sikrer at materialet kommer i en jævn strøm fra start. **Læs-nummeret er KUN opstarts-styring — ikke en rolle bilen bærer hele dagen.** Efter de pinnede læs kører bilerne i **loop** (frem og tilbage mellem fabrik og plads), indtil produktets tons er hentet. Bruges læs-nummeret som intern styring bagved er det fint; det skal bare ikke fremstå som en blivende bil-rolle.
 
 **Interval-regel (LÅST 2026-06-10 — opdateret fra 2026-05-26):** Intervallet (i minutter, typisk 12-20) er **kadencen for loop'et og starter efter det SIDSTE pinnede læs** — ikke mellem de pinnede. De pinnede tider kan formanden sætte frit. Eksempel: pinned bil 1 på plads 07:00, pinned bil 2 på plads 08:00 (60 min mellem, formandens valg), interval 20 min → næste bil 08:20, derefter 08:40 osv. i loop. **Per produkt:** Produkt 1 har normalt de pinnede opstarts-læs. Efterfølgende produkter kører blot med i loop'et MEDMINDRE formanden angiver et selvstændigt starttidspunkt + interval for produktet (jf. "Køres direkte i forlængelse af Produkt 1?"-toggle i bilbestillingen — Nej = egen starttid + interval).
@@ -96,18 +98,18 @@ Vognmanden modtager dette array (én ønske-bil pr. objekt, hver med sit `bil_or
 **Komponent:** `VognmandBekraeftelseBadge` (pille pr. dag på Asfalt kørsel)
 **Forretningsregel (3-state lifecycle, LÅST 2026-06-19):** Pillen har TRE tilstande, ikke to — den eksplicitte send-gate gør forskel på "planlagt" og "sendt":
 1. **"Planlagt"** (neutral/grå) — formanden har planlagt dagens kørsel (`planlagt = true`), men har endnu IKKE sendt til vognmand.
-2. **"Afventer vognmand"** (gul) — formanden har trykket den eksplicitte **"Send til vognmand"-knap** (`sendt_til_vognmand = true`). Forbliver gul indtil data kommer RETUR.
+2. **"Sendt til vognmand"** (gul) — formanden har trykket den eksplicitte **"Send til vognmand"-knap** (`sendt_til_vognmand = true`). Forbliver gul indtil data kommer RETUR. (label omdøbt 2026-06-23: tidl. "Afventer vognmand")
 3. **"Bekræftet vognmand"** (grøn) — vognmandens retur-data er ankommet.
 
 Samme 3-state gælder **materiellevering** (pr. enhed) — se Flow 2 Trin 5.
 
-**Eksplicit afsendelses-gate — uafhængig "Send til vognmand"-knap PR. SEKTION (LÅST 2026-06-19):** Både **Asfaltkørsel** og **Materiellevering** har HVER sin egen "Send til vognmand"-knap i bunden af sin sektion. De sendes **uafhængigt** — asfaltkørsel-biler og materiellevering kan være klar på forskellige tidspunkter, og hver knap har sin egen per-dag send-state. Tilstand pr. sektion: gul **"Send til vognmand"** → grøn **"Sendt til vognmand"** (hele knappen grøn, intet ikon) + **"Ret"-link** der genåbner til redigering. Knapperne afløser den tidligere implicitte per-række "Gem/Send"-trigger: intet sendes før knappen trykkes, så formanden kan rette frit indtil da. Hver sektions 3-state-piller (Planlagt → Afventer → Bekræftet) drives af DEN sektions egen send-knap. **"Ret" er KUN muligt i "Afventer vognmand"-tilstanden (LÅST 2026-06-19):** Når bestillingen er **bekræftet af vognmand**, deaktiveres/skjules "Ret" — formanden kan ikke længere redigere en bekræftet bestilling i app'en; ændringer aftales i stedet telefonisk med vognmand (jf. ønskeliste-reglen). For asfaltkørsel er "låst" pr. dag (alle dagens rækker bekræftet), for materiel pr. enhed. **Send-tilstanden er PR. DAG, men ÉN afledt knap (LÅST 2026-06-19):** Send-state gemmes pr. dag (`day.date` i `sendtTilVognmandDates`), men der er ÉN section-level "Send til vognmand"-knap hvis tilstand er **afledt**: knappen er gul **"Send til vognmand"** hvis der findes mindst én **planlagt-men-usendt** dag; ellers grøn **"Sendt til vognmand"**. Formanden kan planlægge én eller flere dage ad gangen og sende dem samlet — et klik markerer ALLE usendte planlagte dage som sendt. Allerede-sendte dage **sendes ikke igen**. Planlægges flere dage senere, bliver knappen gul igen (de nye usendte dage). De enkelte dag-rækkers piller (Planlagt → Afventer → Bekræftet) viser fortsat individuel status pr. `day.date`. **Materiellevering bruger samme afledte knap, men keyet pr. ENHED (`resource-id`)** i stedet for dag (materiel er en flad enheds-liste): gul hvis der findes mindst én planlagt-men-usendt materiel-enhed → ét klik sender alle usendte enheder samlet → grøn når alle planlagte enheder er sendt; allerede-sendte enheder sendes ikke igen. Piller pr. enhed (Planlagt/Afventer/Bekræftet) i både normal- og samleordre-mode. Samme gul→grøn-mønster bruges på "Send til fabrik"- og afregnings-knapperne (konsistens). Egen bil → fortsat auto-bekræftet ved send (se Variant: Egen bil-flow).
+**Eksplicit afsendelses-gate — uafhængig "Send til vognmand"-knap PR. SEKTION (LÅST 2026-06-19):** Både **Asfaltkørsel** og **Materiellevering** har HVER sin egen "Send til vognmand"-knap i bunden af sin sektion. De sendes **uafhængigt** — asfaltkørsel-biler og materiellevering kan være klar på forskellige tidspunkter, og hver knap har sin egen per-dag send-state. Tilstand pr. sektion: gul **"Send til vognmand"** → grøn **"Sendt til vognmand"** (hele knappen grøn, intet ikon) + **"Ret"-link** der genåbner til redigering. Knapperne afløser den tidligere implicitte per-række "Gem/Send"-trigger: intet sendes før knappen trykkes, så formanden kan rette frit indtil da. Hver sektions 3-state-piller (Planlagt → Sendt → Bekræftet) drives af DEN sektions egen send-knap. **"Ret" er KUN muligt i "Sendt til vognmand"-tilstanden (LÅST 2026-06-19):** Når bestillingen er **bekræftet af vognmand**, deaktiveres/skjules "Ret" — formanden kan ikke længere redigere en bekræftet bestilling i app'en; ændringer aftales i stedet telefonisk med vognmand (jf. ønskeliste-reglen). For asfaltkørsel er "låst" pr. dag (alle dagens rækker bekræftet), for materiel pr. enhed. **Send-tilstanden er PR. DAG, men ÉN afledt knap (LÅST 2026-06-19):** Send-state gemmes pr. dag (`day.date` i `sendtTilVognmandDates`), men der er ÉN section-level "Send til vognmand"-knap hvis tilstand er **afledt**: knappen er gul **"Send til vognmand"** hvis der findes mindst én **planlagt-men-usendt** dag; ellers grøn **"Sendt til vognmand"**. Formanden kan planlægge én eller flere dage ad gangen og sende dem samlet — et klik markerer ALLE usendte planlagte dage som sendt. Allerede-sendte dage **sendes ikke igen**. Planlægges flere dage senere, bliver knappen gul igen (de nye usendte dage). De enkelte dag-rækkers piller (Planlagt → Sendt til vognmand → Bekræftet vognmand) viser fortsat individuel status pr. `day.date`. **Materiellevering bruger samme afledte knap, men keyet pr. ENHED (`resource-id`)** i stedet for dag (materiel er en flad enheds-liste): gul hvis der findes mindst én planlagt-men-usendt materiel-enhed → ét klik sender alle usendte enheder samlet → grøn når alle planlagte enheder er sendt; allerede-sendte enheder sendes ikke igen. Piller pr. enhed (Planlagt/Sendt til vognmand/Bekræftet vognmand) i både normal- og samleordre-mode. Samme gul→grøn-mønster bruges på "Send til fabrik"- og afregnings-knapperne (konsistens). Egen bil → fortsat auto-bekræftet ved send (se Variant: Egen bil-flow).
 **Bekræftet-flip:** Når vognmandens retur-data ankommer (`confirmed_vehicles[]` populeres → `bekraeftet_af_vognmand = true`), skifter pillen til grønt **"Bekræftet af vognmand"** (Trin 6) — **samtidig** med at **Bilbestilling-tabellen under Udførsel** udfyldes med de bekræftede biler (Trin 7). Pille og Udførsel-tabel hænger sammen: samme retur-data driver begge på én gang.
 **Tilstande:**
 - `planlagt = true` + `sendt_til_vognmand = false` → ⚪ "Planlagt" (neutral/grå — planlagt, ikke sendt endnu)
-- `sendt_til_vognmand = true` + `bekraeftet_af_vognmand = false` → 🟡 "Afventer vognmand"
+- `sendt_til_vognmand = true` + `bekraeftet_af_vognmand = false` → 🟡 "Sendt til vognmand" (label omdøbt 2026-06-23: tidl. "Afventer vognmand")
 - `bekraeftet_af_vognmand = true` → 🟢 "Bekræftet af vognmand" + Udførsel-Bilbestilling-tabel udfyldt
-- "Ret" på den grønne "Send"-knap → tilbage til "Planlagt"
+- Rettelse af en allerede-sendt dag (per-dag "Ret" → "Gem kørsel", ELLER "Ret"-link på den grønne section-knap) → sendt-status **nulstilles** → tilbage til ⚪ "Planlagt", og dagen skal sendes igen. Begrundelse: vognmandens kopi er forældet så snart formanden ændrer bestillingen. Gælder også **materiel pr. enhed** (Gem → enheden falder tilbage til "Planlagt"). LÅST 2026-06-23.
 - Egen bil → ingen vognmand-pille (auto-bekræftet ved send — se Variant: Egen bil-flow)
 **Læser:** `orders.asfalt_koersel[].planlagt` + `.sendt_til_vognmand` + `.bekraeftet_af_vognmand`
 
@@ -339,7 +341,7 @@ For `undervejs`-biler beregnes live ETA fra faktisk timestamps. `planlagt`-biler
 - Bestillingen sendes DIREKTE fra formand til chauffør
 - `orders.asfalt_koersel[].egen_bil = true` (nyt data-flag)
 - `orders.asfalt_koersel[].bekraeftet_af_vognmand` er N/A — bestillingen er auto-bekræftet ved formand-send
-- Vognmand-badge i formand-UI viser "Egen bil" (ikke "Afventer vognmand" eller "Bekræftet af vognmand")
+- Vognmand-badge i formand-UI viser "Egen bil" (ikke "Sendt til vognmand" eller "Bekræftet af vognmand")
 - Trin 5b (fabrik-notifikation) gælder STADIG — fabrik skal vide hvornår egen bil ankommer, samme beregning, kun chauffør-data udfyldes fra formand i stedet for vognmand
 
 **Trin EB-1 — Formand vælger Egen bil + chauffør**
@@ -1006,7 +1008,7 @@ Feltet er optional. `undefined` = ikke aflyst. Streng-union fremfor boolean så 
 
 #### Formand-UI: Aflys-celle i ordredetalje-rækken (LÅST 2026-06-09)
 
-**Placering:** 6. celle i ordredetalje-grid'et (`makeOrdredetaljerCard` i `OrdrePlanScreen.tsx`) ved siden af "Udføres i perioden / Mængde tons / Produkt / Tykkelse / Fabrik". Grid'et udvides fra `grid-cols-5` til `grid-cols-6` i begge varianter (enkelt-ordre + samleordre-tabs).
+**Placering:** 5. celle i ordredetalje-grid'et (`makeOrdredetaljerCard` i `OrdrePlanScreen.tsx`) ved siden af "Mængde tons / Produkt / Tykkelse / Fabrik". Grid'et er `grid-cols-5` i begge varianter (enkelt-ordre + samleordre-tabs). (LÅST 2026-06-23: "Udføres i perioden"-cellen fjernet fra ordredetaljer — redundant med top-datovælger-sektionen.)
 
 Aflys-cellen vises i **både Planlægning-mode og Udførsel-mode** — samme `makeOrdredetaljerCard`-factory bruges, men kaldes med `cardMode='udfoersel'` + `udfoerselSelectedDate` i Udførsel.
 
@@ -1028,11 +1030,7 @@ Aflys-cellen vises i **både Planlægning-mode og Udførsel-mode** — samme `ma
 - Klik på en årsag = aflysning af valgt dato med valgt årsag (kalder `cancelDay(productId, dayId, reason)`).
 - Multi-aflysning understøttes: pickeren lukker efter aflysning, cellen re-rendrer, og man kan klikke "Aflys flere" igen.
 
-**Dobbelt-signal:** "Udføres i perioden"-cellen (1. celle) viser også rød sub-tekst med aflyste dage:
-```
-[dato] aflyst
-```
-i `font-inter text-xxs text-bad font-medium`. Sikrer at aflysningen ses uanset om formanden kigger på dato-cellen eller aflys-cellen.
+**Aflysnings-signal:** Aflyste dage vises KUN på dato-pillerne i top-datovælgeren ("Udføres i perioden"-sektionen). "Udføres i perioden"-cellen i ordredetalje-grid'et er fjernet (LÅST 2026-06-23), så rød sub-tekst med aflyste dage i den celle eksisterer ikke længere.
 
 **Tokens:** `bg-bad/10`, `text-bad`, `font-inter text-xs font-semibold`, `px-xs py-xxs rounded-md`. Default celle-struktur (`p-sm flex flex-col h-full min-h-[96px]`) matcher de andre celler.
 
@@ -1251,11 +1249,11 @@ Referencen er **altid det 1. materiel** (`firstResource`) — ikke det umiddelba
 **Skriver til:** `orders.materiel[]` med `{ afhentning_vejnavn, afhentning_nummer, afhentning_postnummer, klar_dato, klar_tid, lokation_dato, lokation_tid, aflæsningssted, aflæsningspostnummer, kommentar_til_chauffoer }`
 
 **Badge-lifecycle (materiel) — afventer → bekræftet (LÅST 2026-06-15):** Parallelt med asfalt-kørsel (Flow 1 Trin 2) har **hver materiel-enhed** sin egen vognmand-pille i formandens Planlægning → Materiel-sektion (`VognmandBekraeftelseBadge`, samme stil som Asfalt kørsel):
-- Pillen sættes til gult **"Afventer vognmand"** så snart formanden trykker **"Gem transport"** på materiel-enheden (`orders.materiel[].gemt = true`) — så snart formanden gemmer/sender, ikke først når vognmanden har åbnet den.
+- Pillen sættes til gult **"Sendt til vognmand"** så snart formanden trykker **"Gem transport"** på materiel-enheden (`orders.materiel[].gemt = true`) — så snart formanden gemmer/sender, ikke først når vognmanden har åbnet den. (label omdøbt 2026-06-23: tidl. "Afventer vognmand")
 - Når vognmandens retur-data ankommer (`orders.materiel[].confirmed_transport` populeres → `bekraeftet_af_vognmand = true`, jf. Trin 3-4), skifter pillen til grønt **"Bekræftet af vognmand"** — **samtidig** med at materiel-bilen vises i Udførsel under **"Biler & afregning"** med "Kørt materiel"-badge (Trin 5). Samme retur-data driver pille + Udførsel-visning på én gang.
 
 **Tilstande pr. materiel-enhed:**
-- `gemt = true` + `bekraeftet_af_vognmand = false` → 🟡 "Afventer vognmand"
+- `gemt = true` + `bekraeftet_af_vognmand = false` → 🟡 "Sendt til vognmand" (label omdøbt 2026-06-23: tidl. "Afventer vognmand")
 - `bekraeftet_af_vognmand = true` → 🟢 "Bekræftet af vognmand" + materiel-bil i Udførsel "Biler & afregning"
 
 **Granularitets-forskel fra asfalt:** Materiel-pillen er **pr. materiel-enhed** (én pille pr. linje), modsat asfalt hvor pillen er **pr. dag**. En ordre kan derfor have flere materiel-enheder i forskellige tilstande samtidig (nogle afventer, andre bekræftet).

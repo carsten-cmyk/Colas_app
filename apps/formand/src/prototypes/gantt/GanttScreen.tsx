@@ -148,11 +148,15 @@ function isInRange(day: Date, order: GanttOrder): boolean {
   return day >= start && day <= end
 }
 
-function getBarColorClass(order: GanttOrder): string {
+// Bar-farve sættes PR. DAG, ikke pr. ordre: en ordre der løber hen over en weekend
+// vises grøn på hverdage og gul på lø/sø. Prioritet: aflyst > nat > weekend-dag > normal.
+function getBarColorClass(order: GanttOrder, day: Date): string {
   // Aflyst overrider alt — ensartet rød markering (jf. FF aflysnings-markeringer 2026-06-15)
   if (order.state === 'cancelled') return 'bg-bad'
+  // Nat er en ordre-egenskab (tidsvindue) — markeres på alle ordrens dage
   if (order.tidsvindue === 'nat') return 'bg-deep-teal'
-  if (order.tidsvindue === 'weekend') return 'bg-warning'
+  // Weekend afledes af kalenderen, ikke af ordrens tidsvindue
+  if (isWeekend(day)) return 'bg-warning'
   return 'bg-good'
 }
 
@@ -322,10 +326,13 @@ export function GanttScreen() {
                     key={order.id}
                     className={`flex ${oi < visibleOrders.length - 1 ? 'border-b border-box-outline' : ''}`}
                   >
-                    {/* Order info */}
-                    <div
+                    {/* Order info — klikbar (samme destination som gantt-staven) */}
+                    <button
+                      type="button"
+                      onClick={() => navigate('/prototyper/ordre-plan')}
+                      aria-label={`Åbn ordre ${order.orderNumber}`}
                       style={{ width: 160, flexShrink: 0 }}
-                      className="px-sm py-xs flex flex-col justify-center gap-xxxs"
+                      className="px-sm py-xs flex flex-col justify-center gap-xxxs text-left cursor-pointer hover:bg-soft-gray transition-colors"
                     >
                       <p className="font-poppins font-bold text-xs text-deep-teal leading-tight">
                         Udførselssted
@@ -339,12 +346,12 @@ export function GanttScreen() {
                       <p className="font-inter text-xxs text-text-muted leading-tight">
                         Ordrenummer {order.orderNumber}
                       </p>
-                    </div>
+                    </button>
 
                     {/* Day cells */}
                     {days.map((day, di) => {
                       const inRange = isInRange(day, order)
-                      const barColorClass = inRange ? getBarColorClass(order) : ''
+                      const barColorClass = inRange ? getBarColorClass(order, day) : ''
                       const isToday = sameDay(day, TODAY)
                       const weekend = isWeekend(day)
                       const start = parseDate(order.startDate)
@@ -365,27 +372,17 @@ export function GanttScreen() {
                             <div className="absolute inset-y-0 left-0 w-[2px] pointer-events-none" style={{ zIndex: 1, backgroundImage: 'repeating-linear-gradient(to bottom, rgba(11,57,80,0.5) 0px, rgba(11,57,80,0.5) 5px, transparent 5px, transparent 10px)' }} />
                           )}
                           {inRange && (
-                            order.id === '1' ? (
-                              <button
-                                onClick={() => navigate('/prototyper/ordre-plan')}
-                                aria-label={`Åbn ordre ${order.orderNumber}`}
-                                className={[
-                                  'h-[6px] w-full cursor-pointer hover:opacity-75 transition-opacity',
-                                  barColorClass,
-                                  isFirst ? 'rounded-l-full ml-[3px]' : '',
-                                  isLast ? 'rounded-r-full mr-[3px]' : '',
-                                ].filter(Boolean).join(' ')}
-                              />
-                            ) : (
-                              <div
-                                className={[
-                                  'h-[6px] w-full',
-                                  barColorClass,
-                                  isFirst ? 'rounded-l-full ml-[3px]' : '',
-                                  isLast ? 'rounded-r-full mr-[3px]' : '',
-                                ].filter(Boolean).join(' ')}
-                              />
-                            )
+                            <button
+                              type="button"
+                              onClick={() => navigate('/prototyper/ordre-plan')}
+                              aria-label={`Åbn ordre ${order.orderNumber}`}
+                              className={[
+                                'h-[6px] w-full cursor-pointer hover:opacity-75 transition-opacity',
+                                barColorClass,
+                                isFirst ? 'rounded-l-full ml-[3px]' : '',
+                                isLast ? 'rounded-r-full mr-[3px]' : '',
+                              ].filter(Boolean).join(' ')}
+                            />
                           )}
                         </div>
                       )
@@ -502,7 +499,7 @@ export function GanttScreen() {
                         </div>
                         {days.map((day, di) => {
                           const inRange = isInRange(day, order)
-                          const barColorClass = inRange ? getBarColorClass(order) : ''
+                          const barColorClass = inRange ? getBarColorClass(order, day) : ''
                           const isToday = sameDay(day, TODAY)
                           const weekend = isWeekend(day)
                           const start = parseDate(order.startDate)
