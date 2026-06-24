@@ -137,7 +137,13 @@ export function clusterEtaper(plannedDates: string[]): Etape[] {
     // Tæl hverdage i hullet (ekskl. prev-dagen, inkl. alt frem til curr-dagen)
     const hullStart = new Date(prev + 'T00:00:00')
     hullStart.setDate(hullStart.getDate() + 1)
-    const hullStartStr = hullStart.toISOString().slice(0, 10)
+    // Lokal dato-formatering — IKKE toISOString(): toISOString konverterer til UTC
+    // og skubber lokal midnat én dag tilbage i UTC+-tidszoner (fx dansk CET/CEST),
+    // hvilket fejlagtigt får to på-hinanden-følgende hverdage til at se ud som et hul.
+    const hullStartStr =
+      `${hullStart.getFullYear()}-` +
+      `${String(hullStart.getMonth() + 1).padStart(2, '0')}-` +
+      `${String(hullStart.getDate()).padStart(2, '0')}`
 
     const hverdageIHul = weekdaysBetween(hullStartStr, curr)
 
