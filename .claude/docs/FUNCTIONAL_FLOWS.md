@@ -292,12 +292,12 @@ For `undervejs`-biler beregnes live ETA fra faktisk timestamps. `planlagt`-biler
 
 ### Trin 7b — Formand sender ordre-SMS til chauffør (LÅST 2026-06-15)
 **App:** formand
-**Komponent:** `OrdrePlanScreen` → Bilbestilling-tabel → "Send opgave som SMS"-knap per bil-række
+**Komponent:** `OrdrePlanScreen` → Bekræftede biler-tabel → "Send ordre nu" / "Gensend ordre"-knap per bil-række
 **Handling:** Sender et **konsolideret dags-link pr. chauffør** (deep-link til chauffør-webapp på dagens ordre(r)). Se Trin 8 for distribution.
-**State + labels (opdateret 2026-06-15):** `ChauffoerSmsStatus` (STATUS_VOKABULAR #13). Da første SMS sendes AUTOMATISK (debounce nedenfor), er den manuelle knap reelt en gensend:
-- `ikke_sendt` (debounce-vindue, endnu ikke auto-sendt): pille "Afventer afsendelse" + knap **"Send nu"** (manuel straks-send/override).
-- `sendt` (auto-sendt): markering **"Sendt ✓"** + aktiv **"Gensend"**-knap (manuel gensend — fremrykket fra fase 2).
-- `aendret_siden_afsendelse` (fase 2): "Gensend" + "Ordre opdateret"-signal.
+**State + labels (opdateret 2026-06-23):** `ChauffoerSmsStatus` (STATUS_VOKABULAR #13). Da første SMS sendes AUTOMATISK (debounce nedenfor), er den manuelle knap reelt en gensend:
+- `ikke_sendt` (debounce-vindue, endnu ikke auto-sendt): pille **"Afventer afsendelse"** + knap **"Send ordre nu"** (manuel straks-send/override).
+- `sendt` (auto-sendt): pille **"Ordre sendt til chauffør ✓"** + aktiv **"Gensend ordre"**-knap (manuel gensend — fremrykket fra fase 2).
+- `aendret_siden_afsendelse` (fase 2): pille **"Ordre opdateret"** + knap **"Gensend ordre"**.
 **Granularitet:** ÉN SMS pr. chauffør pr. dag (nøgle: chauffør-tlf) for **asfalt-kørsel**, uanset antal ordrer/læs — respekterer at en chauffør har flere ordrer/dag. Knappen vises per bil-række, men tilstanden er per chauffør (cross-ordre-konsolidering sker i backend). **Materiel-transport har en separat regel: én SMS pr. chauffør pr. ordre** (konsoliderer flere materiel-enheder på samme bil) — se Flow 2 Trin 4b.
 **Trigger:** Auto-send styret af debounce-timing (se nedenfor) + manuel straks-/gensend fra tabellen.
 
@@ -305,7 +305,7 @@ For `undervejs`-biler beregnes live ETA fra faktisk timestamps. `planlagt`-biler
 - **Initial batch — 2 timer (FAST):** Send-tidspunktet er **første disponering + 2 timer** og er fast. Ændrer vognmanden chauffør-sættet i vinduet, flytter send-tidspunktet sig IKKE — ved send-tidspunktet får de chauffører der ER disponeret netop da deres SMS ("første SMS-batch").
 - **Sen erstatning — 10 minutter:** EFTER at første SMS-batch er sendt (ordren er i "notificeret"-fase), får enhver chauffør der tilføjes/skiftes (typisk nedbrud, sygdom) sin SMS efter kun **10 minutter** — så en akut indsat chauffør får besked hurtigt.
 - **Ingen fast klokkeslæts-cutoff:** Fordi nogle chauffører kører aften/nat, kan vi ikke vente til fx midnat. Debouncen er altid relativ til disponering, aldrig et fast ur-tidspunkt.
-- **Manuel straks-send:** Formandens "Send opgave som SMS"-knap pr. række kan altid override debouncen og sende med det samme.
+- **Manuel straks-send:** Formandens **"Send ordre nu"**-knap pr. række kan altid override debouncen og sende med det samme. Ændres til **"Gensend ordre"** når status er `sendt` eller `aendret_siden_afsendelse`.
 - **Granularitet:** Send-tidspunktet følger den konsoliderede dags-SMS pr. chauffør (jf. ovenfor). T0 = chaufførens første disponering på dagen.
 
 🟡 **ÅBENT (implementering):**
@@ -313,7 +313,7 @@ For `undervejs`-biler beregnes live ETA fra faktisk timestamps. `planlagt`-biler
 - **Aften/nat lead-time:** Hvis første disponering sker <2 timer før chaufførens planlagte start, risikerer fast T0+2t at sende for sent. Skal send-tid være `min(T0 + 2t, planlagt_start − lead)`?
 
 **Bekræftelses-pille — formand + vognmand (LÅST 2026-06-15):** Når SMS er afsendt, skal BÅDE formand og vognmand kunne se at opgaven er sendt til chaufføren:
-- **Formand:** Pille på **Bilbestilling**-tabellen (Udførsel-mode) pr. chauffør/række, fx "Sendt til chauffør ✓" (drevet af `confirmed_vehicles[].sms_status = 'sendt'`). I debounce-vinduet kan pillen vise afventende tilstand (fx "Sendes om ~1t 40m"). *(Pending-tilstand kræver evt. ny `ChauffoerSmsStatus`-værdi, fx `planlagt` — afklares; enum ligger i STATUS_VOKABULAR #13.)*
+- **Formand:** Pille på **Bekræftede biler**-tabellen (Udførsel-mode) pr. chauffør/række: **"Ordre sendt til chauffør ✓"** (drevet af `confirmed_vehicles[].sms_status = 'sendt'`). I debounce-vinduet viser pillen **"Afventer afsendelse"**. *(Pending-tilstand kræver evt. ny `ChauffoerSmsStatus`-værdi, fx `planlagt` — afklares; enum ligger i STATUS_VOKABULAR #13.)*
 - **Vognmand:** Tilsvarende pille SKAL findes i vognmand-app'en ("Sendt til chauffør"), så vognmanden ved at hans disponering er kommunikeret videre til chaufføren. 🟡 **Vognmand-app er ikke designet færdig endnu — pillen NOTERES her men bygges ikke nu.**
 
 **Reassign (nedbrud):** Ny vognmand-disponering (anden chauffør) → ny `confirmed_vehicles[]`-row ankommer → auto-SMS til den nye chauffør efter **10-min-reglen** (sen erstatning, se debounce ovenfor); den afløste af-disponeres.
@@ -1165,6 +1165,7 @@ Adskilt trigger fra ovenstående vejr-aflysning (som er formand-initieret, dag-n
   - **Timeløn → timeløn:** chauffør på timeløn afregnes normalt for køretiden (ud + retur).
   - **Akkord → kun ventetid:** chauffør på akkord får **ikke** akkord for returlæsset (det blev jo aldrig udlagt) — kun **ventetid** afregnes.
 - **Status:** Prototype-oplæg bygges i `chauffeur-web` (enkelt + multiprodukt) tilgængeligt fra tools-/prototyper-menuen. UI-placering (Ankommet-til-plads + Order details) under iteration — visuelt sprog matcher eksisterende vejeflow-skærme. **TODO: Erstat mock med Supabase når klar** — negativt vejebilag skrives til `plan_vejebilag` på samme måde som vejr-aflysning-returen.
+- **Mødetid vises ikke ved returlæs (LÅST 2026-06-23):** Mødetid på fabrik (`moedetid_fabrik`) er **kun relevant for første læs** — det læs der bærer mødetiden fra bilbestillingen (se Trin 8 / Mødetid på fabrik). Loop-læs (bilen kører frem og tilbage mellem fabrik og plads) og returlæs har **ingen mødetid** og viser den ikke i UI. `TaskDetailScreen` skjuler mødetid-blokken når `returlaesOprettet === true`.
 
 **Badge-lifecycle — hvornår forsvinder "Ændret af formand"? (LÅST 2026-06-03)**
 
@@ -1218,6 +1219,17 @@ Ordren er en **append-only log** af dage. Hver dag har sin egen sektion med:
 
 **Status:** Planlagt, ikke bygget endnu
 **Trigger:** Ordre kommer fra PLAN med en **holdpakke** (mennesker + materiel). Formand åbner Materiel-sektionen på ordren for at planlægge transport.
+
+### 🟢 LÅST 2026-06-23 — ETAPE-BEVIDST model (planlægningsenhed: ORDRE → ETAPE)
+
+**Reframe:** Materiel planlægges nu **pr. ETAPE**, ikke pr. ordre. En ordre udføres i etaper (fx 3 dage i marts + 3 dage i juli); mellem etaper bruges samme materiel af en anden ordre. **PLAN sender kun planlagte datoer; kommende etaper planlægges først ~2 dage før.** Den **fulde, kanoniske model er dokumenteret i `.claude/docs/MATERIEL_FLOW.md`** (sektion "🟢 LÅST 2026-06-23 — ETAPE-BEVIDST materiel-model") — herunder kun det der ændrer dette flows trin:
+
+- **Tre lag:** (1) **Pakken** = holdets faste SPECIFIKKE enheder (samme anlægsnr hver etape) + tilføjet materiel — **bæres automatisk videre** mellem etaper, genvælges ikke; tilføjet materiel bæres OGSÅ videre, men kan fjernes pr. etape. (2) **Transport-planen** (afhentning · dato · tid · aflæsning) er **PR. ETAPE — nulstilles hver etape**; datamodel-skift: ét transport-sæt pr. enhed pr. ETAPE (før: pr. ordre). (3) **Frigivelse er PASSIV** — ordren gør intet; maskinens placering spores i PLAN, næste ordres formand henter den via afhentnings-prefill ("seneste aflæsning i PLAN" — eksisterende mekanisme, jf. Trin 1).
+- **Etape-detektion:** appen **klynger ordrens faktisk-planlagte dage**. **Weekend-/helligdags-huller bryder IKKE en etape**; et hul på **flere på-hinanden-følgende hverdage = ny etape**. Klyngnings-input = de reelle PLAN-dage (jf. Flow 1 Trin 1 "Udføres i perioden = kun PLAN-planlagte dage").
+- **Kun-første-dag-planlægning:** materiel planlægges **KUN etapens første udførselsdag** (transport sigter mod ankomst til dag 1). Øvrige dage: ingen planlægning, materiellet står på pladsen.
+- **Fire UX-tilstande** (materiel-sektion reagerer på `selectedPlanDate`): (1) **Etapens første dag/lead-up** → fuld transport-planlægning, afhentning prefyldt fra PLAN-placering. (2) **Midt i etape** → read-only "Materiel på pladsen (ankom [dato])". (3) **Dvale-gap mellem etaper** → "Frigivet — næste etape ikke planlagt endnu". (4) **Næste etape netop planlagt i PLAN** → "Planlæg materiel-transport for etape [N]"-opgave: pakken for-listet, transport blank; **AUTO-opret blanke transport-pladser** for pakkens enheder + **notifikation** ("Planlæg materiel for etape N") for discoverability.
+- **Forudsætning uden for app-scope:** knaphedskonflikt (specifik maskine ikke ledig til næste etape) er et PLAN/disponerings-anliggende — appen antager maskinen er tilbage.
+- **Cross-app:** vognmand modtager transport **pr. etape**. **🟡 ÅBENT (ikke låst):** bør materiel-SMS-konsolidering skifte fra 1 SMS/chauffør/ORDRE (Trin 4b) til **1 SMS/chauffør/ETAPE**? Afventer bekræftelse — lås ikke uden kunde-input.
 
 ### Trin 0 — Holdpakke fra PLAN
 **App:** formand
@@ -1961,6 +1973,7 @@ Afregningstypen flyder ind på ordren via `confirmed_vehicles[].afregning_type`.
 - **Tillægsareal (m²) → Afregning (🟢 LÅST 2026-06-22):** På samme måde vises en note **"{m²} m² tillægsareal registreret i 4A"** ud for kvm/tons i Registrer udlægning — men **kun hvis der faktisk er udlagt tillægsareal** (> 0) for det valgte produkt. Står ved siden af "tons registreret i 4A"-noten.
 - **Udlægningsareal (m²) → Afregning (🟢 LÅST 2026-06-22):** Ligeledes overføres det udlagte areal fra 4A → note **"{m²} m² areal registreret i 4A"**, placeret under de to øvrige. Alle **tre referencer (tons · areal · tillægsareal)** grupperes samlet inde i Registrer udlægning-boksen hvor tons/areal angives — pr. valgt produkt.
 - **A3 (ØVR. 3.a) er en SELVSTÆNDIG blanket ≠ A4 (🟢 LÅST 2026-06-22):** 3a og 4a er to FORSKELLIGE PLAN-blanketter (separate komponenter — `OvrigeOplysningerSkema3a` vs `OvrigeOplysningerSkema`). **3a-felter** (1:1 kopi fra PLAN): Strækning · **Bygherre (præudfyldes med ordrens kundenavn)** · **"Strækning kontrolleret"** (Morgen/Aften Kl. + Nej) · Produktoplysninger (produkt-navigation) · sektion "Udfyldes af EL/DL": Bygherretilsyn + Prøve udtaget ved anlæg (tilsyn) + Komprimeringskontrol bestilt + Laboratoriekontrol bestilt (alle Ja/Nej-toggles) + Bemærkninger. **4a-felter:** Stationering · Udlagt antal tons · Udlægningsareal (l×b, live-beregner) · Tillægsareal · Areal i alt · Gennemsnitsforbrug · Skitse vedlagt (toggle) · Bemærkninger. **Begge:** produkt-navigation med **default lag 1 valgt** + "Vælg produkt"-label; Gem-knap gul→grøn.
+- **3a "Materialer"-undersektion (🟢 LÅST 2026-06-23):** 3a indeholder en "Materialer"-undersektion med 4 temperaturmålinger vist som 4 kolonner (grid-cols-4). Pr. måling: Uensartede (Ja/Nej-toggle), °C (tal-input, manuel), Kl (tid-input). **Automatik-model (LÅST 2026-06-23):** tidspunkterne **auto-præudfyldes ved dagens afslutning fra dagens afsluttede læs** med jævnt fordelte intervaller (prototype-seed simulerer aften/nat-udlægning: 20:30 / 22:00 / 00:00 / 03:00), og **kan rettes manuelt af formanden**. **Temperatur indtastes altid manuelt** (måles i marken). Ingen vejeseddel-kolonne på blanketten (kun Uensartede · °C · Kl pr. måling).
 
 ---
 
