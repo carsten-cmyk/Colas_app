@@ -1,9 +1,9 @@
 /**
  * PROTOTYPE — BottomTabBar
- * 5 tabs: Start, Opgaver, Vejning, Timereg, Kontakt
+ * 5 tabs: Start, Opgaver, Vejesedler, Timereg, Kontakt
  * Matches original React Native BottomTabBar design.
  */
-import { Home, Truck, Scale, Clock, Phone, Wrench } from 'lucide-react'
+import { Home, Truck, FileCheck2, Clock, Phone, Wrench } from 'lucide-react'
 import { FS } from '@/styles/spacing'
 
 export type TabName = 'start' | 'opgaver' | 'vejning' | 'timereg' | 'kontakt' | 'prototyper'
@@ -17,7 +17,7 @@ export interface BottomTabBarProps {
 const TABS: { name: TabName; label: string; Icon: React.ComponentType<{ size: number; color: string }> }[] = [
   { name: 'start', label: 'Start', Icon: Home },
   { name: 'opgaver', label: 'Opgaver', Icon: Truck },
-  { name: 'vejning', label: 'Vejning', Icon: Scale },
+  { name: 'vejning', label: 'Vejesedler', Icon: FileCheck2 },
   { name: 'timereg', label: 'Timereg', Icon: Clock },
   { name: 'kontakt', label: 'Kontakt', Icon: Phone },
   { name: 'prototyper', label: '...', Icon: Wrench },

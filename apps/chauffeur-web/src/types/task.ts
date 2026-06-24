@@ -2,6 +2,20 @@
 
 export type TaskState = 'idle' | 'active' | 'paused' | 'completed'
 
+/** Vejeseddel fra vejesystem (MAUS). brutto beregnes som tara + tons i visningen — gem ikke brutto. */
+export interface Vejeseddel {
+  /** MAUS vejeseddel-nummer, fx '4471023' */
+  vejeseddelNr: string
+  /** Klokkeslæt i format 'HH.MM', fx '07.42' */
+  tidspunkt: string
+  /** Produkt/recept-navn, fx 'SMA 11S 8mm' */
+  produkt: string
+  /** Taravægt i tons */
+  tara: number
+  /** Nettovægt i tons (brutto = tara + tons) */
+  tons: number
+}
+
 export interface Location {
   name: string
   address: string
@@ -47,4 +61,6 @@ export interface Task {
   bestilt_total?: number
   /** Sum af tons hentet på vejesedler indtil nu */
   hentet?: number
+  /** Vejesedler fra MAUS — kun asfalt-ordrer. TODO: Erstat med Supabase når klar */
+  vejesedler?: Vejeseddel[]
 }

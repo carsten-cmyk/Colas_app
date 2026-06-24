@@ -1,5 +1,5 @@
 // TODO: Erstat med Supabase når klar
-import type { Task } from '@/types/task'
+import type { Task, Vejeseddel } from '@/types/task'
 
 export const mockTasks: Task[] = [
   {
@@ -52,7 +52,14 @@ export const mockTasks: Task[] = [
     recept_nr: '94101A',
     produktnavn: 'SMA 11S 8mm',
     bestilt_total: 340,
-    hentet: 0,
+    hentet: 90.6,
+    // TODO: Erstat med Supabase når klar
+    vejesedler: [
+      { vejeseddelNr: '4471010', tidspunkt: '05.52', produkt: 'SMA 11S 8mm', tara: 14.7, tons: 22.3 },
+      { vejeseddelNr: '4471011', tidspunkt: '07.05', produkt: 'SMA 11S 8mm', tara: 15.1, tons: 23.6 },
+      { vejeseddelNr: '4471012', tidspunkt: '08.21', produkt: 'SMA 11S 8mm', tara: 14.9, tons: 21.8 },
+      { vejeseddelNr: '4471013', tidspunkt: '09.40', produkt: 'SMA 11S 8mm', tara: 15.0, tons: 22.9 },
+    ] as Vejeseddel[],
   },
   {
     id: '2',
@@ -91,6 +98,14 @@ export const mockTasks: Task[] = [
     produktnavn: 'SMA 11S 22mm',
     bestilt_total: 120,
     hentet: 110,
+    // TODO: Erstat med Supabase når klar
+    vejesedler: [
+      { vejeseddelNr: '4471023', tidspunkt: '07.14', produkt: 'SMA 11S 22mm', tara: 14.8, tons: 21.4 },
+      { vejeseddelNr: '4471024', tidspunkt: '08.52', produkt: 'SMA 11S 22mm', tara: 15.2, tons: 22.1 },
+      { vejeseddelNr: '4471025', tidspunkt: '10.09', produkt: 'SMA 11S 22mm', tara: 14.6, tons: 20.8 },
+      { vejeseddelNr: '4471026', tidspunkt: '11.33', produkt: 'SMA 11S 22mm', tara: 15.0, tons: 21.9 },
+      { vejeseddelNr: '4471027', tidspunkt: '13.01', produkt: 'SMA 11S 22mm', tara: 14.9, tons: 23.8 },
+    ] as Vejeseddel[],
   },
   {
     id: '3',
@@ -127,6 +142,11 @@ export const mockTasks: Task[] = [
     recept_nr: '71105B',
     produktnavn: 'AB 11T 22mm',
     bestilt_total: 80,
-    hentet: 0,
+    hentet: 37.8,
+    // TODO: Erstat med Supabase når klar
+    vejesedler: [
+      { vejeseddelNr: '4471031', tidspunkt: '10.47', produkt: 'AB 11T 22mm', tara: 15.1, tons: 18.6 },
+      { vejeseddelNr: '4471032', tidspunkt: '12.18', produkt: 'AB 11T 22mm', tara: 14.7, tons: 19.2 },
+    ] as Vejeseddel[],
   },
 ]

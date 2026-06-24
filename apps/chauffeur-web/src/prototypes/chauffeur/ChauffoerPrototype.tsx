@@ -4,12 +4,13 @@
  * Må ikke importeres i produktionskode.
  */
 import { useState } from 'react'
-import type { TaskState } from '@/types/task'
+import type { TaskState, Vejeseddel } from '@/types/task'
 import type { Conversation } from '@/types/messages'
 import type { MaterielTask } from '@/types/materielTask'
 import { mockTasks } from '@/mocks/tasks'
 import { mockConversations } from '@/mocks/messages'
 import { MATERIEL_TASKS } from '@/mocks/materielTasks'
+import { DAGENS_VEJESEDLER } from '@/mocks/dagensVejesedler'
 import { SAFE_AREA, FS } from '@/styles/spacing'
 import { SplashScreen } from './screens/SplashScreen'
 import { DashboardScreen } from './screens/DashboardScreen'
@@ -24,6 +25,7 @@ import { ReturlaesMultiScreen } from './screens/ReturlaesMultiScreen'
 import { TimeRegistrationScreen } from './screens/TimeRegistrationScreen'
 import { TaskListScreen } from './screens/TaskListScreen'
 import { KontakterScreen } from './screens/KontakterScreen'
+import { DagensVejesedlerScreen } from './screens/DagensVejesedlerScreen'
 import { BottomTabBar } from './components/BottomTabBar'
 import type { TabName } from './components/BottomTabBar'
 
@@ -46,6 +48,13 @@ export function ChauffoerPrototype() {
   // Delt returlæs-state — sættes af begge indgange (TaskDetailScreen + AnkommetUdfoerselsstedScreen)
   // TODO: Erstat med Supabase når klar
   const [returlaesOprettetForTask, setReturlaesOprettetForTask] = useState<Record<string, boolean>>({})
+  // Vejeseddel-overlay — payload-baseret så overlayet kan vise enten dagens eller en ordres vejesedler
+  // TODO: Erstat med Supabase når klar
+  const [vejesedlerView, setVejesedlerView] = useState<{ vejesedler: Vejeseddel[]; title: string; dato: string | null } | null>(null)
+
+  function danskDatoIdAg(): string {
+    return new Date().toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' })
+  }
 
   // ── Materiel-state (parallelt ID-rum — rører ikke asfalt-logik) ─────────────
   const [materielTasks, setMaterielTasks] = useState<MaterielTask[]>(MATERIEL_TASKS)
@@ -157,12 +166,14 @@ export function ChauffoerPrototype() {
         />
       )}
 
-      {/* Vejning tab — åbner welcome/scan-UI som manuel fallback */}
+      {/* Vejesedler tab — viser dagens vejesedler (AnkommetFabrikScreen bevaret som prototype-blok) */}
       {activeTab === 'vejning' && (
-        <>
-          <AnkommetFabrikScreen onClose={() => setActiveTab('start')} messageCount={MESSAGE_COUNT} />
-          <BottomTabBar activeTab={activeTab} onTabPress={handleTabPress} messageCount={MESSAGE_COUNT} />
-        </>
+        <DagensVejesedlerScreen
+          variant="tab"
+          onClose={() => setActiveTab('start')}
+          messageCount={MESSAGE_COUNT}
+          onTabPress={handleTabPress}
+        />
       )}
 
       {/* Timereg tab — åbner TaskListScreen i timeregMode */}
@@ -319,6 +330,7 @@ export function ChauffoerPrototype() {
             setActiveTab('start')
           }}
           messageCount={MESSAGE_COUNT}
+          onViewVejesedler={() => setVejesedlerView({ vejesedler: DAGENS_VEJESEDLER, title: 'Dagens vejesedler', dato: danskDatoIdAg() })}
         />
       )}
       {isPrototyperTab && prototypeSubScreen === 'samles-paa-en-bil' && (
@@ -343,6 +355,7 @@ export function ChauffoerPrototype() {
           otherActiveTask={otherActiveTask ? { id: otherActiveTask.id, orderNumber: otherActiveTask.orderNumber, produkt: otherActiveTask.produkt } : null}
           onGoToOtherTask={(id) => setSelectedTaskId(id)}
           onArrivalConfirm={(dest) => setArrivalScreen(dest)}
+          onViewVejesedler={() => selectedTask && setVejesedlerView({ vejesedler: selectedTask.vejesedler ?? [], title: `Vejesedler — ordre ${selectedTask.orderNumber}`, dato: null })}
           returlaesOprettet={selectedTask ? (returlaesOprettetForTask[selectedTask.id] ?? false) : false}
           onOpretReturlaes={() => {
             if (selectedTask) {
@@ -378,6 +391,19 @@ export function ChauffoerPrototype() {
           onClose={() => setViewingTimeregFor(null)}
           messageCount={MESSAGE_COUNT}
           reviewMode
+          onViewVejesedler={() => setVejesedlerView({ vejesedler: DAGENS_VEJESEDLER, title: 'Dagens vejesedler', dato: danskDatoIdAg() })}
+        />
+      )}
+
+      {/* Vejeseddel-overlay — lægger sig oven på aktiv skærm (tidsreg eller TaskDetail); retur-knap afslører skærmen under */}
+      {vejesedlerView && (
+        <DagensVejesedlerScreen
+          variant="overlay"
+          vejesedler={vejesedlerView.vejesedler}
+          title={vejesedlerView.title}
+          dato={vejesedlerView.dato}
+          onClose={() => setVejesedlerView(null)}
+          messageCount={MESSAGE_COUNT}
         />
       )}
 

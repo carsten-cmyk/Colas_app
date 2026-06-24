@@ -4,11 +4,11 @@
  */
 import { useState, useRef } from 'react'
 import { X, Pencil, Mic, ChevronDown, ChevronUp, Check } from 'lucide-react'
-import { SAFE_AREA, FS } from '@/styles/spacing'
+import { SAFE_AREA, FS, SP } from '@/styles/spacing'
 import { BottomTabBar } from '../components/BottomTabBar'
 import type { TabName } from '../components/BottomTabBar'
+import { DAGENS_VEJESEDLER } from '@/mocks/dagensVejesedler'
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
 const MOCK = {
   date: '12. Februar 2026',
   projectName: 'Uddannelsescenter Syd, Lolland',
@@ -16,6 +16,7 @@ const MOCK = {
   orderNumber: '1212343',
   tons: 73,
   formand: { name: 'Lars Hansen', phone: '+45 22 33 44 55' },
+  vejesedler: DAGENS_VEJESEDLER,
 }
 
 const INITIAL_ENTRIES = [
@@ -63,9 +64,11 @@ export interface TimeRegistrationScreenProps {
    * Normal "Afslut opgave og send timer"-flow er uændret når reviewMode er false/undefined.
    */
   reviewMode?: boolean
+  /** Navigér til vejeseddel-oversigten (overlay). Vises som link under Tons-label. */
+  onViewVejesedler?: () => void
 }
 
-export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode = false }: TimeRegistrationScreenProps) {
+export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode = false, onViewVejesedler }: TimeRegistrationScreenProps) {
   const commentRef = useRef<HTMLTextAreaElement>(null)
   const [activeTab] = useState<TabName>('prototyper')
   const [entries, setEntries] = useState<Entry[]>(INITIAL_ENTRIES)
@@ -375,8 +378,47 @@ export function TimeRegistrationScreen({ onClose, messageCount = 0, reviewMode =
             >
               Tons
             </span>
+            {/* Se vejesedler — navigerer til DagensVejesedlerScreen overlay */}
+            {onViewVejesedler && (
+              <button
+                type="button"
+                onClick={onViewVejesedler}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: `${SP.xs}px ${SP.xs}px`,
+                  minHeight: 44,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: FS.xxs,
+                  color: C.deepTeal,
+                  textDecoration: 'underline',
+                  textUnderlineOffset: 2,
+                  margin: 0,
+                }}
+              >
+                Se vejesedler ({DAGENS_VEJESEDLER.length})
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Hjælpetekst — timeforbrug */}
+        <p
+          style={{
+            fontFamily: 'Inter, sans-serif',
+            fontSize: FS.xs,
+            color: C.textMuted,
+            lineHeight: 1.4,
+            margin: 0,
+            marginTop: 8,
+          }}
+        >
+          Timerne registreres fra mødetidspunktet til afslutning af opgaven. Ventetid skal du selv registrere. Hviletid registreres når du har aktiveret hviletids-knappen.
+        </p>
 
         {/* Sektion-label */}
         <span

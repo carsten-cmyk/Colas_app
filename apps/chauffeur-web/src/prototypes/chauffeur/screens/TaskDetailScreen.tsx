@@ -42,6 +42,8 @@ export interface TaskDetailScreenProps {
   onArrivalConfirm?: (destination: 'fabrik' | 'plads') => void
   /** Åbn returlæs-flow */
   onOpretReturlaes?: () => void
+  /** Navigér til vejeseddel-overlay for denne ordre */
+  onViewVejesedler?: () => void
   /**
    * Returlæs er oprettet for denne opgave — løftet op fra ChauffoerPrototype så begge
    * indgange (TaskDetailScreen + AnkommetUdfoerselsstedScreen) sætter samme tilstand.
@@ -61,6 +63,7 @@ export function TaskDetailScreen({
   onGoToOtherTask,
   onArrivalConfirm,
   onOpretReturlaes,
+  onViewVejesedler,
   returlaesOprettet = false,
 }: TaskDetailScreenProps) {
   // Hviletid-interval-valg: null = modal lukket, tal = valgt varighed i sekunder (prototype bruger sekunder for hurtig demo)
@@ -310,6 +313,31 @@ export function TaskDetailScreen({
                   ? String(Math.max(task.bestilt_total - (task.hentet ?? 0), 0))
                   : String(task.ton)}
               </p>
+              {/* Se vejesedler — kun hvis asfalt-ordren har vejesedler */}
+              {task.vejesedler != null && task.vejesedler.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onViewVejesedler?.()}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: `${SP.xs}px ${SP.xs}px`,
+                    minHeight: 44,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: FS.xxs,
+                    color: C.deepTeal,
+                    textDecoration: 'underline',
+                    textUnderlineOffset: 2,
+                    margin: 0,
+                  }}
+                >
+                  Se vejesedler ({task.vejesedler.length})
+                </button>
+              )}
             </div>
           </div>
 
@@ -479,7 +507,7 @@ export function TaskDetailScreen({
                     {pickup.address}
                   </a>
                 </div>
-                {pickup.meetingTime && (
+                {pickup.meetingTime && !returlaesOprettet && (
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <p
                       style={{

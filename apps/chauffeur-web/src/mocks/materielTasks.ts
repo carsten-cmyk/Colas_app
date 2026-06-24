@@ -29,7 +29,7 @@ export const MATERIEL_TASKS: MaterielTask[] = [
       },
     ],
     formandNote: 'Hent nøgle til depot hos vagt — ring 10 min. før ankomst.',
-    formand: { name: 'Lars Bøgelund', phone: '40 22 85 61' },
+    formand: { name: 'Lars Bøgelund', phone: '+45 40 22 85 61' },
     state: 'idle',
   },
 
@@ -74,7 +74,7 @@ export const MATERIEL_TASKS: MaterielTask[] = [
       },
     ],
     formandNote: 'Udstyr SKAL læsses i nummerorden — VT før DV70. Kontakt formand ved tvivl.',
-    formand: { name: 'Mikkel Tranberg', phone: '51 77 30 44' },
+    formand: { name: 'Mikkel Tranberg', phone: '+45 51 77 30 44' },
     state: 'idle',
   },
 ]
