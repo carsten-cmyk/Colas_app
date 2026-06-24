@@ -13,7 +13,6 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronLeft,
-  Pencil,
   Mic,
   Camera,
   CloudRain,
@@ -36,6 +35,16 @@ import { useDagsoverblik } from '@/hooks/useDagsoverblik'
 import { INITIAL_RECEPTER } from '@/mocks/recepter'
 import { INITIAL_UDLAEGGERE } from '@/mocks/udlaeggere'
 import { formatWeekday, formatLongDate } from '@/utils/date'
+import { clusterEtaper, getMaterielUiState, DEMO_TRANSPORT_PLANER, transportKey } from './etape'
+import type { Etape, MaterielUiState, MaterielTransportPlan } from './etape'
+import {
+  MaterielPaaPladsenTilstand,
+  MaterielDvaleTilstand,
+  MaterielPlanlaegTilstand,
+  MaterielNyEtapeTilstand,
+} from './MaterielTilstande'
+import type { MaterielEnhed as MaterielEnhedTilstand } from './MaterielTilstande'
+import type { TransportPlanPatch } from './MaterielTilstande'
 import { formatPhone, toE164 } from '@shared/utils/phone'
 import { formatRegnr } from '@shared/utils/regnr'
 import type { DagsoverblikRegistrering } from '@/types/order'
@@ -278,7 +287,7 @@ const INITIAL_PRODUCTS: MockProduct[] = [
     estimatedTrucks: 2,
     estimatedTonsPerTruck: 26,
     startDate: '2026-03-17',
-    endDate: '2026-03-19',
+    endDate: '2026-07-07',
     kravTilSamlinger: 'Klæbet',
     ekstraTemperaturmaalinger: true,
     entreprisekontrol: 1,
@@ -291,6 +300,10 @@ const INITIAL_PRODUCTS: MockProduct[] = [
       },
       { id: 'd1-2', day: 2, date: '2026-03-18', tonsPlanned: 70, cancelled: false },
       { id: 'd1-3', day: 3, date: '2026-03-19', tonsPlanned: 60, cancelled: false },
+      // Etape 1 — juli (matcher DEMO_PLANLAGTE_DAGE fra etape.ts for seed-konsistens)
+      // TODO: Erstat med Supabase når klar — dage fra PLAN plan_dag-tabel
+      { id: 'd1-4', day: 4, date: '2026-07-06', tonsPlanned: 80, cancelled: false },
+      { id: 'd1-5', day: 5, date: '2026-07-07', tonsPlanned: 80, cancelled: false },
     ],
   },
   {
@@ -551,11 +564,6 @@ function dateToString(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
-function addDays(base: Date, n: number): Date {
-  const d = new Date(base)
-  d.setDate(d.getDate() + n)
-  return d
-}
 
 
 
@@ -750,7 +758,7 @@ const INITIAL_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
         ankomst_plads_tid: '06:30',
         laes_nummer: 1,
         moedetid_fabrik: '05:54',
-        sms_status: 'ikke_sendt',
+        sms_status: 'sendt',
         // time-afregning med prædufyldte værdier fra chauffør-app
         afregning: {
           afregning_type: 'time',
@@ -1275,22 +1283,22 @@ export function OrdrePlanScreen() {
   const [besigtigelseComment, setBesigtigelseComment] = useState('')
   const [noteComments, setNoteComments] = useState<NoteComment[]>(INITIAL_COMMENTS)
   const [sentDayIds, setSentDayIds] = useState<Set<string>>(new Set())
-  const [expandedResourceId, setExpandedResourceId] = useState<string | null>(null)
-  const [afhentningAdresse, setAfhentningAdresse] = useState<Record<string, string>>({})
-  const [afhentningPostnr, setAfhentningPostnr] = useState<Record<string, string>>({})
-  const [afhentningKlarDato, setAfhentningKlarDato] = useState<Record<string, string>>({})
-  const [afhentningKlarTid, setAfhentningKlarTid] = useState<Record<string, string>>({})
-  const [afhentningLeveringDato, setAfhentningLeveringDato] = useState<Record<string, string>>({})
-  const [afhentningLeveringTid, setAfhentningLeveringTid] = useState<Record<string, string>>({})
-  // null = ikke besvaret endnu, true = samme som første, false = nyt sted
-  const [sammeAflæsning, setSammeAflæsning] = useState<Record<string, boolean | null>>({})
+  // afhentningAdresse, afhentningPostnr, afhentningKlarDato/Tid, afhentningLeveringDato/Tid,
+  // sammeAflæsning og materielKommentar er MIGRERET til transportPlaner (MaterielTransportPlan
+  // pr. enhed × etape). Se transportPlaner-state nedenfor.
+  // TODO Round 4b: swap til faktiskPlanlagteDage + reel transport-state fra Supabase.
   const [kørselExpandedId, setKørselExpandedId] = useState<string | null>(null)
   // TODO: Erstat med Supabase når klar — afsendelsesgate for ASFALT-biler til vognmand, keyed på selectedPlanDate (ISO-dato-streng).
   // Seeder demo-dage som "Sendt til vognmand" (planlægnings-end-state: d2-1 = 16. marts, d2-2 = 17. marts).
   const [sendtTilVognmandDates, setSendtTilVognmandDates] = useState<Set<string>>(new Set(['2026-03-16', '2026-03-17']))
-  // TODO: Erstat med Supabase når klar — afsendelsesgate for MATERIELLEVERING til vognmand, keyed på resource-id. Uafhængig af asfalt-gate.
-  // Seeder de tidligere bekræftede materiel-enheder som "Sendt til vognmand" (planlægnings-end-state).
-  const [materielSendteEnhederIds, setMaterielSendteEnhederIds] = useState<Set<string>>(new Set(INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE.items.map(it => it.resourceId)))
+  // TODO: Erstat med Supabase når klar — afsendelsesgate for MATERIELLEVERING til vognmand.
+  // Re-keyed til transportKey(resourceId, etapeId) (Round 4a).
+  // Seeder r1×etape0 som "Sendt til vognmand" svarende til DEMO_TRANSPORT_PLANER (sendt:true, bekraeftet:true).
+  const [materielSendteEnhederIds, setMaterielSendteEnhederIds] = useState<Set<string>>(
+    () => new Set(
+      INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE.items.map(it => transportKey(it.resourceId, 0))
+    )
+  )
   // TODO: Erstat med Supabase når klar — fabrik-bestilling sendt pr. dag, keyed på selectedPlanDate (ISO-dato-streng)
   const [fabrikSendtDates, setFabrikSendtDates] = useState<Set<string>>(new Set())
   // TODO: Erstat med Supabase — d2-1 og d2-2 er forudfyldte til demo
@@ -1358,7 +1366,7 @@ export function OrdrePlanScreen() {
   const GOOGLE_KM = 36 // Google-beregnet køreafstand — bruges som hint hvis formand redigerer
   const factoryKm = GOOGLE_KM // display-only — km fra Google-integration (drivetid = km × 1 min)
   const [kørselKommentar, setKørselKommentar] = useState<Record<string, string>>({})
-  const [materielKommentar, setMaterielKommentar] = useState<Record<string, string>>({})
+  // materielKommentar MIGRERET til transportPlaner[key].kommentar — fjernet her.
   // TODO: Erstat med Supabase når klar — gemmes på plan_dag per ordre
   const [dagVognmand, setDagVognmand] = useState<Record<string, string>>({})             // dayId -> vognmandId
   const [dagAfregning, setDagAfregning] = useState<Record<string, 'time' | 'akkord'>>({}) // dayId -> 'time' | 'akkord'
@@ -1372,6 +1380,7 @@ export function OrdrePlanScreen() {
   )
   const [vognmandMaterielBekraeftelse] = useState<VognmandMaterielBekraeftelse>(INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE)
   // TODO: Erstat med Supabase når klar — opdateres via Realtime når vognmand bekræfter pr. enhed.
+  // Re-keyed til transportKey(resourceId, etapeId) (Round 4a).
   // Bekræftelse seedes IKKE i planlægnings-demoen — den er downstream (Udførsel).
   // Planlægnings-end-state = "Sendt til vognmand". Badge-lifecycle: gem → "Sendt til vognmand", vognmand-retur → "Bekræftet vognmand".
   const [bekraeftedeEnhederIds, setBekraeftedeEnhederIds] = useState<Set<string>>(
@@ -1419,27 +1428,42 @@ export function OrdrePlanScreen() {
   const days = activeProduct.days
   const activeDays = days.filter(d => !d.cancelled)
 
-  // ── Dato-først model ──────────────────────────────────────────────────────
-  // Ordrens samlede dag-spænd = min(start) til max(end) over alle produkter
-  const orderStartDate = useMemo(() => {
-    return products.reduce((min, p) => (p.startDate && (!min || p.startDate < min) ? p.startDate : min), '' as string)
-  }, [products])
-  const orderEndDate = useMemo(() => {
-    return products.reduce((max, p) => (p.endDate && (!max || p.endDate > max) ? p.endDate : max), '' as string)
+  // ─── Etape-bevidst materiel-model (Round 4c — LÅST 2026-06-23) ──────────────
+  //
+  // Datakilde: ordrens faktisk-planlagte dage fra ALLE produkters day-array,
+  // filtreret på tonsPlanned > 0 && !cancelled — IKKE et contiguous dag-fill.
+  // Dette spejler "Udføres i perioden = kun PLAN-planlagte dage"-reglen (FF Flow 1).
+  //
+  // TODO: Erstat med Supabase når klar — planlagte dage hentes fra plan_dag-tabellen.
+
+  /** Faktisk-planlagte dage på tværs af alle produkter — deduplikeret og sorteret. */
+  const faktiskPlanlagteDage = useMemo<string[]>(() => {
+    const datoSet = new Set<string>()
+    for (const p of products) {
+      for (const d of p.days) {
+        if (d.tonsPlanned > 0 && !d.cancelled) {
+          datoSet.add(d.date)
+        }
+      }
+    }
+    return [...datoSet].sort()
   }, [products])
 
-  // Alle dage i ordrens spænd (inkl. dage uden produkter — vises grayed-out i pillen)
+  // ── Dato-først model ──────────────────────────────────────────────────────
+  // Dato-piller i Planlægning-mode: faktisk-planlagte dage + én demo-dvale-dag
+  // så alle fire materiel-UX-tilstande kan nås via datovælgeren i prototype.
+  //
+  // DEMO_DVALE_DAG er en dag i gap'et mellem etape 0 (marts) og etape 1 (juli)
+  // — giver 'dvale'-tilstand i materiel-sektionen.
+  //
+  // TODO: Erstat med Supabase når klar — i produktion er alle PLAN-dage synlige
+  //   i datovælgeren; dvale-tilstanden opstår naturligt ved at vælge en dag uden
+  //   planlagte produkter (eller via notifikations-flow for næste etape).
+  const DEMO_DVALE_DAG = '2026-05-04'
   const planDays = useMemo(() => {
-    if (!orderStartDate || !orderEndDate) return [] as string[]
-    const out: string[] = []
-    let cur = new Date(orderStartDate + 'T00:00:00')
-    const end = new Date(orderEndDate + 'T00:00:00')
-    while (cur <= end) {
-      out.push(dateToString(cur))
-      cur = addDays(cur, 1)
-    }
-    return out
-  }, [orderStartDate, orderEndDate])
+    const all = new Set([...faktiskPlanlagteDage, DEMO_DVALE_DAG])
+    return [...all].sort()
+  }, [faktiskPlanlagteDage])
 
   // Produkter for valgt dag (med deres day-objekt for den dag)
   // Frasorterer produkter med 0 tons i hele deres udlægningsperiode (ikke blot på valgt dag).
@@ -1450,6 +1474,103 @@ export function OrdrePlanScreen() {
       .map(p => ({ product: p, day: p.days.find(d => d.date === selectedPlanDate) }))
       .filter((x): x is { product: MockProduct; day: DayPlan } => !!x.day)
   }, [products, selectedPlanDate])
+
+  /**
+   * Etaper klynget fra faktisk-planlagte dage (Round 4c: kilde = faktiskPlanlagteDage).
+   * Weekend-tolerant: lørdags-/søndagsgab bryder IKKE en etape.
+   *
+   * Med INITIAL_PRODUCTS' to etaper (marts + juli) giver dette:
+   *   etape 0: 2026-03-16 … 2026-03-19 (union p1+p2, firstDay = 2026-03-16)
+   *   etape 1: 2026-07-06 … 2026-07-07 (p1 july-dage, firstDay = 2026-07-06)
+   *
+   * TODO: Erstat med Supabase når klar — planlagte dage hentes fra plan_dag-tabellen.
+   */
+  const etaper = useMemo<Etape[]>(
+    () => clusterEtaper(faktiskPlanlagteDage),
+    [faktiskPlanlagteDage],
+  )
+
+  /**
+   * Aktuel materiel-UX-tilstand for den valgte dag.
+   */
+  const materielUiState = useMemo<MaterielUiState>(
+    () => getMaterielUiState(selectedPlanDate, etaper),
+    [selectedPlanDate, etaper],
+  )
+
+  /**
+   * Transport-planer keyed på transportKey(resourceId, etapeId).
+   * Mutable container-state — presentere opdaterer via onTransportChange/onTransportGem.
+   *
+   * Seed: DEMO_TRANSPORT_PLANER (etape 0: r1 planlagt, r2+r3 ikke-planlagt; etape 1: alle blank).
+   * Etape-id'erne 0 og 1 matcher clusterEtaper(faktiskPlanlagteDage) output ovenfor.
+   *
+   * TODO: Erstat med Supabase når klar — fra materiel_transport_plan-tabellen.
+   */
+  const [transportPlaner, setTransportPlaner] = useState<Record<string, MaterielTransportPlan>>(
+    () => ({ ...DEMO_TRANSPORT_PLANER })
+  )
+
+  /**
+   * Den etape der indeholder den valgte dag — bruges til transportKey-opslag i presentere.
+   * Undefined hvis dagen falder i et dvale-gap (dvale-tilstand viser ingen transport-planer).
+   */
+  const aktivEtape = useMemo<Etape | undefined>(
+    () => etaper.find(e => e.dates.includes(selectedPlanDate)),
+    [etaper, selectedPlanDate],
+  )
+
+  /**
+   * Pakke-ressourcer som MaterielEnhed-liste (subset til presentere).
+   * Udelukker 'egen-korsel'-enheder, da de ikke transporteres via vognmand.
+   */
+  const materielResources: MaterielEnhedTilstand[] = useMemo(
+    () =>
+      resources
+        .filter(r => r.transportTag !== 'egen-korsel')
+        .map(r => ({ id: r.id, plantNumber: r.plantNumber, description: r.description })),
+    [resources],
+  )
+
+  // ─── Round 4b: Auto-opret blanke transport-pladser ved ny etape ─────────────
+  //
+  // Idempotent effekt: når materielUiState er 'ny-etape' og aktivEtape er defineret,
+  // sikres at transportPlaner har en blank MaterielTransportPlan for HVER enhed i
+  // materielResources for den givne etape. Eksisterende planer overskrives IKKE.
+  //
+  // TODO: Erstat med Supabase når klar — auto-insert i materiel_transport_plan-tabellen
+  //   når en ny etape oprettes i PLAN (Supabase trigger eller server-action).
+  useEffect(() => {
+    if (materielUiState !== 'ny-etape' || !aktivEtape) return
+
+    setTransportPlaner(prev => {
+      let changed = false
+      const next = { ...prev }
+
+      for (const r of materielResources) {
+        const key = transportKey(r.id, aktivEtape.id)
+        if (!next[key]) {
+          changed = true
+          next[key] = {
+            resourceId: r.id,
+            etapeId: aktivEtape.id,
+            status: 'ikke-planlagt',
+            afhentning: { vejnavn: '', nummer: '', postnr: '' },
+            klar: { dato: '', tid: '' },
+            lokation: { dato: '', tid: '' },
+            aflaesning: '',
+            kommentar: '',
+            sendt: false,
+            bekraeftet: false,
+          }
+        }
+      }
+
+      return changed ? next : prev
+    })
+  }, [materielUiState, aktivEtape, materielResources])
+
+  // ─── End etape-model Round 4b ────────────────────────────────────────────
 
   // Default ordre/produkt på dato-skift: hvis det fokuserede produkt ikke har et
   // day-objekt for selectedPlanDate, skift til første produkt der HAR en day på dagen.
@@ -1529,24 +1650,74 @@ export function OrdrePlanScreen() {
     setFjernModalId(null)
   }
 
-  function markTransportPlanlagt(id: string) {
+  /**
+   * Gem transport for én enhed i én etape.
+   * Opdaterer: resources.status → 'planlagt', transportPlaner[key].status → 'planlagt',
+   * og fjerner nøglen fra bekræftede/sendte sæt (revert-on-edit).
+   */
+  function markTransportPlanlagt(resourceId: string, etapeId: number) {
+    const key = transportKey(resourceId, etapeId)
     setResources(prev => prev.map(r =>
-      r.id === id ? { ...r, status: 'planlagt' } : r
+      r.id === resourceId ? { ...r, status: 'planlagt' } : r
     ))
+    // Opdater transport-planens status til 'planlagt'
+    setTransportPlaner(prev => {
+      const existing = prev[key]
+      if (!existing) return prev
+      return { ...prev, [key]: { ...existing, status: 'planlagt' } }
+    })
     // Gem → "Planlagt" (fjern fra bekræftet-sæt).
     // "Bekræftet vognmand" gensættes kun når vognmand returnerer bekræftelse via Supabase Realtime.
     setBekraeftedeEnhederIds(prev => {
       const next = new Set(prev)
-      next.delete(id)
+      next.delete(key)
       return next
     })
-    // Rettelse efter afsendelse → tilbage til "Planlagt": sendt-status nulstilles, så enheden
-    // skal sendes igen (vognmandens kopi er forældet når formanden ændrer bestillingen).
+    // Revert-on-edit: rettelse efter afsendelse → tilbage til "Planlagt".
+    // Vognmandens kopi er forældet når formanden ændrer — sendt-status nulstilles.
     setMaterielSendteEnhederIds(prev => {
       const next = new Set(prev)
-      next.delete(id)
+      next.delete(key)
       return next
     })
+  }
+
+  /**
+   * Handler til presentere: opdaterer ét felt på én transport-plan.
+   * Keyer automatisk på transportKey(resourceId, etapeId).
+   */
+  function handleTransportChange(resourceId: string, etapeId: number, patch: TransportPlanPatch) {
+    const key = transportKey(resourceId, etapeId)
+    setTransportPlaner(prev => {
+      const existing = prev[key]
+      if (!existing) return prev
+      return { ...prev, [key]: { ...existing, ...patch } }
+    })
+  }
+
+  /**
+   * Handler til presentere: "Send til vognmand" section-level for alle planlagte usendte enheder
+   * i den givne etape. Keyer sendt-sæt med transportKey.
+   */
+  function handleMaterielSend(etape: Etape) {
+    const nyeSendte: string[] = []
+    for (const r of resources) {
+      const key = transportKey(r.id, etape.id)
+      const plan = transportPlaner[key]
+      if (plan?.status === 'planlagt' && !plan.sendt) {
+        nyeSendte.push(key)
+      }
+    }
+    if (nyeSendte.length === 0) return
+    // Enkelt state-opdatering for alle enheder (undgår batch-stale-closure problem)
+    setTransportPlaner(prev => {
+      const next = { ...prev }
+      for (const key of nyeSendte) {
+        next[key] = { ...next[key], sendt: true }
+      }
+      return next
+    })
+    setMaterielSendteEnhederIds(prev => new Set([...prev, ...nyeSendte]))
   }
 
   function gemKørsel(dayId: string) {
@@ -2472,9 +2643,8 @@ export function OrdrePlanScreen() {
                                 <div className="flex">
                                   <button
                                     onClick={() => setKørselExpandedId(day.id)}
-                                    className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-lg border border-hairline bg-white font-inter text-xs font-medium text-text-muted hover:text-text-primary transition-colors"
+                                    className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-lg border border-hairline font-inter text-xs font-medium text-dark-teal hover:bg-surface-2 transition-colors whitespace-nowrap min-h-touch"
                                   >
-                                    <Pencil size={11} />
                                     Ret
                                   </button>
                                 </div>
@@ -2995,6 +3165,20 @@ export function OrdrePlanScreen() {
           <section>
             <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Materiellevering</h2>
 
+            {/* Ny-etape container-niveau notifikation.
+                NOTE: MaterielNyEtapeTilstand (presenter) indeholder allerede et internt
+                warn-bg-banner med samme budskab ("Planlæg materiel-transport for etape N").
+                Det banner er synligt øverst i presenter-kortet, umiddelbart under denne
+                overskrift — et yderligere container-banner her ville være redundant.
+                Vi stoler på presenter-banneret og tilføjer i stedet kun en diskret
+                sektion-label-tilføjelse via mb-justering nedenfor.
+                Kilde: Round 4b-opgave, kriterium (b). */}
+            {!isSamleordreMode && materielUiState === 'ny-etape' && (
+              <p className="font-inter text-xs text-text-muted mb-xs">
+                Ny etape planlagt — materiel-transport skal planlægges
+              </p>
+            )}
+
             {/* Samleordre: vis sub-header pr. ordre */}
             {isSamleordreMode && samleordreCtx && (
               <>
@@ -3034,25 +3218,37 @@ export function OrdrePlanScreen() {
                                 </div>
                               </div>
                               <div>
-                                {/* Vognmand status badge — 3-state: Planlagt / Sendt til vognmand / Bekræftet vognmand. Keyed på resource-id. */}
-                                {r.status !== 'planlagt' ? (
-                                  <span className="inline-flex items-center gap-[5px] px-xs py-xxxs rounded-lg font-inter text-xs font-semibold whitespace-nowrap bg-[#F5F5F5] text-text-muted">
-                                    Ikke planlagt
-                                  </span>
-                                ) : bekraeftedeEnhederIds.has(r.id) ? (
-                                  // downstream/Udførsel-tilstand — ikke seedet i planlægnings-demoen
-                                  <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good font-inter text-xs font-semibold text-white whitespace-nowrap">
-                                    Bekræftet vognmand
-                                  </span>
-                                ) : materielSendteEnhederIds.has(r.id) ? (
-                                  <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-yellow/25 font-inter text-xs font-semibold text-[#8A6A00] whitespace-nowrap">
-                                    Sendt til vognmand
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-[#F5F5F5] font-inter text-xs font-semibold text-text-muted whitespace-nowrap">
-                                    Planlagt
-                                  </span>
-                                )}
+                                {/* Vognmand status badge — 3-state — re-keyed til transportKey(resourceId, etapeId) (Round 4a). */}
+                                {(() => {
+                                  const etapeId = aktivEtape?.id ?? 0
+                                  const key = transportKey(r.id, etapeId)
+                                  if (r.status !== 'planlagt') {
+                                    return (
+                                      <span className="inline-flex items-center px-xs py-xxxs rounded-lg font-inter text-xs font-semibold whitespace-nowrap bg-surface-2 text-text-muted">
+                                        Ikke planlagt
+                                      </span>
+                                    )
+                                  }
+                                  if (bekraeftedeEnhederIds.has(key)) {
+                                    return (
+                                      <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good-bg font-inter text-xs font-semibold text-good whitespace-nowrap">
+                                        Bekræftet vognmand
+                                      </span>
+                                    )
+                                  }
+                                  if (materielSendteEnhederIds.has(key)) {
+                                    return (
+                                      <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-warn-bg font-inter text-xs font-semibold text-text-secondary whitespace-nowrap">
+                                        Sendt til vognmand
+                                      </span>
+                                    )
+                                  }
+                                  return (
+                                    <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-surface-2 font-inter text-xs font-semibold text-text-muted whitespace-nowrap">
+                                      Planlagt
+                                    </span>
+                                  )
+                                })()}
                               </div>
                             </div>
                           </div>
@@ -3068,285 +3264,78 @@ export function OrdrePlanScreen() {
               </>
             )}
 
-            {/* Normal mode: eksisterende fulde materiel-liste */}
-            {!isSamleordreMode && (
-            <div className="bg-white border border-hairline rounded-xl overflow-hidden mb-sm">
-              {resources.map((r, i) => {
-                const isExpanded = expandedResourceId === r.id
-                const erFørste = i === 0
-                const firstResource = resources[0]
-                const sammeAflæsningValg = sammeAflæsning[r.id] ?? null
+            {/* Normal mode: etape-bevidste presentere (Round 4a) */}
+            {!isSamleordreMode && (() => {
+              // Brancher på materielUiState — afledt af selectedPlanDate + etaper
+              if (materielUiState === 'planlaeg' && aktivEtape) {
                 return (
-                  <div key={r.id} className={i < resources.length - 1 || isExpanded ? 'border-b border-hairline' : ''}>
-                    {/* Hoved-række */}
-                    <div
-                      className={`grid items-center gap-md px-sm py-sm transition-colors ${!isExpanded ? 'hover:bg-[#F5F5F5]' : ''}`}
-                      style={{ gridTemplateColumns: '36px 1fr auto' }}
+                  <>
+                    <MaterielPlanlaegTilstand
+                      resources={materielResources}
+                      etape={aktivEtape}
+                      transportPlaner={transportPlaner}
+                      onChange={(resourceId, patch) =>
+                        handleTransportChange(resourceId, aktivEtape.id, patch)
+                      }
+                      onGem={(resourceId) =>
+                        markTransportPlanlagt(resourceId, aktivEtape.id)
+                      }
+                      onSend={() => handleMaterielSend(aktivEtape)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { setTilfoejMaterielOpen(true); setMaterielSoeg('') }}
+                      className="w-full flex items-center justify-center gap-xs py-xs font-inter text-sm text-text-muted border border-hairline rounded-xl bg-surface hover:bg-surface-2 transition-colors mt-xxxs"
                     >
-                      <div className="w-9 h-9 rounded-md bg-soft-aqua flex items-center justify-center text-deep-teal">
-                        <Truck size={16} />
-                      </div>
-                      <div>
-                        <p className="font-inter text-sm font-medium text-text-primary">{r.description}</p>
-                        <div className="flex items-center gap-xs mt-xxxs">
-                          <span className="font-inter text-xs text-text-muted tabular-nums">{r.plantNumber}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-xs">
-                        {r.status === 'planlagt' && !isExpanded ? (
-                          <>
-                            {/* Vognmand status badge — 3-state: Planlagt / Sendt til vognmand / Bekræftet vognmand. Keyed på resource-id. */}
-                            {bekraeftedeEnhederIds.has(r.id) ? (
-                              // downstream/Udførsel-tilstand — ikke seedet i planlægnings-demoen
-                              <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good font-inter text-xs font-semibold text-white whitespace-nowrap">
-                                Bekræftet vognmand
-                              </span>
-                            ) : materielSendteEnhederIds.has(r.id) ? (
-                              <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-yellow/25 font-inter text-xs font-semibold text-[#8A6A00] whitespace-nowrap">
-                                Sendt til vognmand
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-[#F5F5F5] font-inter text-xs font-semibold text-text-muted whitespace-nowrap">
-                                Planlagt
-                              </span>
-                            )}
-                            {/* Ret skjules når enheden er bekræftet af vognmand (FUNCTIONAL_FLOWS Trin 2) */}
-                            {!bekraeftedeEnhederIds.has(r.id) && (
-                              <button
-                                onClick={() => setExpandedResourceId(r.id)}
-                                className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-lg border border-hairline font-inter text-xs font-medium text-dark-teal hover:bg-[#F5F5F5] transition-colors whitespace-nowrap"
-                              >
-                                <Pencil size={11} />
-                                Ret
-                              </button>
-                            )}
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => isExpanded ? (markTransportPlanlagt(r.id), setExpandedResourceId(null)) : setExpandedResourceId(r.id)}
-                            className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap"
-                          >
-                            {isExpanded ? 'Gem transport' : 'Planlæg transport'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Expand — transport-planlægning */}
-                    {isExpanded && (
-                      <div className="mx-sm mb-lg rounded-xl border border-dark-teal/20 bg-soft-aqua shadow-sm flex flex-col gap-md p-md">
-
-                        {/* Afhentning */}
-                        <div className="flex flex-col gap-xs">
-                          <p className="font-inter text-xs font-semibold text-text-primary">Afhentningssted</p>
-
-                          <div className="grid grid-cols-2 gap-xs">
-                            <div className="flex flex-col gap-xxxs col-span-2">
-                              <label className="font-inter text-xxs text-text-muted">Adresse</label>
-                              <input
-                                type="text"
-                                value={afhentningAdresse[r.id] ?? ''}
-                                onChange={e => setAfhentningAdresse(prev => ({ ...prev, [r.id]: e.target.value }))}
-                                placeholder="Vejnavn og nummer"
-                                className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal placeholder:text-text-muted"
-                              />
-                            </div>
-                            <div className="flex flex-col gap-xxxs">
-                              <label className="font-inter text-xxs text-text-muted">Postnummer</label>
-                              <input
-                                type="text"
-                                value={afhentningPostnr[r.id] ?? ''}
-                                onChange={e => setAfhentningPostnr(prev => ({ ...prev, [r.id]: e.target.value }))}
-                                placeholder="0000"
-                                className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal placeholder:text-text-muted"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col gap-xxxs">
-                            <label className="font-inter text-xxs text-text-muted font-semibold">Klar til afhentning</label>
-                            <div className="grid grid-cols-2 gap-xs">
-                              <div className="flex flex-col gap-xxxs">
-                                <label className="font-inter text-xxs text-text-muted">Dato</label>
-                                <input
-                                  type="date"
-                                  value={afhentningKlarDato[r.id] ?? ''}
-                                  onChange={e => setAfhentningKlarDato(prev => ({ ...prev, [r.id]: e.target.value }))}
-                                  className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                                />
-                              </div>
-                              <div className="flex flex-col gap-xxxs">
-                                <label className="font-inter text-xxs text-text-muted">Klokkeslæt</label>
-                                <input
-                                  type="time"
-                                  value={afhentningKlarTid[r.id] ?? ''}
-                                  onChange={e => setAfhentningKlarTid(prev => ({ ...prev, [r.id]: e.target.value }))}
-                                  className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col gap-xxxs">
-                            <label className="font-inter text-xxs text-text-muted font-semibold">Skal være på lokation</label>
-                            <div className="grid grid-cols-2 gap-xs">
-                              <div className="flex flex-col gap-xxxs">
-                                <label className="font-inter text-xxs text-text-muted">Dato</label>
-                                <input
-                                  type="date"
-                                  value={afhentningLeveringDato[r.id] ?? ''}
-                                  onChange={e => setAfhentningLeveringDato(prev => ({ ...prev, [r.id]: e.target.value }))}
-                                  className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                                />
-                              </div>
-                              <div className="flex flex-col gap-xxxs">
-                                <label className="font-inter text-xxs text-text-muted">Klokkeslæt</label>
-                                <input
-                                  type="time"
-                                  value={afhentningLeveringTid[r.id] ?? ''}
-                                  onChange={e => setAfhentningLeveringTid(prev => ({ ...prev, [r.id]: e.target.value }))}
-                                  className="font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col gap-xxxs">
-                            <label className="font-inter text-xxs text-text-muted">Kommentar til vognmand</label>
-                            <textarea
-                              value={materielKommentar[r.id] ?? ''}
-                              onChange={e => setMaterielKommentar(prev => ({ ...prev, [r.id]: e.target.value }))}
-                              rows={2}
-                              placeholder="Særlige forhold, adgang, tidsvinduer..."
-                              className="w-full font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal transition-colors resize-none leading-relaxed"
-                            />
-                          </div>
-
-                          {/* Kort til markering af afhentningssted */}
-                          <div className="w-full h-[140px] rounded-xl bg-[#E8EFF5] border border-hairline flex flex-col items-center justify-center gap-xs text-text-muted">
-                            <div className="w-8 h-8 rounded-full bg-dark-teal/10 flex items-center justify-center">
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-dark-teal"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg>
-                            </div>
-                            <p className="font-inter text-xs text-text-muted">Kortintegration tilgængelig efter opsætning</p>
-                            <p className="font-inter text-xxs text-text-muted opacity-60">Klik for at markere afhentningssted</p>
-                          </div>
-                        </div>
-
-                        <hr className="border-hairline" />
-
-                        {/* Aflæsning */}
-                        <div className="flex flex-col gap-xs">
-                          <p className="font-inter text-xs font-semibold text-text-primary">Aflæsningssted</p>
-
-                          {/* Spørg fra 2. materiel og frem */}
-                          {!erFørste && sammeAflæsningValg === null && (
-                            <div className="flex items-center gap-sm bg-white border border-hairline rounded-xl px-sm py-xs">
-                              <span className="font-inter text-xs text-text-secondary flex-1">
-                                Samme aflæsningssted som <span className="font-medium text-text-primary">{firstResource.description}</span>?
-                              </span>
-                              <div className="flex bg-white border border-hairline rounded-md p-xxxs gap-xxxs">
-                                <button
-                                  onClick={() => setSammeAflæsning(prev => ({ ...prev, [r.id]: true }))}
-                                  className={`px-sm py-xxxs rounded-sm font-inter text-xs font-semibold transition-colors ${sammeAflæsningValg === true ? 'bg-deep-teal text-white' : 'text-text-muted hover:bg-soft-aqua'}`}
-                                >Ja</button>
-                                <button
-                                  onClick={() => setSammeAflæsning(prev => ({ ...prev, [r.id]: false }))}
-                                  className={`px-sm py-xxxs rounded-sm font-inter text-xs font-semibold transition-colors ${sammeAflæsningValg === false ? 'bg-deep-teal text-white' : 'text-text-muted hover:bg-soft-aqua'}`}
-                                >Nej</button>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Arvet aflæsningssted */}
-                          {!erFørste && sammeAflæsningValg === true && (
-                            <div className="flex items-center justify-between bg-[#E7F4EE] border border-[#1F8A5B]/20 rounded-xl px-sm py-xs">
-                              <div className="flex items-center gap-xs">
-                                <span className="w-[6px] h-[6px] rounded-full bg-[#1F8A5B] flex-shrink-0" />
-                                <span className="font-inter text-xs text-text-secondary">
-                                  Arver aflæsningssted fra <span className="font-medium text-text-primary">{firstResource.description}</span>
-                                </span>
-                              </div>
-                              <button
-                                onClick={() => setSammeAflæsning(prev => ({ ...prev, [r.id]: null }))}
-                                className="font-inter text-xxs text-text-muted hover:text-text-primary transition-colors"
-                              >Ændre</button>
-                            </div>
-                          )}
-
-                          {/* Vis kort: altid for første, eller hvis valgt "nej" */}
-                          {(erFørste || sammeAflæsningValg === false) && (
-                            <div className="w-full h-[140px] rounded-xl bg-[#E8EFF5] border border-hairline flex flex-col items-center justify-center gap-xs text-text-muted">
-                              <div className="w-8 h-8 rounded-full bg-dark-teal/10 flex items-center justify-center">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-dark-teal"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg>
-                              </div>
-                              <p className="font-inter text-xs text-text-muted">Kortintegration tilgængelig efter opsætning</p>
-                              <p className="font-inter text-xxs text-text-muted opacity-60">Klik for at markere aflæsningssted</p>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Gem-knap */}
-                        <div className="flex justify-end gap-xs pt-xxxs">
-                          <button
-                            onClick={() => setExpandedResourceId(null)}
-                            className="font-inter text-xs text-text-muted hover:text-text-primary px-xs py-xxxs"
-                          >
-                            Annullér
-                          </button>
-                          <button
-                            onClick={() => { markTransportPlanlagt(r.id); setExpandedResourceId(null) }}
-                            className="font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90"
-                          >
-                            Gem transport
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                      <Plus size={14} aria-hidden="true" />
+                      Tilføj materiel
+                    </button>
+                  </>
                 )
-              })}
-              {/* Send til vognmand — materiellevering section-level afledt tilstand.
-                  Keyed på resource-id (ikke dato) så HVER enhed kan sendes uafhængigt.
-                  Vises KUN når der er mindst én planlagt enhed (status === 'planlagt').
-                  Gul = usendte planlagte enheder findes; grøn (disabled) = alle planlagte enheder er sendt.
-                  Klik sender ALLE usendte planlagte enheder — allerede-sendte røres ikke.
-                  TODO: Erstat med Supabase når klar — insert i vognmand_materiel_bestilling-tabel */}
-              {!isSamleordreMode && (() => {
-                const planlagteEnheder = resources.filter(r => r.status === 'planlagt')
-                if (planlagteEnheder.length === 0) return null
-                const usendteEnheder = planlagteEnheder.filter(r => !materielSendteEnhederIds.has(r.id))
-                const harUsendte = usendteEnheder.length > 0
+              }
+              if (materielUiState === 'ny-etape' && aktivEtape) {
                 return (
-                  <div className="border-t border-hairline px-sm py-sm flex items-center justify-between">
-                    {harUsendte ? (
-                      <button
-                        type="button"
-                        onClick={() => setMaterielSendteEnhederIds(prev => new Set([...prev, ...usendteEnheder.map(r => r.id)]))}
-                        className="inline-flex items-center font-inter text-sm font-semibold text-deep-teal bg-yellow px-sm py-xs rounded-lg hover:opacity-90 active:scale-[0.98] transition-all min-h-[44px]"
-                      >
-                        Send til vognmand
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled
-                        className="inline-flex items-center font-inter text-sm font-semibold text-white bg-good px-sm py-xs rounded-lg min-h-[44px] cursor-default"
-                      >
-                        Sendt til vognmand
-                      </button>
-                    )}
-                  </div>
+                  <>
+                    <MaterielNyEtapeTilstand
+                      resources={materielResources}
+                      etape={aktivEtape}
+                      transportPlaner={transportPlaner}
+                      onChange={(resourceId, patch) =>
+                        handleTransportChange(resourceId, aktivEtape.id, patch)
+                      }
+                      onGem={(resourceId) =>
+                        markTransportPlanlagt(resourceId, aktivEtape.id)
+                      }
+                      onSend={() => handleMaterielSend(aktivEtape)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { setTilfoejMaterielOpen(true); setMaterielSoeg('') }}
+                      className="w-full flex items-center justify-center gap-xs py-xs font-inter text-sm text-text-muted border border-hairline rounded-xl bg-surface hover:bg-surface-2 transition-colors mt-xxxs"
+                    >
+                      <Plus size={14} aria-hidden="true" />
+                      Tilføj materiel
+                    </button>
+                  </>
                 )
-              })()}
-              <button
-                onClick={() => { setTilfoejMaterielOpen(true); setMaterielSoeg('') }}
-                className="w-full flex items-center justify-center gap-xs py-xs font-inter text-sm text-text-muted border-t border-hairline bg-[#F5F5F5] hover:bg-hairline transition-colors"
-              >
-                <Plus size={14} />
-                Tilføj materiel
-              </button>
-            </div>
-            )}
+              }
+              if (materielUiState === 'paa-pladsen' && aktivEtape) {
+                return (
+                  <MaterielPaaPladsenTilstand
+                    resources={materielResources}
+                    etape={aktivEtape}
+                    transportPlaner={transportPlaner}
+                  />
+                )
+              }
+              // dvale (gap mellem etaper eller dag uden etape)
+              const naestEtape = etaper.find(e => e.firstDay > selectedPlanDate)
+              return (
+                <MaterielDvaleTilstand
+                  naestEtapeStartDato={naestEtape?.firstDay}
+                />
+              )
+            })()}
 
           </section>
 
@@ -3376,6 +3365,9 @@ export function OrdrePlanScreen() {
               setEkstraLinjer={setEkstraLinjer}
               ekstraSent={ekstraSent}
               setEkstraSent={setEkstraSent}
+              materielUiState={materielUiState}
+              etaper={etaper}
+              transportPlaner={transportPlaner}
             />
           )}
 
@@ -4252,6 +4244,28 @@ function OvrigeOplysningerSkema3a({
   const [komprimering, setKomprimering] = useState<'ja' | 'nej' | null>(null)
   const [laboratoriekontrol, setLaboratoriekontrol] = useState<'ja' | 'nej' | null>(null)
 
+  // Materialer — 4 temperaturmålinger (blanket-sektion "3. Materialer")
+  // TODO: Erstat med Supabase når klar — tidspunkterne auto-præudfyldes i produktion
+  // fra dagens afsluttede læs ved dagens afslutning; temperatur indtastes manuelt af formanden.
+  const [materialeMaalinger, setMaterialeMaalinger] = useState<
+    { uensartede: 'ja' | 'nej' | null; temperaturC: string; klokkeslaet: string }[]
+  >([
+    { uensartede: 'nej', temperaturC: '', klokkeslaet: '20:30' },
+    { uensartede: 'nej', temperaturC: '', klokkeslaet: '22:00' },
+    { uensartede: 'nej', temperaturC: '', klokkeslaet: '00:00' },
+    { uensartede: 'nej', temperaturC: '', klokkeslaet: '03:00' },
+  ])
+
+  function updateMaaling(
+    idx: number,
+    field: 'uensartede' | 'temperaturC' | 'klokkeslaet',
+    value: 'ja' | 'nej' | null | string
+  ) {
+    setMaterialeMaalinger(prev =>
+      prev.map((m, i) => (i === idx ? { ...m, [field]: value } : m))
+    )
+  }
+
   const [saved3a, setSaved3a] = useState(false)
 
   return (
@@ -4307,6 +4321,50 @@ function OvrigeOplysningerSkema3a({
                 <span className={KS_LABEL_CLS}>Nej</span>
               </label>
             </div>
+          </div>
+        </div>
+      </fieldset>
+
+      {/* Materialer — blanket-sektion "3. Materialer": 4 temperaturmålinger som 4 kolonner */}
+      <fieldset className="border border-hairline rounded-lg p-sm">
+        <legend className="font-poppins text-xs font-semibold text-text-primary px-xs">Materialer</legend>
+        <div className="mt-xs space-y-xs">
+          {/* Række-label + 4-kolonne grid */}
+          <div className="grid grid-cols-4 gap-sm">
+            {materialeMaalinger.map((m, idx) => (
+              <div key={idx} className="flex flex-col gap-xxxs">
+                <span className={KS_LABEL_CLS + ' text-center'}>Måling {idx + 1}</span>
+                {/* Uensartede — separat JaNejToggle pr. kolonne */}
+                <div className="flex flex-col gap-xxxs">
+                  <span className={KS_LABEL_CLS}>Uensartede</span>
+                  <JaNejToggle
+                    value={m.uensartede}
+                    onChange={val => updateMaaling(idx, 'uensartede', val)}
+                  />
+                </div>
+                {/* Temperatur */}
+                <div className="flex flex-col gap-xxxs">
+                  <label className={KS_LABEL_CLS}>°C</label>
+                  <input
+                    type="number"
+                    value={m.temperaturC}
+                    onChange={e => updateMaaling(idx, 'temperaturC', e.target.value)}
+                    placeholder="–"
+                    className={KS_INPUT_CLS}
+                  />
+                </div>
+                {/* Klokkeslæt — præudfyldt med jævnt fordelte tidspunkter for aften/nat-udlægning */}
+                <div className="flex flex-col gap-xxxs">
+                  <label className={KS_LABEL_CLS}>Kl</label>
+                  <input
+                    type="time"
+                    value={m.klokkeslaet}
+                    onChange={e => updateMaaling(idx, 'klokkeslaet', e.target.value)}
+                    className={KS_INPUT_CLS}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </fieldset>
@@ -5104,7 +5162,7 @@ const MATERIEL_ENHEDER: MaterielEnhed[] = [
   { anlaegsNr: '7-0078', beskrivelse: 'HAMM DV70VV' },
 ]
 
-function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeftelse, vognmandMaterielBekraeftelse, products, isSamleordreMode, samleordreCtx, samleordreTabOrderNr, makeOrdredetaljerCard, renderOrdredetaljerCollapsedPille, selectedDate, onSelectDate, ekstraLinjer, setEkstraLinjer, ekstraSent, setEkstraSent }: {
+function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeftelse, vognmandMaterielBekraeftelse, products, isSamleordreMode, samleordreCtx, samleordreTabOrderNr, makeOrdredetaljerCard, renderOrdredetaljerCollapsedPille, selectedDate, onSelectDate, ekstraLinjer, setEkstraLinjer, ekstraSent, setEkstraSent, materielUiState, etaper, transportPlaner }: {
   forundersoegelseFotos: MockPhoto[]
   onAddPhotos: (p: MockPhoto[]) => void
   vognmandBekraeftelse?: VognmandBekraeftelse
@@ -5137,6 +5195,12 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
   /** Om ekstraarbejde er sendt (godkendt) — løftet til root */
   ekstraSent: boolean
   setEkstraSent: (b: boolean) => void
+  /** Etape-bevidst UX-tilstand for materiel-sektionen — afledt af selectedDate + etaper i root */
+  materielUiState: MaterielUiState
+  /** Klyngede etaper for ordren (fra root) */
+  etaper: Etape[]
+  /** Transport-planer keyed på transportKey(resourceId, etapeId) (fra root) */
+  transportPlaner: Record<string, MaterielTransportPlan>
 }) {
   const setSelectedDate = onSelectDate
 
@@ -5207,9 +5271,13 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
   // TODO: Erstat med Supabase når klar — materiel_transport[].sms_status pr. (ordre, dag, regnr)
   const [materielSmsStatusMap, setMaterielSmsStatusMap] = useState<Record<string, ChauffoerSmsStatus>>(() => {
     const map: Record<string, ChauffoerSmsStatus> = {}
-    for (const item of (vognmandMaterielBekraeftelse?.items ?? [])) {
+    const items = vognmandMaterielBekraeftelse?.items ?? []
+    // Første unikke regnr (øverste transport-bil) vises som 'sendt' — demo-default
+    let foerste = true
+    for (const item of items) {
       if (!(item.regnr in map)) {
-        map[item.regnr] = 'ikke_sendt'
+        map[item.regnr] = foerste ? 'sendt' : 'ikke_sendt'
+        foerste = false
       }
     }
     return map
@@ -5265,26 +5333,18 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
     e.target.value = ''
   }
 
-  // Beregn ordrens start- og slutdato (union af alle produkter — matcher "Udføres i perioden"-cellen)
-  const orderStartDate = useMemo(() =>
-    products.reduce((min, p) => (p.startDate && (!min || p.startDate < min) ? p.startDate : min), '' as string),
-  [products])
-  const orderEndDate = useMemo(() =>
-    products.reduce((max, p) => (p.endDate && (!max || p.endDate > max) ? p.endDate : max), '' as string),
-  [products])
-
-  // Dato-piller: præcis orderStartDate..orderEndDate (inklusiv) — matcher Ordredetaljer-cellens range
-  const udfoerselDays = useMemo(() => {
-    if (!orderStartDate || !orderEndDate) return [] as string[]
-    const out: string[] = []
-    let cur = new Date(orderStartDate + 'T00:00:00')
-    const end = new Date(orderEndDate + 'T00:00:00')
-    while (cur <= end) {
-      out.push(dateToString(cur))
-      cur = addDays(cur, 1)
+  // Dato-piller: faktisk-planlagte dage (tonsPlanned > 0 && !cancelled) — ikke contiguous fill.
+  // Spejler "Udføres i perioden = kun PLAN-planlagte dage"-reglen (FF Flow 1, LÅST 2026-06-23).
+  // TODO: Erstat med Supabase når klar — dage fra plan_dag-tabellen.
+  const udfoerselDays = useMemo<string[]>(() => {
+    const datoSet = new Set<string>()
+    for (const p of products) {
+      for (const d of p.days) {
+        if (d.tonsPlanned > 0 && !d.cancelled) datoSet.add(d.date)
+      }
     }
-    return out
-  }, [orderStartDate, orderEndDate])
+    return [...datoSet].sort()
+  }, [products])
 
   return (
     <div className="flex flex-col gap-[48px]">
@@ -5393,7 +5453,6 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                   <div className="flex items-center justify-between px-sm py-xs border-b border-good/20">
                     <div className="flex items-center gap-xs">
                       <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">Biler</span>
-                      <span className="font-inter text-xxs font-semibold text-good">Bekræftet</span>
                     </div>
                     <span className="font-poppins font-semibold text-sm text-text-primary">{bilerTypeTekst}</span>
                   </div>
@@ -5440,34 +5499,51 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                                     <>
                                       <span
                                         className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-good bg-good-bg border border-good/40 rounded-md px-xs min-h-[44px] min-w-[44px]"
-                                        aria-label={`SMS sendt til ${b.chauffoer}`}
+                                        aria-label={`Ordre sendt til chauffør ${b.chauffoer}`}
                                       >
-                                        Sendt ✓
+                                        Ordre sendt til chauffør
                                       </span>
                                       <button
                                         type="button"
                                         onClick={() => sendSms(b.regnr)}
-                                        aria-label={`Gensend SMS til ${b.chauffoer}`}
+                                        aria-label={`Gensend ordre til ${b.chauffoer}`}
                                         className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-[44px] min-w-[44px]"
                                       >
-                                        Gensend
+                                        Gensend ordre
+                                      </button>
+                                    </>
+                                  ) : smsStatus === 'aendret_siden_afsendelse' ? (
+                                    <>
+                                      <span
+                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-warning bg-warning-bg border border-warning/40 rounded-md px-xs min-h-[44px] min-w-[44px]"
+                                        aria-label={`Ordre opdateret siden afsendelse — ${b.chauffoer}`}
+                                      >
+                                        Ordre opdateret
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => sendSms(b.regnr)}
+                                        aria-label={`Gensend ordre til ${b.chauffoer}`}
+                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-[44px] min-w-[44px]"
+                                      >
+                                        Gensend ordre
                                       </button>
                                     </>
                                   ) : (
                                     <>
                                       <span
                                         className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs text-text-muted border border-hairline rounded-md px-xs min-h-[44px] min-w-[44px]"
-                                        aria-label={`Afventer auto-afsendelse til ${b.chauffoer}`}
+                                        aria-label={`Ordre afventer afsendelse — ${b.chauffoer}`}
                                       >
                                         Afventer afsendelse
                                       </span>
                                       <button
                                         type="button"
                                         onClick={() => sendSms(b.regnr)}
-                                        aria-label={`Send SMS nu til ${b.chauffoer}`}
+                                        aria-label={`Send ordre til ${b.chauffoer} nu`}
                                         className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-[44px] min-w-[44px]"
                                       >
-                                        Send nu
+                                        Send ordre nu
                                       </button>
                                     </>
                                   )}
@@ -5503,14 +5579,46 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                 </div>
               ) : null}
 
-              {/* Materiel transport — tabel i enkelt-ordre bekræftet-tilstand; status-kort ellers */}
-              {visMaterielDetalje ? (
+              {/* ── Materiel transport — etape-bewidst branch (Round 3 — LÅST 2026-06-23) ─────────
+                  'planlaeg' | 'ny-etape' → eksisterende tabel (transport sker denne dag)
+                  'paa-pladsen'           → read-only MaterielPaaPladsenTilstand (transport afsluttet)
+                  'dvale'                 → MaterielDvaleTilstand (gap mellem etaper)
+                  Asfalt-biler-sektionen OVENFOR er urørt — den er IKKE etape-branchet.
+                  TODO: Erstat MATERIEL_ENHEDER med Supabase-data når klar. */}
+              {(materielUiState === 'paa-pladsen') ? (() => {
+                // Find aktiv etape for selectedDate
+                const aktivEtape = etaper.find(e => e.dates.includes(selectedDate))
+                if (!aktivEtape) return null
+                // Map lokale MaterielEnhed → MaterielEnhedTilstand (id, plantNumber, description)
+                const tilstandEnheder: MaterielEnhedTilstand[] = MATERIEL_ENHEDER.map(m => ({
+                  id: m.anlaegsNr,
+                  plantNumber: m.anlaegsNr,
+                  description: m.beskrivelse,
+                }))
+                return (
+                  <MaterielPaaPladsenTilstand
+                    resources={tilstandEnheder}
+                    etape={aktivEtape}
+                    transportPlaner={transportPlaner}
+                  />
+                )
+              })() : (materielUiState === 'dvale') ? (() => {
+                // Find næste etapes startdato — vis til formanden hvis planlagt
+                const naestEtape = etaper.find(e => e.startDate > selectedDate)
+                return (
+                  <MaterielDvaleTilstand
+                    naestEtapeStartDato={naestEtape?.startDate}
+                  />
+                )
+              })() : (
+              /* 'planlaeg' | 'ny-etape' — eksisterende materiel-transport-tabel (uændret) */
+              /* Materiel transport — tabel i enkelt-ordre bekræftet-tilstand; status-kort ellers */
+              visMaterielDetalje ? (
                 /* ── Materiel-tabel (bekræftet, enkelt-ordre) — FF Trin 7 (LÅST 2026-06-15) ── */
                 <div className="overflow-hidden rounded-xl border border-good/30 bg-good-bg">
                   <div className="flex items-center justify-between px-sm py-xs border-b border-good/20">
                     <div className="flex items-center gap-xs">
                       <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">Materiel transport</span>
-                      <span className="font-inter text-xxs font-semibold text-good">Bekræftet</span>
                     </div>
                     <span className="font-poppins font-semibold text-sm text-text-primary">{materielTypeTekst}</span>
                   </div>
@@ -5571,35 +5679,52 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                                       {erSendt ? (
                                         <>
                                           <span
-                                            className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-good bg-good-bg border border-good/40 rounded-md px-xs min-h-[44px] min-w-[44px]"
-                                            aria-label={`SMS sendt til ${m.chauffoer}`}
+                                            className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-good bg-good-bg border border-good/40 rounded-md px-xs min-h-touch min-w-touch"
+                                            aria-label={`Ordre sendt til chauffør ${m.chauffoer}`}
                                           >
-                                            Sendt ✓
+                                            Ordre sendt til chauffør
                                           </span>
                                           <button
                                             type="button"
                                             onClick={() => sendMaterielSms(m.regnr)}
-                                            aria-label={`Gensend materiel SMS til ${m.chauffoer}`}
-                                            className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-[44px] min-w-[44px]"
+                                            aria-label={`Gensend ordre til ${m.chauffoer}`}
+                                            className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-touch min-w-touch"
                                           >
-                                            Gensend
+                                            Gensend ordre
+                                          </button>
+                                        </>
+                                      ) : materielSmsStatus === 'aendret_siden_afsendelse' ? (
+                                        <>
+                                          <span
+                                            className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-warning bg-warning-bg border border-warning/40 rounded-md px-xs min-h-touch min-w-touch"
+                                            aria-label={`Ordre opdateret siden afsendelse — ${m.chauffoer}`}
+                                          >
+                                            Ordre opdateret
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => sendMaterielSms(m.regnr)}
+                                            aria-label={`Gensend ordre til ${m.chauffoer}`}
+                                            className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-touch min-w-touch"
+                                          >
+                                            Gensend ordre
                                           </button>
                                         </>
                                       ) : (
                                         <>
                                           <span
-                                            className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs text-text-muted border border-hairline rounded-md px-xs min-h-[44px] min-w-[44px]"
-                                            aria-label={`Afventer auto-afsendelse til ${m.chauffoer}`}
+                                            className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs text-text-muted border border-hairline rounded-md px-xs min-h-touch min-w-touch"
+                                            aria-label={`Ordre afventer afsendelse — ${m.chauffoer}`}
                                           >
                                             Afventer afsendelse
                                           </span>
                                           <button
                                             type="button"
                                             onClick={() => sendMaterielSms(m.regnr)}
-                                            aria-label={`Send materiel SMS nu til ${m.chauffoer}`}
-                                            className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-[44px] min-w-[44px]"
+                                            aria-label={`Send ordre til ${m.chauffoer} nu`}
+                                            className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-touch min-w-touch"
                                           >
-                                            Send nu
+                                            Send ordre nu
                                           </button>
                                         </>
                                       )}
@@ -5650,6 +5775,9 @@ function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeft
                     {displayMaterielBekraeftet ? 'Bekræftet vognmand' : 'Afventer bekræftelse'}
                   </span>
                 </div>
+              /* visMaterielDetalje-ternary slutter */
+              )
+              /* planlaeg/ny-etape-branch slutter */
               )}
             </div>
           )
@@ -6208,26 +6336,20 @@ function AfregningContent({ vognmandBekraeftelse, todayDay, isSamleordreMode, sa
   // ── Ordredetaljer state (separat fra UdfoerselContent's detailsExpanded) ────
   const [detailsExpandedAfregning, setDetailsExpandedAfregning] = useState(true)
 
-  // ── Afregningsperiode dato-piller — union af alle produkters dage ──────────
-  // Matcher Udførsel-mode's "Udføres i perioden"-sektion. Bruger samme selectedDate
-  // (hejst til root) så valg deles på tværs af Udførsel + Afregning.
-  const afregningOrderStartDate = useMemo(() =>
-    (products ?? []).reduce((min, p) => (p.startDate && (!min || p.startDate < min) ? p.startDate : min), '' as string),
-  [products])
-  const afregningOrderEndDate = useMemo(() =>
-    (products ?? []).reduce((max, p) => (p.endDate && (!max || p.endDate > max) ? p.endDate : max), '' as string),
-  [products])
-  const afregningDays = useMemo(() => {
-    if (!afregningOrderStartDate || !afregningOrderEndDate) return [] as string[]
-    const out: string[] = []
-    let cur = new Date(afregningOrderStartDate + 'T00:00:00')
-    const end = new Date(afregningOrderEndDate + 'T00:00:00')
-    while (cur <= end) {
-      out.push(dateToString(cur))
-      cur = addDays(cur, 1)
+  // ── Afregningsperiode dato-piller — faktisk-planlagte dage ──────────────────
+  // Matcher Udførsel-mode's sparse "Udføres i perioden"-sektion.
+  // Bruger samme selectedDate (hejst til root) så valg deles med Udførsel + Afregning.
+  // Spejler "Udføres i perioden = kun PLAN-planlagte dage"-reglen (FF Flow 1).
+  // TODO: Erstat med Supabase når klar — dage fra plan_dag-tabellen.
+  const afregningDays = useMemo<string[]>(() => {
+    const datoSet = new Set<string>()
+    for (const p of (products ?? [])) {
+      for (const d of p.days) {
+        if (d.tonsPlanned > 0 && !d.cancelled) datoSet.add(d.date)
+      }
     }
-    return out
-  }, [afregningOrderStartDate, afregningOrderEndDate])
+    return [...datoSet].sort()
+  }, [products])
 
   // ── Udlægning per-produkt tabs state ─────────────────────────────────────────
   // Bestemmer hvilke produkter der vises tabs for i Udlægning-sektionen.
@@ -7566,7 +7688,7 @@ function AfregningContent({ vognmandBekraeftelse, todayDay, isSamleordreMode, sa
                           <button
                             type="button"
                             onClick={() => { setMaterielAfregningGodkendt(true) }}
-                            className="min-h-[44px] shrink-0 ml-auto bg-yellow text-deep-teal font-inter font-semibold text-sm py-xxxs px-sm rounded-lg hover:opacity-90 transition-all"
+                            className="min-h-touch shrink-0 ml-auto bg-yellow text-deep-teal font-inter font-semibold text-sm py-xxxs px-sm rounded-lg hover:opacity-90 transition-all"
                           >
                             Godkend afregning
                           </button>
