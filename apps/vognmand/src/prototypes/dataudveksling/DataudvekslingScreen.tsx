@@ -43,7 +43,10 @@ const FORMAND_OUTPUT: Felt[] = [
 const VOGNMAND_RETUR: Felt[] = [
   { navn: 'Bil-ordrenummer', kolonne: 'bil_ordrenummer', eksempel: '1212343-170326-01', forklaring: 'Echo af match-nøglen vi sendte — kobler bilen til den rigtige bestilling', paakraevet: true },
   { navn: 'Reelt reg.nr', kolonne: 'reg_nr', eksempel: 'XE32114', forklaring: 'Bilens faktiske registreringsnummer — bærer al udførsels-/afregningsdata', paakraevet: true },
-  { navn: 'Biltype', kolonne: 'biltype', eksempel: 'Sættevogn', forklaring: 'Mappes mod Colas’ biltyper — aftal de eksakte tekster' },
+  { navn: 'Biltype', kolonne: 'biltype', eksempel: 'Sættevogn', forklaring: 'Vælges fra Colas’ prædefinerede biltype-liste, så den matcher vores database — ingen match → filen afvises', paakraevet: true },
+  { navn: 'Lasteevne (Tons)', kolonne: 'lasteevne_tons', eksempel: '32', forklaring: 'Bilens kapacitet i Tons — så vi kan validere samlet kapacitet mod forventede Tons. Forudfyldes fra biltype-listen hvor muligt; ellers påkrævet fra dig' },
+  { navn: 'Rækkefølge', kolonne: 'raekkefoelge', eksempel: '1', forklaring: 'Bilens position i dagens rækkefølge — bekræfter starttiden (kan udledes af løbenummeret i bil-ordrenummeret)' },
+  { navn: 'Ankomst fabrik (retur)', kolonne: 'ankomst_fabrik', eksempel: '06.30', forklaring: 'HH.mm — du returnerer den mødetid på fabrik vi sendte, så vi kender starttider for ALLE biler og kan beregne hele dagens flow' },
   { navn: 'Chaufførens navn', kolonne: 'chauffoer_navn', eksempel: 'Lars Pedersen', forklaring: 'Vises til formand + chauffør' },
   { navn: 'Chaufførens mobilnummer', kolonne: 'chauffoer_mobil', eksempel: '+4520304050', forklaring: 'SMS + app-link sendes hertil — hele flowet falder hvis det mangler', paakraevet: true },
 ]
@@ -57,8 +60,8 @@ const BESTILLING_DEMO_RAEKKER: Record<string, string>[] = [
 ]
 
 const RETUR_DEMO_RAEKKER: Record<string, string>[] = [
-  { bil_ordrenummer: '1212343-170326-01', reg_nr: 'XE32114', biltype: 'Sættevogn', chauffoer_navn: 'Lars Pedersen', chauffoer_mobil: '+4520304050' },
-  { bil_ordrenummer: '1212343-170326-02', reg_nr: 'AB54231', biltype: 'Påhængsvogn (drejekrans)', chauffoer_navn: 'Brian Nielsen', chauffoer_mobil: '+4520304051' },
+  { bil_ordrenummer: '1212343-170326-01', reg_nr: 'XE32114', biltype: 'Sættevogn', lasteevne_tons: '32', raekkefoelge: '1', ankomst_fabrik: '06.30', chauffoer_navn: 'Lars Pedersen', chauffoer_mobil: '+4520304050' },
+  { bil_ordrenummer: '1212343-170326-02', reg_nr: 'AB54231', biltype: 'Påhængsvogn (drejekrans)', lasteevne_tons: '28', raekkefoelge: '2', ankomst_fabrik: '06.45', chauffoer_navn: 'Brian Nielsen', chauffoer_mobil: '+4520304051' },
 ]
 
 /** Byg CSV-tekst (UTF-8 BOM + semikolon + CRLF) og trig download i browseren. */
@@ -212,14 +215,15 @@ export function DataudvekslingScreen() {
             </p>
           </div>
           <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-3 gap-md">
-            <InfoBlok Icon={Server} titel="Kanal: SFTP">
-              Colas stiller en krypteret SFTP-drop-mappe til rådighed pr. vognmand. Filformat: CSV i UTF-8 med
-              header-række og fast separator. Små vognmænd uden system bruger en web-formular med samme felter.
+            <InfoBlok Icon={Server} titel="To kanaler — samme fil">
+              Store vognmænd med eget system: krypteret SFTP-drop-mappe, der poller og henter automatisk hvert
+              15. minut. Små vognmænd uden system: e-mail-notifikation med upload-link til web-formularen nedenfor.
+              Samme CSV-kontrakt begge veje.
             </InfoBlok>
-            <InfoBlok Icon={Clock} titel="Hvornår — automatisk">
-              Colas lægger bestillingsfilen i mappen automatisk, når formanden har sendt — senest kl. 18 dagen før.
-              Du lægger din disponering retur i mappen senest samme deadline. Filen hentes og indlæses automatisk
-              i begge retninger.
+            <InfoBlok Icon={Clock} titel="Kun én fil — seneste vinder">
+              Bestillingen ligger som ét stabilt filnavn pr. vognmand pr. dag og overskrives ved rettelser — der
+              opstår aldrig flere versioner. Import sker pr. bil-ordrenummer, så seneste fil vinder. Rettelser før
+              kl. 18 dagen før trigger ny hentning (SFTP-poll / ny e-mail); derefter aftales ændringer telefonisk.
             </InfoBlok>
             <InfoBlok Icon={ShieldCheck} titel="Sikkerhed">
               SFTP (ikke FTP), da filen indeholder persondata (chaufførnavn + mobil). Drop-endpoint i EU og

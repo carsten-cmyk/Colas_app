@@ -202,9 +202,96 @@ Gælder både CSV-fil og web-formular. Følger `.claude/docs/DATOFORMAT.md` (sto
 `bil_ordrenummer; ordrenummer; dato; fabrik; produkt; forventet_tons; aflaesningssted; forventet_antal_biler; ankomst_plads; moedetid_fabrik; afregningsform; kommentar`
 
 **Disponering retur (vognmand → Colas), én række pr. bil:**
-`bil_ordrenummer; reg_nr; biltype; chauffoer_navn; chauffoer_mobil`
+`bil_ordrenummer; reg_nr; biltype; lasteevne_tons; raekkefoelge; ankomst_fabrik; chauffoer_navn; chauffoer_mobil`
+
+| Nyt retur-felt | Krav | Hvorfor (LÅST 2026-06-25) |
+|---|---|---|
+| **`lasteevne_tons`** | Heltal | Lader Colas validere samlet kapacitet mod `forventet_tons` i stedet for kun at gætte antal biler. **Forsøges forudfyldt fra biltype-listen** (standard-lasteevne pr. biltype); kan den ikke fastlægges pr. type → **påkrævet** retur-felt fra vognmand |
+| **`raekkefoelge`** | Heltal | Bekræfter bilens position i dagens rækkefølge. Teknisk redundant med løbenummeret i `bil_ordrenummer` (`...-NN`), men returneres eksplicit som bekræftelse |
+| **`ankomst_fabrik`** | `HH.mm` | Vognmanden **returnerer den mødetid på fabrik** vi sendte (afsnit 1), så Colas kender starttider for **alle** biler og kan beregne hele dagens flow i formandens udførsel/kørsel |
 
 **Match-nøgle:** `bil_ordrenummer` (`<ordrenr>-DDMMYY-NN`) er fælles i begge retninger og kobler bekræftet bil mod bestillingen.
+
+---
+
+## Filudveksling — leveringskanaler, versionering og afvisning (LÅST 2026-06-25)
+
+### To leveringskanaler — samme fil, samme kontrakt
+
+| | **Store vognmænd** (eget system) | **Små vognmænd** (intet system) |
+|---|---|---|
+| **Hentning af bestilling** | **Automatiseret pull** — poller SFTP-drop-mappen på interval, henter med det samme der ligger en fil | **Notifikation** (e-mail primær, evt. SMS-varsel) "ny bestilling klar" → henter manuelt |
+| **Disponering** | I eget system → CSV | **Web-formular** — kan downloade bestillingen som **.csv**, udfylde i Excel og uploade igen |
+| **Retur** | CSV-upload via SFTP | Upload via **link i notifikationen** |
+
+Begge kanaler rammer **samme `confirmed_vehicles[]`-ingest** og **samme fil-kontrakt** — der vedligeholdes kun én kontrakt.
+
+- **Polling-interval (store): hvert 15. minut (LÅST 2026-06-25).** Kan justeres pr. vognmand i dataaftalen hvis særlige behov, men 15 min er standarden.
+- **Notifikations-kanal (små): e-mail (LÅST 2026-06-25).** E-mailen indeholder **altid upload-linket** til web-formularen. (SMS-varsel kan tilføjes senere via LINK Mobility-stakken hvis ønsket.)
+
+### "Kun én fil" trods rettelser — match-nøgle + stabilt filnavn
+
+- **Match-nøglen gør import idempotent:** alt indlæses pr. `bil_ordrenummer`, **seneste række vinder**. Uanset hvor mange gange formanden retter eller sender sekventielt, ender vognmanden med ét aktuelt billede — ikke flere versioner af samme bestilling.
+- **Ét stabilt filnavn pr. vognmand pr. dag:** fx `colas_bestilling_<vognmand-id>_<yyyy-mm-dd>.csv`. Rettelser **overskriver** samme fil — der opstår aldrig `...v1`/`...v2` i drop-mappen.
+- **Version-stempel i header:** `genereret_tidspunkt` (+ evt. `version`) så begge sider kan se at indholdet er ændret, selv om filnavnet er det samme.
+
+### Hvordan en rettelse trigger gen-hentning
+
+- **Store (pull):** polleren ser ændret `last-modified`/version på det stabile filnavn → **re-puller automatisk**. Ren SFTP-polling er nok; ingen push påkrævet.
+- **Små (notifikation):** hver rettelse før cutoff udløser en **ny notifikation** ("Bestilling opdateret — hent igen") med upload-linket.
+- **Cutoff lukker vinduet:** rettelser kun til **kl. 18 dagen før** (= fil-deadline, jf. "Ændrings-cutoff"). Derefter telefonisk. Gen-hentnings-vinduet er dermed afgrænset.
+
+### Afvisning af filupload + fejlregistrering
+
+- **Alt-eller-intet pr. fil:** finder valideringen mindst én **blokerende fejl**, **afvises hele filen** — ingen partiel disponering oprettes (undgår uklar halv-tilstand for en dagsfil).
+- **Fejl logges pr. række:** vognmanden får en **fejlrapport** der præcist viser hvilke(n) række(r) + felt(er) der fejlede, så filen kan rettes og gen-uploades.
+- **Validering (jf. `DisponeringUpload`-prototypen):** bil-ordrenummer-mønster (`<ordrenr>-DDMMYY-NN`), E.164-mobil (`+4520304050`), påkrævede felter, **biltype mod den prædefinerede liste** (se nedenfor).
+- **Advarsler** (ikke-blokerende) afviser ikke filen, men vises i rapporten.
+
+### Prædefineret biltype-liste
+
+Colas leverer en **kontrolleret liste over biltyper** sammen med (eller forud for) bestillingen, så vognmandens valg **matcher Colas' database**.
+
+- **CSV-upload:** `biltype` valideres mod listen → **ingen match = blokerende fejl** (filen afvises).
+- **Web-formular:** `biltype` vælges fra **dropdown** (kun gyldige værdier).
+- **Lasteevne knyttes til listen:** vi forsøger at lægge **standard-lasteevne (tons) pr. biltype** ind i listen, så `lasteevne_tons` kan **forudfyldes**. Kan lasteevne ikke fastlægges pr. type (samme type varierer) → **`lasteevne_tons` er påkrævet retur-felt fra vognmand**.
+- 🟡 **TODO:** Den faktiske biltype-liste mangler at blive leveret af Colas (kunde-input).
+
+---
+
+## Materiel-transport — egen udvekslings-kontrakt (LÅST 2026-06-25)
+
+Materiel-transport (Flow 2) udveksles med **samme kanaler og samme fil-mekanik** som asfaltkørsel, men med eget felt-sæt.
+
+**Bestilling (Colas → vognmand), pr. materiel-transport:**
+`materiel_ordrenummer; ordrenummer; varenummer; beskrivelse; afhentningssted; afhentning_lat; afhentning_lng; klar_dato; klar_tid; lokation_dato; lokation_tid; aflaesningssted; aflaesning_lat; aflaesning_lng; biltype; kommentar`
+
+| Felt | Forklaring |
+|---|---|
+| **`varenummer`** | Materiellets **unikke vare-/anlægsnummer** (identitet i PLAN). Bæres gennem hele livscyklussen |
+| **`afhentning_lat` / `afhentning_lng`** | **Google Maps-koordinater** for afhentnings-pin — præcis placering af maskinen |
+| **`klar_dato` + `klar_tid`** | Klar til afhentning |
+| **`lokation_dato` + `lokation_tid`** | Skal være på lokation (udførselssted) |
+| **`aflaesning_lat` / `aflaesning_lng`** | **Google Maps-koordinater** for aflæsnings-pin — præcis placering hvor maskinen skal aflæsses |
+
+**Retur (vognmand → Colas):** `materiel_ordrenummer; reg_nr; biltype; chauffoer_navn; chauffoer_mobil` (samme model som asfalt-retur).
+
+**Koordinater er afgørende for chauffør-webappen:** chaufføren navigerer efter pin'en (Google Maps-link i `MaterielTaskDetailScreen`), ikke kun adressen. Formanden SKAL derfor kunne sætte pin for både afhentning og aflæsning i materiellevering — den tidligere kort-stub blev fjernet 2026-06-24 under etape-omskrivningen og **genindføres som reel koordinat-input**.
+
+### Materiel hører til et hold + persistent placering (LÅST 2026-06-25)
+
+- Alt materiel har et **unikt varenummer** og hører til et **hold** (sjak). Materiel grupperes på hold i holdpakken (Flow 2 Trin 0).
+- Når formanden sætter **kort-markering (pin) + adresse på aflæsningsstedet**, gemmes **både adresse OG koordinater på varenummeret** i databasen (PLAN).
+- **Logik:** en maskine, der sidst blev afleveret på lokation X, *befinder sig* på X næste gang den skal bruges. Næste gang samme varenummer disponeres, **forudfyldes afhentningsstedet automatisk** (adresse + pin) fra den gemte seneste aflæsning. Findes ingen tidligere aflæsning → felter + kort er blanke (ingen fallback til udførselsstedet).
+- Dette **udvider** den eksisterende adresse-prefill (FF Flow 2 Trin 1, LÅST 2026-06-15) til også at omfatte **pin-koordinaterne**.
+
+---
+
+## Vognmand-login — mangler (TODO 2026-06-25)
+
+Der findes endnu **ingen reel login-side til vognmanden** — kun en prototype-login. Det er en selvstændig auth-flade (adskilt fra chauffør-SMS-login) der skal **kommunikere med Oracle-databasen** (APPS/PLAN). Skal bygges før produktion.
+
+---
 
 ### Vognmand-app (prototype)
 

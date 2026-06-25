@@ -15,7 +15,12 @@ import {
 // Kanonisk: Docs/Vognmand/Dataudveksling-vognmand.md § "CSV-kolonner".
 
 /** Forventede kolonner i header-rækken (rækkefølge er vejledende, navn er bindende). */
-const KOLONNER = ['bil_ordrenummer', 'reg_nr', 'biltype', 'chauffoer_navn', 'chauffoer_mobil'] as const
+const KOLONNER = [
+  'bil_ordrenummer', 'reg_nr',
+  'biltype',          // TODO: valider mod Colas' prædefinerede biltype-liste når den foreligger — ukendt biltype → blokerende fejl
+  'lasteevne_tons', 'raekkefoelge', 'ankomst_fabrik',
+  'chauffoer_navn', 'chauffoer_mobil',
+] as const
 type Kolonne = (typeof KOLONNER)[number]
 
 /** Påkrævede felter — en række uden disse afvises. */
@@ -23,6 +28,7 @@ const PAAKRAEVET: Kolonne[] = ['bil_ordrenummer', 'reg_nr', 'chauffoer_navn', 'c
 
 const BIL_ORDRE_MOENSTER = /^\d+-\d{6}-\d{2}$/   // <ordrenr>-DDMMYY-NN
 const E164_MOENSTER = /^\+\d{8,15}$/             // +4520304050
+const ANKOMST_FABRIK_MOENSTER = /^\d{2}\.\d{2}$/ // HH.mm med punktum, 24-timer (fx 06.30)
 
 type RaekkeStatus = 'ok' | 'advarsel' | 'fejl'
 
@@ -85,6 +91,19 @@ function tjekRaekke(felter: Record<Kolonne, string>): TjekketRaekke {
   }
   if (!felter.biltype) {
     advarsler.push('Biltype mangler — anbefales udfyldt')
+  }
+  if (felter.lasteevne_tons) {
+    const v = Number(felter.lasteevne_tons)
+    if (!Number.isInteger(v) || v <= 0) fejl.push('Lasteevne skal være et positivt heltal (fx 32)')
+  } else {
+    advarsler.push('Lasteevne mangler — forventes fra biltype-liste, ellers påkrævet')
+  }
+  if (felter.raekkefoelge) {
+    const v = Number(felter.raekkefoelge)
+    if (!Number.isInteger(v) || v <= 0) fejl.push('Rækkefølge skal være et positivt heltal (fx 1)')
+  }
+  if (felter.ankomst_fabrik && !ANKOMST_FABRIK_MOENSTER.test(felter.ankomst_fabrik)) {
+    fejl.push('Ankomst fabrik skal være HH.mm (fx 06.30)')
   }
 
   const status: RaekkeStatus = fejl.length > 0 ? 'fejl' : advarsler.length > 0 ? 'advarsel' : 'ok'

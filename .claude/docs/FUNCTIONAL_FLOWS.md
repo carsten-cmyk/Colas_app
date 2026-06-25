@@ -27,6 +27,8 @@ Begge kræver: France åbner firewall App→backend; bruger-auth via AD/Azure (F
 
 **⚠️ Afstemnings-punkt (vejedata-kilde):** France = **MAUS/DataHub**, men DK-flowet (Flow 3, Thomas) refererer **Danvægt** ved fabrikkens vægt. Forholdet MAUS ↔ Danvægt skal afklares (er Danvægt den fysiske vægt/terminal og MAUS det system der registrerer/fordeler — eller parallelle?). Vores `DATA_FIELDS`/Excel siger pt. "Danvægt".
 
+**🛑 Database er IKKE Supabase (note 2026-06-25):** Vores operationelle lag bliver **sandsynligvis Oracle** (egen app-skema i APPS-instansen i France, samme miljø som PLAN — jf. systemlandskabet ovenfor og memory `project_hosting_database_valg`). Vi har talt om at det ender på Oracle; det endelige Postgres-vs-Oracle-valg afgøres sammen med backend-modellen (~15.6 / Jesper DK-IT). **Konsekvens for dette dokument:** alle spredte `// TODO: Erstat med Supabase`-noter og "Supabase realtime"-omtaler nedenfor er **forældet terminologi** fra prototype-fasen — læs dem som "erstat mock med den rigtige database/backend (Oracle/APPS)". Realtime-mekanismen (Supabase realtime subscriptions) er heller ikke låst og må gentænkes mod Oracle/backend (polling, DataHub-materialisering eller eget event-lag). Koden ryddes løbende; denne note er facit indtil da.
+
 ---
 
 ## Flow 1: Bilbestilling — Formand → Vognmand → Chauffør
@@ -42,7 +44,7 @@ Begge kræver: France åbner firewall App→backend; bruger-auth via AD/Azure (F
 
 **Pinnede opstarts-læs (LÅST 2026-06-10 — erstatter Første-læs-reglen 2026-05-22):** Formanden sætter eksplicit ankomsttid på pladsen for de **første 1-3 læs pr. produkt** (typisk kun produkt 1). Antallet er formandens valg (1-3, som angivet i Asfalt kørsel-rækken). Disse "pinnede" opstarts-læs sikrer at materialet kommer i en jævn strøm fra start. **Læs-nummeret er KUN opstarts-styring — ikke en rolle bilen bærer hele dagen.** Efter de pinnede læs kører bilerne i **loop** (frem og tilbage mellem fabrik og plads), indtil produktets tons er hentet. Bruges læs-nummeret som intern styring bagved er det fint; det skal bare ikke fremstå som en blivende bil-rolle.
 
-**Interval-regel (LÅST 2026-06-10 — opdateret fra 2026-05-26):** Intervallet (i minutter, typisk 12-20) er **kadencen for loop'et og starter efter det SIDSTE pinnede læs** — ikke mellem de pinnede. De pinnede tider kan formanden sætte frit. Eksempel: pinned bil 1 på plads 07:00, pinned bil 2 på plads 08:00 (60 min mellem, formandens valg), interval 20 min → næste bil 08:20, derefter 08:40 osv. i loop. **Per produkt:** Produkt 1 har normalt de pinnede opstarts-læs. Efterfølgende produkter kører blot med i loop'et MEDMINDRE formanden angiver et selvstændigt starttidspunkt + interval for produktet (jf. "Køres direkte i forlængelse af Produkt 1?"-toggle i bilbestillingen — Nej = egen starttid + interval).
+**Interval-regel (LÅST 2026-06-10 — opdateret fra 2026-05-26):** Intervallet (i minutter, typisk 12-20) er **kadencen for loop'et og starter efter det SIDSTE pinnede læs** — ikke mellem de pinnede. De pinnede tider kan formanden sætte frit. Eksempel: pinned bil 1 på plads 07:00, pinned bil 2 på plads 08:00 (60 min mellem, formandens valg), interval 20 min → næste bil 08:20, derefter 08:40 osv. i loop. **Per produkt:** Produkt 1 har de pinnede opstarts-læs. Efterfølgende produkter kører blot med i loop'et — **sekventielt direkte** efter forrige produkts sidste-læs. *(Den tidligere mulighed for at give produkt 2+ egen starttid + interval — "Køres direkte i forlængelse af"-toggle — er FJERNET 2026-06-25.)*
 
 **Mødetid på fabrik (LÅST 2026-06-10):** **Hver bil** får ét opstarts-ankomsttidspunkt på pladsen under indfasningen → og dermed én mødetid på fabrik: `moedetid_fabrik = ankomst_plads − køretid`, hvor køretid = Google Maps + 10%. De pinnede biler bruger formandens eksplicitte plads-tider; de øvrige biler får deres opstarts-ankomst beregnet af intervallet fra sidste pinnede læs (08:20, 08:40 …) og indgår i flowet, **indtil ALLE biler er i rotation.** Når hele flåden er fyldt ind, kører de i loop uden flere planlagte tider. Eksempel: pinned ankomst plads 07:15, køretid 36 min → mødetid fabrik 06:39.
 
@@ -70,27 +72,32 @@ Begge kræver: France åbner firewall App→backend; bruger-auth via AD/Azure (F
 ```
 Vognmanden modtager dette array (én ønske-bil pr. objekt, hver med sit `bil_ordre_nr`) og svarer med `confirmed_vehicles[]` (Trin 4), der bærer samme `bil_ordre_nr` retur.
 
-**Bilbehov-dashboard (LÅST 2026-06-10):** I "Planlæg kørsel"-panelet vises en read-only **Bilbehov**-dashboard (beregningsoverblik der hjælper formanden disponere antal biler). Tiles og deres beregninger:
+**Bilbehov-dashboard (LÅST 2026-06-10, dynamisk gjort 2026-06-25):** I "Planlæg kørsel"-panelet vises en **Bilbehov**-dashboard (beregningsoverblik der hjælper formanden disponere antal biler). **8 bokse på én række** (desktop), hvoraf **3 er editerbare** (lys gul baggrund `bg-yellow/15` + grå outline) og resten er beregnede output. Rækkefølge:
 
-| Tile | Indhold | Beregning |
-|---|---|---|
-| **Forventet tons** | Produktets/dagens forventede tons, undertekst **"incl. ekstra bestilling"** | `getEffectiveTons(d) = d.tonsPlanned + (d.ekstraTons?.tons ?? 0)` — dvs. originalt planlagt + PLAN-pushet ekstra-bestilling (Flow 9b). *(Erstatter tidligere "Mangler"-tile.)* |
-| **Anbefalet** | Anbefalet antal biler (á gns. tons) | Som i dag: `ceil(forventet tons / (gns. tons pr. bil × runder pr. bil))` |
-| **Runder** | Runder pr. bil (hovedtal) + rundtid i minutter (undertekst) | Rundtid = `2 × køretid + 15 min læsning + 15 min aflæsning` — hvor **køretid = Google Maps +10%** (samme buffer som Afstand-tilen). |
-| **Afstand til fabrik** | Køreafstand + køretid til fabrik | **Google Maps-køreafstand + 10%** (buffer for reel kørsel vs. Google-estimat). Køretid afledt af samme +10%-værdi. |
-| **Forventet sidste bil** | Forventet tidspunkt for sidste bil pr. produkt (P1, P2 …) | **Genbruger vejesedler-beregningen** — tidspunktet for **forventet sidste bil/læs** pr. produkt (samme prognose som Vejesedler-sektionen). Én række pr. produkt. |
+| # | Tile | Type | Indhold / Beregning |
+|---|---|---|---|
+| 1 | **Forventet tons** | output | `getEffectiveTons(d) = d.tonsPlanned + (d.ekstraTons?.tons ?? 0)` — originalt planlagt + PLAN-pushet ekstra-bestilling (Flow 9b). |
+| 2 | **Starttidspunkt plads** | **editerbar** (prefill **06:00**) | Tidspunkt første bil er på pladsen. To-vejs bundet til Bil 1's starttid i "Starttider og intervaller". Driver runder pr. bil + Forventet sidste bil. |
+| 3 | **Forventet aflæsning** | **editerbar** (prefill **15 Minutter**) | Aflæsningstid pr. bil. Indgår i rundtiden. `KørselDayParams.aflaesningstidMin`. |
+| 4 | **Interval** | **editerbar** (prefill **20 Minutter**) | Kadence i loop'et (`intervalMinutes`). **Flyttet hertil fra "Starttider og intervaller"-sektionen 2026-06-25.** |
+| 5 | **Anbefalet** | output | `ceil(forventet tons / (gns. tons pr. bil × runder pr. bil))`. |
+| 6 | **Runder** | output | Runder pr. bil + rundtid (undertekst). Rundtid = `2 × køretid + 15 min læsning + Forventet aflæsning` — køretid = Google Maps +10%. |
+| 7 | **Afstand til fabrik** | output | **Google Maps-køreafstand + 10%**. Køretid afledt af samme +10%-værdi. |
+| 8 | **Forventet sidste bil** | output | Tidspunkt for forventet sidste bil/læs pr. produkt (P1, P2 …), samme prognose som Vejesedler. Beregnes nu **dynamisk** fra de 3 editerbare felter. Én række pr. produkt. |
+
+**De 3 editerbare felter gør motoren dynamisk (LÅST 2026-06-25):** De erstatter de tidligere statiske/hardcodede værdier (start 07:00, aflæsning 15, interval). Når formanden retter dem, regnes **Anbefalet** og **Forventet sidste bil** live. Felterne er **præudfyldt** med 06:00 / 15 / 20, så der altid er et resultat — formanden retter kun ved reelle ændringer.
 
 **+10%-bufferen er kanonisk køretid** og slår igennem i ALLE afledte tal: Afstand til fabrik, Rundtid og Anbefalet antal biler (som afhænger af runder pr. bil).
 
 **Forventet sidste bil → markering til vognmand (LÅST 2026-06-10):** Den forventede sidste bil beregnes ikke kun til formandens Bilbehov og Vejesedler — den **markeres også til vognmanden** (cross-app), så vognmanden ved hvornår dagens kørsel forventes færdig. *(Modtager-side i vognmand-app bygges i separat sektion-pakke; kontrakt forfines der. Relaterer til sidste-læs-frigivelse.)*
 
-**Bilbehov er read-only** — ren beregning fra tonnage, fabrik (+10% køretid), rundtid og vejesedler-prognose. Formanden redigerer ikke felterne; de opdateres når han ændrer biler/tons.
+**Bilbehov — delvist editerbart (opdateret 2026-06-25):** De **3 gule felter** (Starttidspunkt plads · Forventet aflæsning · Interval) redigeres direkte af formanden. De **5 hvide bokse** er ren beregning fra tonnage, fabrik (+10% køretid), rundtid og de 3 input — opdateres automatisk når formanden ændrer biler/tons/de 3 felter.
 
 **Bilbehov — beregnings-præciseringer (2026-06-15):**
 
-- **Multi-produkt rotation (samme biler):** Samme biler kører alle dagens produkter **sekventielt**. Produkt 2+ kører **så tæt på sit opstartstidspunkt som muligt**. Et eksplicit opstartstidspunkt (`foersteLaesPaaPlads`) på et produkt kan dække en **pause hvor maskinerne flyttes** mellem produkter. "Forventet sidste bil" pr. produkt SKAL derfor beregnes fra produktets **eget** opstartstidspunkt når det er sat — og sekventielt (lige efter forrige produkts sidste bil) når `foersteLaesPaaPlads = null`. *(Nuværende kode antager fejlagtigt back-to-back via én cursor og ignorerer per-produkt-start — rettes.)*
+- **Multi-produkt rotation (samme biler):** Samme biler kører alle dagens produkter **sekventielt**. Produkt 2+ kører **direkte i forlængelse** af forrige produkt (lige efter forrige produkts sidste bil). "Forventet sidste bil" pr. produkt beregnes derfor sekventielt via én cursor. *(Per-produkt egen starttid/interval er fjernet 2026-06-25 — der er ikke længere et eget opstartstidspunkt pr. produkt.)*
 - **avgTons fra de kørende biler:** Når biler er valgt, beregnes gns. tons/bil fra de **faktisk valgte biler** (kapaciteten er kendt). Ingen biler valgt → vis et **synligt fallback "antaget gns. 30 tons"** (ikke en skjult magisk værdi).
-- **Forventet sidste bil — tom uden input:** Står tom indtil der er **mindst én bil med opstartstidspunkt + interval** (minimumsinput for rotations-beregningen).
+- **Forventet sidste bil — præudfyldt (opdateret 2026-06-25):** Tidligere tom uden input; nu er Starttidspunkt plads + Interval **præudfyldt** (06:00 / 20), så P1's sidste bil altid beregnes. P2+ beregnes sekventielt direkte efter forrige produkt (ingen egen starttid længere).
 - **Kapacitet-dækket-indikator (grøn/rød) — genindført:** En pille viser **grøn "Kapacitet dækket"** når de valgte bilers kapacitet (kapacitet/runde × runder) dækker forventet tons, ellers **rød "[X] Tons mangler"**. Det er formandens live-feedback på "har jeg valgt nok biler". *(Fandtes i v1 `KoerselPanel`, forsvandt i 5-boks-dashboardet — genindføres.)* **Anbefalet antal biler er et stabilt mål** — det er IKKE Anbefalet der skifter farve, det er dækningen.
 
 ### Trin 2 — Formand ser afventende status (badge-lifecycle, LÅST 2026-06-15)
@@ -152,6 +159,18 @@ Disse felter sendes retur til formand (Trin 7) og til chauffør (Trin 8) — hve
 **Leverancevej — fil-udveksling, ikke drag-and-drop (LÅST 2026-06-19):** Vognmanden disponerer i **sit eget system** og leverer disponeringen via **fil-udveksling** (CSV via SFTP for store / web-formular for små). Drag-and-drop-`VognmandDisponeringsScreen` er derfor **ud af scope** — bevaret bag `SHOW_DISPONER`-flag i prototypen, men UI-en udgår sandsynligvis. `confirmed_vehicles[]` populeres uændret fra fil/formular. Fil-kontrakten (CSV-kolonner + format-konventioner: ISO-dato `yyyy-mm-dd`, tid `HH.mm`, semikolon-separator, UTF-8) + de fire udvekslings-øjeblikke er kanonisk dokumenteret i `Docs/Vognmand/Dataudveksling-vognmand.md` § "Udvekslings-model". Vognmand-app'en (`DataudvekslingScreen`) viser kontrakten + downloadbare CSV-eksempler (bestilling + retur) og en "Opdatér"-pull af klar-data (ikke on-demand-generering).
 
 **Webupload — "den anden dør" for små vognmænd (LÅST 2026-06-22):** Det er **fil hele vejen (CSV)** for alle vognmænd — forskellen er kun leveringskanalen: **store dropper automatisk via SFTP**, **små uploader CSV'en i vognmand-app'en** (ingen SFTP-klient at sætte op). Begge døre rammer **samme `confirmed_vehicles[]`-ingest og samme fil-kontrakt** — der er kun én kontrakt at vedligeholde. Begrundelse: små vognmænd har intet system at eksportere fra og håndlaver CSV'en i Excel → en upload i en app de allerede logger ind i er mindre arbejde (for dem og os) end SFTP-konto/-nøgle-provisionering + support, og webformularen giver straks-validering.
+
+**Leveringskanaler + versionering + afvisning (LÅST 2026-06-25):** Kanonisk i `Docs/Vognmand/Dataudveksling-vognmand.md` § "Filudveksling". Kort:
+- **Store vognmænd: automatiseret SFTP-pull hvert 15. minut.** Poller drop-mappen og henter med det samme der ligger en fil.
+- **Små vognmænd: notifikation via e-mail** ("ny bestilling klar") med **upload-link** til web-formularen. (SMS-varsel kan tilføjes senere.)
+- **"Kun én fil" trods rettelser:** import er **idempotent pr. `bil_ordrenummer` (seneste vinder)** + **ét stabilt filnavn pr. vognmand pr. dag** (`colas_bestilling_<vognmand-id>_<yyyy-mm-dd>.csv`, overskrives ved rettelse) + **`genereret_tidspunkt`/`version`-stempel** i header. Der opstår aldrig flere versioner i drop-mappen.
+- **Rettelse trigger gen-hentning:** store ser ændret `last-modified`/version → re-puller automatisk; små får **ny e-mail** ("Bestilling opdateret — hent igen"). Begrænset af **kl-18-cutoff** dagen før (derefter telefonisk).
+- **Afvisning:** mindst én blokerende fejl → **hele filen afvises** (alt-eller-intet, ingen partiel disponering), men **fejl logges pr. række** i en rapport til vognmanden. Validering: bil-ordrenummer-mønster, E.164-mobil, påkrævede felter, **biltype mod prædefineret liste**.
+- **Prædefineret biltype-liste:** Colas leverer en kontrolleret biltype-liste så valg matcher databasen; ingen match = blokerende fejl. **Standard-lasteevne forsøges knyttet til listen** (forudfylder `lasteevne_tons`); kan den ikke fastlægges pr. type → lasteevne er påkrævet retur-felt. 🟡 Selve listen afventer Colas.
+
+**Nye retur-felter pr. bil (LÅST 2026-06-25):** Ud over reg.nr/biltype/chauffør/mobil returnerer vognmanden nu også: **`lasteevne_tons`** (validerer kapacitet mod `forventet_tons`), **`raekkefoelge`** (bekræfter bilens position) og **`ankomst_fabrik`** (vognmanden returnerer den mødetid på fabrik vi sendte, så Colas kender **starttider for ALLE biler** og kan beregne hele dagens flow i formandens udførsel/kørsel). Felt-tabel i `Dataudveksling-vognmand.md` § "CSV-kolonner".
+
+**Vognmand-login — TODO (2026-06-25):** Der findes endnu **ingen reel login-side til vognmanden** (kun prototype). Selvstændig auth-flade (adskilt fra chauffør-SMS-login) der skal **tale med Oracle-databasen** (APPS/PLAN). Skal bygges før produktion.
 
 **Krav til webupload (prototype: `DisponeringUpload.tsx` i `dataudveksling/`):**
 - **Format/parsing:** CSV, UTF-8 (BOM-tolerant), semikolon-separator, header-række. Citationstegn-håndtering (`""` = escapet `"`). Én datarække pr. bil.
@@ -588,12 +607,10 @@ startTider?: [string | null, string | null, string | null]
 
 **Interval — flyttet ind i Start-rækkefølge-blokken (LÅST 2026-06-04):** Interval-feltet ("Herefter interval") er flyttet op UNDER Nr. 3 i Start-rækkefølge-blokken og styrer kadencen for læs EFTER de 3 eksplicit timede positioner. Det bruger samme underliggende interval-felt som hidtil (`intervalMinutes`/`intervalMin`) — ingen ny interval-datamodel. **"Første læs"-feltet bevares** på sin nuværende plads og fungerer som fallback når formand IKKE har angivet start-rækkefølge med tid.
 
-> ⚠️ **Reconcilering med "Per-produkt kørselsfelter" (nedenfor):** For multi-produkt-ordrer er interval i dag PER PRODUKT (`produkt.intervalMin`). Når interval flyttes til dag-niveau "Herefter interval", gælder per-position-modellen også multi-produkt (besluttet 2026-06-04). Hvis dag-niveau-konsolidering kolliderer med per-produkt-sekventiel-logikken, beholdes per-produkt-interval urørt og afvigelsen noteres her ved implementering.
-
 **Start-rækkefølge er kilde → produktfelter spejler (LÅST 2026-06-04):** Start-rækkefølge-blokken (bil 1's starttid + "Herefter interval") er **eneste indtastningssted**. Produktets felter "Første læs (på plads)" + "Interval (min)" er **read-only spejlinger**:
 - Bil 1's starttid (`startTider[0]`) → vises read-only i "Første læs (på plads)" + synkroniseres til `firstLoadTime` (downstream gantt-summary m.m.)
 - "Herefter interval" (`intervalMinutes`) → vises read-only i "Interval (min)"
-- **Kun produkt 1** spejler. Multi-produkt produkt 2+ beholder sine egne redigerbare felter + Ja/Nej-toggle (den låste per-produkt-model — urørt).
+- **Kun produkt 1** har start-rækkefølge + interval-input. Produkt 2+ kører **altid sekventielt direkte** efter forrige produkt — ingen egne start/interval-felter (per-produkt-model fjernet 2026-06-25).
 - **Validering:** Mangler bil 1's tid og/eller interval, vises en **gul alert** (`bg-warn-bg border-warning`) ved produktet: "Du skal udfylde {første læs / interval / begge}". Alert'en er adaptiv (nævner kun det der mangler).
 
 **Afstand til fabrik + drivetid (LÅST 2026-06-04):** "Afstand til fabrik"-feltet ligger i Bilbehov-kolonnen (højre side af Start-rækkefølge-blokken) som et redigerbart km-input. Køretiden afledes som **drivetid = km × 1 min** og vises ved siden af (fx "36 km · 36 min").
@@ -667,65 +684,13 @@ Dette gælder alle steder vognmanden viser starttidspunkt for ordren (disponerin
 
 ---
 
-#### Per-produkt kørselsfelter — formand styrer overgange (LÅST 2026-06-03)
+#### Per-produkt starttid/interval — FJERNET (LÅST 2026-06-25)
 
-**Forretningsregel:** Ordrer med flere produkter har typisk en "under-asfalt" først og "top-lag" oveni — med eventuelt en reparations-pause imellem. Formand definerer overgangen ved at sætte felter PER PRODUKT i Asfaltkørsel-sektionen i stedet for ét fælles sæt for hele dagen.
+**Tidligere model (LÅST 2026-06-03, nu fjernet):** Produkt 2+ kunne få sin egen starttid (`foersteLaesPaaPlads`) + eget interval (`intervalMin`) via en "Køres direkte i forlængelse af forrige produkt?" Ja/Nej-toggle, så formanden kunne lægge en pause/buffer ind mellem produkter (fx maskinflytning). **Den funktionalitet er fjernet** — ikke længere relevant.
 
-**Felter per produkt:**
-```ts
-produkt: {
-  // ... eksisterende felter (tons, recept, raekkefolge, status)
-  foersteLaesPaaPlads?: string   // HH:mm — første læs på plads for DETTE produkt
-                                  // null = "starter når forrige produkt er færdigt"
-  intervalMin?: number            // minutter mellem læs for DETTE produkt
-                                  // Hvert produkt kan have eget interval
-}
-```
+**Nuværende model:** Produkt 2+ kører **altid sekventielt direkte** efter forrige produkts sidste-læs (svarer til den gamle toggle = Ja / default). Kun **produkt 1** har eksplicitte starttider (start-rækkefølge Bil 1/2/3) + interval (jf. dashboardet, Trin 1). Der er ingen per-produkt `foersteLaesPaaPlads`/`intervalMin` længere — datamodel (`ProduktKørselParams`), toggle-UI, helper og demo-seeds er slettet i `OrdrePlanScreen.tsx`.
 
-**Default-adfærd:**
-- Hvis `foersteLaesPaaPlads === null` → produkt N starter når produkt N-1's sidste vejeseddel er udvejet på fabrik (sekventielt direkte)
-- Hvis udfyldt → produkt N starter på den angivne tid (eller efter forrige produkt, hvad der kommer SENEST)
-
-**UI — formand (Asfaltkørsel-sektion):**
-- Hvis ordren har 1 produkt: nuværende layout uændret (ét fælles felt-sæt)
-- Hvis ordren har 2+ produkter: ét felt-sæt PER produkt, stablet vertikalt med produkt-header
-- Reparations-pauser er IMPLICITTE (intet pause-felt) — formand sætter bare en senere start-tid på næste produkt så bliver gabet automatisk synligt
-
-**UI-mønster: Ja/Nej-toggle for produkt 2+ (LÅST 2026-06-03)**
-
-Det hyppigste tilfælde er sekventiel kørsel uden tids-buffer mellem produkter. For at undgå unødig kompleksitet i den almindelige case, bruges et toggle-mønster:
-
-- **Produkt 1 (index 0)**: viser felter (Første læs + Interval) **altid** — det er det første produkt og kræver start-tid
-- **Produkt 2 og frem (index ≥ 1)**: viser **toggle** "Køres direkte efter forrige produkt?" med Ja/Nej:
-  - **Ja (default)**: felter er skjult. Server-side betyder dette `foersteLaesPaaPlads === null` → sekventielt direkte efter forrige produkts sidste-læs.
-  - **Nej**: felter udvides (Første læs + Interval) så formand kan angive specifik start-tid (med buffer-periode imellem)
-
-**Toggle-tilstand er afledt direkte af data**, ikke separat state:
-- `ppParams.foersteLaesPaaPlads === null` ⟺ toggle = Ja
-- `ppParams.foersteLaesPaaPlads !== null` ⟺ toggle = Nej
-
-**Toggle-switching:**
-- Ja → Nej: `foersteLaesPaaPlads` sættes til en sensible default (forrige produkts tid + 2 timer; fallback `10:00`)
-- Nej → Ja: `foersteLaesPaaPlads` sættes til `null`
-
-**Hvorfor toggle-mønstret (UX-rationale):**
-- 95% af multi-produkt-ordrer kører sekventielt — toggle gør den almindelige case 0-klik
-- Felter dukker kun op når formand bevidst vil have buffer → mindre visuel støj
-- Eksplicit toggle gør det klart at "ingen tid sat" = bevidst valgt, ikke glemt input
-- Default = Ja matcher tons-drevet aktivt-produkt-logik på serveren (se "Produkt-skift-sikring under eksekvering")
-
-**UI — vognmand (Disponering):**
-- Disponerings-tabellen viser produkt-bånd i tidsrækkefølge
-- Tid-gab mellem produkter er synligt som tom-zone i tidslinjen
-- Læs-nummerering fortsætter på tværs af produkter (ikke nulstilles per produkt)
-
-**UI — fabrik (Produktionsplan):**
-- Tidslinjen viser produktion-skift med eventuelt tid-gab
-- Fabriksmesteren ved at de skal stoppe produktion mellem to forskellige recepter
-
-**🟡 Åbne spørgsmål:**
-- Hvad hvis produkt 1 bliver forsinket og dermed forsinker produkt 2's planlagte start? Antagelse: produkt 2's `foersteLaesPaaPlads` fungerer som "tidligst start" — hvis produkt 1 sluttede senere, så fortsætter B sekventielt fra produkt 1's faktiske slut.
-- Skal formand kunne ændre `foersteLaesPaaPlads` mens dagen kører? Antagelse: ja, men kun for produkter der IKKE er startet endnu.
+**UI — vognmand/fabrik:** uændret princip — produkter vises i tidsrækkefølge, læs-nummerering fortsætter på tværs af produkter; der er blot ikke længere et bevidst tid-gab mellem produkter (sekventielt direkte).
 
 #### Produkt-skift-sikring under eksekvering (LÅST 2026-06-03)
 
@@ -740,22 +705,16 @@ Risiko: Når aktivt produkt skifter fra A til B, må en chauffør IKKE ende med 
 For hvert produkt på ordren:
   produkt.faerdig = (sum af UDVEJEDE vejesedler for produkt) >= produkt.tons
 
-aktivt_produkt = første produkt i raekkefolge hvor:
-  - produkt.faerdig === false   AND
-  - (produkt.foersteLaesPaaPlads === null
-     ELLER nuværende_tid >= produkt.foersteLaesPaaPlads − driveTimeMinutes)
+aktivt_produkt = første produkt i raekkefolge hvor produkt.faerdig === false
 ```
+
+*(Forenklet 2026-06-25: per-produkt `foersteLaesPaaPlads` er fjernet, så produkt-skift er altid rent sekventielt — B bliver aktivt så snart A's sidste vejeseddel er udvejet. Ingen tids-buffer mellem produkter længere.)*
 
 **Trigger-tidspunkt for produkt-skift:** I præcis det øjeblik den sidste vejeseddel for produkt A er udvejet på fabrik (status `paa_vej_til_plads` eller senere), beregnes ny `aktivt_produkt`. Næste chauffør der NFC-scanner får produkt B's instruktion.
 
 **Chauffør er passiv:** Han kører bare runder. App + fabrik fortæller ham hvad næste læs er. Ingen tons-tælling eller tid-tjek i appen — alt er server-side.
 
 App'en spørger serveren ved hver væsentlig handling (task-åbning, fabrik-ankomst, etc.) — ALDRIG fra cache. Hvis offline, viser app sidst-kendte tilstand med "🟡 Ikke synkroniseret"-flag og opdaterer ved første netforbindelse.
-
-**Buffer-periode** (når produkt A er færdig FØR produkt B's start-tid):
-- Aktivt produkt = null
-- Chauffør-app viser banner: "Vent — næste læs (produkt B) starter kl. HH:mm. Du kan tage pause."
-- Først når `nuværende_tid >= produkt_B.foersteLaesPaaPlads − driveTimeMinutes` bliver B aktivt
 
 **Lag 2 — Fabrik-scanning er final source of truth**
 Når chauffør NFC-scanner ved Danvægt-læseren, fortæller fabrik-systemet HAM hvad han skal hente: silo X, produkt B, recept Y. Selv hvis hans app stadig viser produkt A (telefon offline, push fejlet, cache stale), så er fabrik-skærmens instruktion korrekt. App'en opdaterer sig efter scanning. Konsekvens: en chauffør kan ALDRIG ende med at hente forkert produkt — fabrikkens vejekortlæser er gatekeeper.
@@ -1242,10 +1201,10 @@ Ordren er en **append-only log** af dage. Hver dag har sin egen sektion med:
 **App:** formand
 **Komponent:** Materiel-sektion på ordre (ikke bygget) — én linje per materiel-enhed fra holdpakken
 **Handling:** For hver materiel-enhed udfylder formanden:
-- **Afhentningssted** — felter: **vejnavn**, **nummer** og **postnummer**. Materiellet kommer fra en ANDEN lokation end udførselsstedet. **Prefyldes automatisk (LÅST 2026-06-15):** da hvert materiel har et **unikt varenummer** (= `anlaegsnr`), slås materiellets **seneste aflæsning** op i PLAN, og felterne prefyldes med dén adresse (materiellet står hvor det sidst blev afleveret). **Findes ingen seneste aflæsning i PLAN → felterne er BLANKE** — ingen fallback til udførselsstedet. Formand kan altid udfylde/overskrive.
+- **Afhentningssted** — felter: **vejnavn**, **nummer** og **postnummer**. Materiellet kommer fra en ANDEN lokation end udførselsstedet. **Prefyldes automatisk (LÅST 2026-06-15, udvidet 2026-06-25):** da hvert materiel har et **unikt varenummer** (= `anlaegsnr`) og hører til et **hold**, slås materiellets **seneste aflæsning** op i PLAN, og felterne prefyldes med dén adresse **+ pin-koordinaterne** (materiellet står hvor det sidst blev afleveret). **Findes ingen seneste aflæsning i PLAN → felterne + kort er BLANKE** — ingen fallback til udførselsstedet. Formand kan altid udfylde/overskrive. **Persistens (LÅST 2026-06-25):** når formanden sætter kort-markering + adresse på **aflæsningsstedet**, gemmes **både adresse og koordinater på varenummeret** i databasen → dén bliver næste disponerings afhentnings-prefill. Persistensen er hele mekanismen bag den passive frigivelse (jf. LÅST-boks ovenfor, lag 3).
 - **Klar til afhentning** — opdelt i **to felter: dato + tid** (LÅST 2026-06-15). Hvornår materiellet er klar til at blive hentet.
 - **Skal være på lokation** — opdelt i **to felter: dato + tid** (LÅST 2026-06-15). Hvornår materiellet skal være ankommet på udførselsstedet.
-- **Aflæsningssted + postnummer:** Adresse på udførselssted (kan også sættes som pin på kort — fremtidig feature)
+- **Aflæsningssted + postnummer:** Adresse på udførselssted. **Sættes også som pin på Google-kort (LÅST 2026-06-25)** — koordinaterne (`lat`/`lng`) gemmes sammen med adressen, fordi chauffør-webappen navigerer efter pin'en, ikke kun teksten. *(Kort-input genindføres i materiellevering — den tidligere stub blev fjernet 2026-06-24 under etape-omskrivningen.)*
 - **Kommentar til chauffør:** Fri-tekst med transport-/håndteringsinstruktioner (samme felt-koncept som asfalt-flow, jf. Flow 1 Trin 1). *(Tidligere "Kommentar til vognmand" — rettet 2026-06-15.)*
 
 **Flere materiel — arv af aflæsningssted (LÅST 2026-06-15):** Er der 2+ materiel-enheder, spørges hver **efterfølgende** enhed: *"Samme aflæsningssted som [1. materiel]?"* (Ja/Nej):
@@ -1253,9 +1212,10 @@ Ordren er en **append-only log** af dage. Hver dag har sin egen sektion med:
 - **Nej** (samt det første materiel selv) → manuelt aflæsningssted-felt.
 Referencen er **altid det 1. materiel** (`firstResource`) — ikke det umiddelbart foregående. (Gælder kun aflæsningssted; afhentning prefyldes individuelt pr. enhed fra PLAN.)
 
-**Google-kortudsnit (LÅST 2026-06-15):** To separate kort:
-- **Afhentnings-kort:** zoomer ind på materiellets **seneste kendte adresse** (fra PLAN, samme som afhentningsfelterne er prefyldt med). Er adressen blank/ukendt → intet zoom/markør endnu.
-- **Aflæsnings-kort:** zoomer ind på **udførselsstedets adresse**.
+**Google-kortudsnit (LÅST 2026-06-15, opdateret 2026-06-25 — pin er nu INPUT, ikke kun zoom):** To separate kort. Formanden kan **sætte/justere en pin** på begge, og koordinaterne (`lat`/`lng`) gemmes med adressen:
+- **Afhentnings-kort:** prefyldes med pin på materiellets **seneste kendte placering** (fra PLAN, samme som afhentningsfelterne). Er placeringen blank/ukendt → intet zoom/pin endnu.
+- **Aflæsnings-kort:** prefyldes med pin på **udførselsstedets adresse**; formanden kan flytte pin'en til den præcise aflæsningsplacering. **Pin'ens koordinater persisteres på varenummeret** og bliver materiellets afhentnings-prefill næste gang det disponeres. Koordinaterne flyder til chauffør-webappens Google Maps-link (Trin 4b).
+- 🟡 **Genindføres:** kort-input i formandens materiellevering blev fjernet 2026-06-24 under etape-omskrivningen og skal genopbygges som **reel koordinat-input** (ikke den tidligere `bg-[#E8EFF5]`-stub — skal tokeniseres).
 
 **Handling:** Formand trykker "Gem transport" per materiel-enhed.
 **Skriver til:** `orders.materiel[]` med `{ afhentning_vejnavn, afhentning_nummer, afhentning_postnummer, klar_dato, klar_tid, lokation_dato, lokation_tid, aflæsningssted, aflæsningspostnummer, kommentar_til_chauffoer }`
@@ -1308,10 +1268,10 @@ Formål: vognmanden får tilstrækkelig kontekst til at disponere korrekt blokvo
 **Skærmen viser:**
 - **Materiel-liste** — de enhed(er) kørslen rummer (beskrivelse + anlægsnr/varenummer). Erstatter asfalt-flowets ton/produkt-metrics.
 - **Afhentninger (1..n, ordnet efter tidspunkt):** pr. stop — **afhentningssted** (adresse) + **tidspunkt**. Har formanden sat en **prik/adresse** → vis et **Google Maps-link** til den (IKKE et indlejret kort i appen). Er der ingen → vis intet kort/link.
-- **Aflæsningssted(er):** udførselssted(er) — adresse.
+- **Aflæsningssted(er):** udførselssted(er) — adresse. **Har formanden sat en pin på aflæsningsstedet (LÅST 2026-06-25) → vis et Google Maps-link med pin'ens `lat`/`lng`** (`maps/search?query=<lat>,<lng>`), så chaufføren ser den **eksakte** aflæsningslokation, ikke kun en adresse-tekst. Samme behandling som afhentning. Er der ingen pin → kun adresse, intet link.
 - **Kommentar til chauffør** (samme felt som asfalt, Flow 1 Trin 1).
 - **Kontakt:** formand (navn + tlf).
-**Læser:** `orders.materiel[]` (afhentning vejnavn/nummer/postnr + klar-tid, aflæsning, beskrivelse, anlægsnr, kommentar_til_chauffoer, evt. pin-koordinater) + `confirmed_transport`, grupperet pr. chauffør-tlf.
+**Læser:** `orders.materiel[]` (afhentning vejnavn/nummer/postnr + klar-tid + **afhentnings-pin-koordinat**, aflæsning adresse + **aflæsnings-pin-koordinat**, beskrivelse, anlægsnr/varenummer, kommentar_til_chauffoer) + `confirmed_transport`, grupperet pr. chauffør-tlf. Begge pin-koordinater driver hver sit Google Maps-link.
 
 **Udførsels-state (forenklet — LÅST 2026-06-15):** `idle → i gang → afsluttet`. INGEN pause/hviletid (modsat asfalt):
 1. **"Start opgave"** (som asfalt) → opgaven går `i gang`.
@@ -2362,7 +2322,27 @@ Fabriksnavnet hentes fra **ordrens tildelte standard-fabrik**. I prototypen hard
 **Komponent:** `DagsoversigtScreen`
 **Handling:** Formand markerer 2+ ordrer for samme dag via checkbox → "Kombiner"-knap → bekræftelses-modal → samleordre oprettes.
 **Skriver til:** `samleordrer` med `{ id, dato, ordre_ids: [a, b], anchor_ordre_id: a }`.
+**Hovedordre = anchor (LÅST 2026-06-25):** `anchor_ordre_id` sættes til den **først valgte** ordre (`a`) ved kombineringen. Den vises som **"Hovedordre"**-mærke i Connected Box og bliver liggende hele samleordrens levetid. En ordre der senere tilføjes via "+ Tilføj ordre" bliver **aldrig** hovedordre — anchor ligger fast fra oprettelsen.
 **Konsekvens:** ALLE morgen-bestillinger for ordrerne på den dato sættes automatisk som multilæs med anchor + stop-liste fra samleordren.
+
+### Trin 0B — Adskil samleordre (split / fortrydelse) — LÅST 2026-06-25
+**App:** formand
+**Komponent:** `DagsoversigtScreen` (kun her — split sker samme sted som kombinering)
+**Hvorfor:** Formanden skal kunne adskille en samleordre igen — enten fordi han alligevel ikke kan nå begge opgaver på dagen, eller fordi sammenlægningen var en fejl. Tidligere kunne man kun kombinere, ikke splitte.
+
+**Hvem kan trækkes ud (ren-regel):** Kun en **ren** ordre — dvs. en ordre med **0 vejesedler kørt i dag** — kan trækkes ud af samleordren. En ordre med aktivitet markeres **"I gang"** og har ingen fjern-affordance. Dette giver ingen data-konflikt fordi (a) hver vejeseddel allerede bærer sit eget `ordre_nr`, og (b) timer/tons registreres først **sidst på dagen** — altså efter et split ville være sket. Den udtrukne ordre er derfor pr. definition ren.
+
+**Hovedordren kan aldrig trækkes ud** — den er ankeret (`anchor_ordre_id`). For at fjerne alt bruges "Ophæv samleordre".
+
+**To affordances i Connected Box:**
+- **"Fjern fra samleordre"** pr. ren, ikke-anchor ordre-række → ordren forlader gruppen og bliver standalone igen.
+- **"Ophæv samleordre"** på boksen → splitter alle children på én gang.
+
+**Bil-arv ved opløsning (LÅST 2026-06-25):** Biler er bestilt på **samleordrens eget nummer** (S-1…). Når samleordren ender med kun hovedordren tilbage — uanset om det sker ved at de andre piltes ud (kollaps) ELLER ved "Ophæv samleordre" — opløses samleordren, og **bil-bestillingen overgår til hovedordrens (anchor) nummer**. Én regel begge veje.
+
+**Time-/tons-fordeling:** Sidst på dagen fordeles timer/tons på **de ordrer der er tilbage** i samleordren (kan være flere end anchor).
+
+**Skriver til:** `samleordrer.ordre_ids` (fjern element) — hvis `length < 2` efter fjernelse: slet samleordre-rækken + flyt aktiv bil-bestilling til `anchor_ordre_id`. Standalone-ordren(e) går tilbage til normal `morgen_bestillinger`-flow uden multilæs-flag.
 
 ### Trin 1 — Formand ser multilæs-bestilling i Ordre-plan
 **App:** formand
