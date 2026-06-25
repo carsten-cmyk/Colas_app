@@ -46,6 +46,12 @@ export interface MaterielTransportPlan {
     vejnavn: string
     nummer: string
     postnr: string
+    /**
+     * Google Maps-pin for afhentningsstedet.
+     * Prefylles automatisk fra materiellets seneste aflæsning (samme varenummer/resourceId)
+     * — dvs. hvor enheden sidst blev efterladt er næste etapes afhentnings-forslag.
+     */
+    koordinat?: { lat: number; lng: number }
   }
   /** Klar til afhentning: dato + tid */
   klar: {
@@ -59,6 +65,12 @@ export interface MaterielTransportPlan {
   }
   /** Aflæsningsadresse (udførselssted) */
   aflaesning: string
+  /**
+   * Google Maps-pin for aflæsningsstedet — sættes af formanden.
+   * Persisteres på varenummeret (resourceId) og bliver afhentnings-prefill
+   * for samme enheds næste etape-disponering.
+   */
+  aflaesningKoordinat?: { lat: number; lng: number }
   kommentar: string
   sendt: boolean
   bekraeftet: boolean
@@ -256,10 +268,11 @@ export const DEMO_TRANSPORT_PLANER: Record<string, MaterielTransportPlan> = {
     resourceId: 'r1',
     etapeId: 0,
     status: 'planlagt',
-    afhentning: { vejnavn: 'Industrivej', nummer: '12', postnr: '4600' },
+    afhentning: { vejnavn: 'Industrivej', nummer: '12', postnr: '4600', koordinat: { lat: 55.3312, lng: 11.6847 } },
     klar: { dato: '2026-03-16', tid: '14:00' },
     lokation: { dato: '2026-03-17', tid: '06:00' },
     aflaesning: 'Søvej 6D, 4900 Nakskov',
+    aflaesningKoordinat: { lat: 54.8347, lng: 11.1503 },
     kommentar: 'Kran tilgængelig på pladsen',
     sendt: true,
     bekraeftet: true,

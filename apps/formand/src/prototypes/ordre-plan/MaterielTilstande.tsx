@@ -17,6 +17,7 @@ import {
   type MaterielTransportPlan,
   transportKey,
 } from './etape'
+import { MaterielKort } from './MaterielKort'
 
 // ─── Delt hjælper: lang dansk dato-format ────────────────────────────────────
 
@@ -189,6 +190,13 @@ function TransportForm({
           </div>
         </div>
 
+        {/* Kort — afhentningssted */}
+        <MaterielKort
+          label="afhentningssted"
+          koordinat={plan.afhentning.koordinat}
+          onChange={k => patch({ afhentning: { ...plan.afhentning, koordinat: k } })}
+        />
+
         {/* Klar til afhentning */}
         <div className="flex flex-col gap-xxxs">
           <label className="font-inter text-xxs text-text-muted font-semibold">Klar til afhentning</label>
@@ -304,16 +312,25 @@ function TransportForm({
 
         {/* Manuel aflæsning: altid for 1. enhed eller ved "Nej" */}
         {(erFoerste || sammeAflaesning === false) && (
-          <div className="flex flex-col gap-xxxs">
-            <label className="font-inter text-xxs text-text-muted">Aflæsningsadresse</label>
-            <input
-              type="text"
-              value={plan.aflaesning}
-              onChange={e => patch({ aflaesning: e.target.value })}
-              placeholder="Vejnavn, nr., postnr."
-              className="font-inter text-xs text-text-primary bg-surface border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal placeholder:text-text-muted"
+          <>
+            <div className="flex flex-col gap-xxxs">
+              <label className="font-inter text-xxs text-text-muted">Aflæsningsadresse</label>
+              <input
+                type="text"
+                value={plan.aflaesning}
+                onChange={e => patch({ aflaesning: e.target.value })}
+                placeholder="Vejnavn, nr., postnr."
+                className="font-inter text-xs text-text-primary bg-surface border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal placeholder:text-text-muted"
+              />
+            </div>
+
+            {/* Kort — aflæsningssted (kun i manuel gren; arve-grenen arver koordinat fra 1. enhed) */}
+            <MaterielKort
+              label="aflæsningssted"
+              koordinat={plan.aflaesningKoordinat}
+              onChange={k => patch({ aflaesningKoordinat: k })}
             />
-          </div>
+          </>
         )}
       </div>
 
