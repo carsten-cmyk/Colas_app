@@ -14,11 +14,11 @@ import {
   Check,
   Plus,
   X,
+  Unlink,
 } from 'lucide-react'
 import { TopBar } from '@/components/layout/TopBar'
 import { BottomTabBar } from '@/components/layout/BottomTabBar'
 import type { TabName } from '@/types/navigation'
-import { formatDateRange } from '@/utils/date'
 
 // ─── Types (inline — prototype) ──────────────────────────────────────────────
 
@@ -50,6 +50,13 @@ interface MockOrder {
 interface MockSamleordre {
   id: string
   orderIds: string[]
+  /**
+   * Hovedordre (anchor) — den FØRST valgte ordre ved kombinering. Ligger fast hele
+   * samleordrens levetid; en ordre tilføjet senere via "+ Tilføj ordre" bliver aldrig anchor.
+   * Kan aldrig trækkes ud. Når samleordren opløses, overgår bil-bestillingen hertil.
+   * Spejler `anchor_ordre_id` i FF Flow 11 Trin 0A/0B (LÅST 2026-06-25).
+   */
+  anchorOrderId: string
 }
 
 // Shape for navigation til Ordre-plan med nye samleordre-children.
@@ -269,7 +276,7 @@ const MOCK_ORDERS: MockOrder[] = [
 // TODO: Erstat med Supabase når klar
 // Mock-samleordre: ord-2 + ord-3 på 2026-03-17 som eksempel på Connected Box
 const INITIAL_SAMLEORDRER: MockSamleordre[] = [
-  { id: 'samle-001', orderIds: ['ord-2', 'ord-3'] },
+  { id: 'samle-001', orderIds: ['ord-2', 'ord-3'], anchorOrderId: 'ord-2' },
 ]
 
 // Module-level mutable store så samleordrer overlever navigation væk fra Dagsoversigt.
@@ -570,13 +577,6 @@ function OrderCardBodyV2({ order, samleNr }: { order: MockOrder; samleNr?: strin
   )
 }
 
-// Status-classes — V3: rounded-full pill, lys baggrund (toggle-æstetik fra OrdrePlanScreen linje 1236-1256)
-// LÅST 2026-06-05: aktiv=mørkegrøn (bg-good/text-white), planlagt=lysegrøn (bg-good-bg/text-good), afventer=gul (bg-warn-bg/text-deep-teal)
-const STATUS_CLASS_V3: Record<OrderStatus, string> = {
-  planlagt: 'bg-good-bg text-good',
-  aktiv: 'bg-good text-white',
-  afventer: 'bg-warn-bg text-deep-teal',
-}
 
 /** Ordre-kortets indhold V3 — toggle-inspireret: hvid base + deep-teal accent-elementer.
  *  4-kol grid (samme struktur som V2) men på hvid baggrund.
@@ -584,7 +584,17 @@ const STATUS_CLASS_V3: Record<OrderStatus, string> = {
  *  Status-piller er rounded-full (matcher toggle-æstetikken i OrdrePlanScreen linje 1236-1256).
  *  Planlæg-knap: bg-deep-teal text-white rounded-full font-poppins font-semibold — direkte toggle-stil.
  */
-function OrderCardBodyV3({ order }: { order: MockOrder }) {
+function OrderCardBodyV3({
+  order,
+  isAnchor = false,
+  onRemove,
+}: {
+  order: MockOrder
+  /** Vis "Hovedordre"-mærke — kun relevant i samleordre-kontekst */
+  isAnchor?: boolean
+  /** Hvis sat: vis "Fjern fra samleordre"-knap. Udelades for anchor + ordrer i gang. */
+  onRemove?: () => void
+}) {
   return (
     <>
       {/* ─── Header-strip ─────────────────────────────────────────────────── */}
@@ -600,14 +610,25 @@ function OrderCardBodyV3({ order }: { order: MockOrder }) {
         </div>
         {/* Højre: badge-stack — alle rounded-full (toggle-æstetik) */}
         <div className="flex items-center gap-xs flex-wrap flex-shrink-0">
-          <span className="px-xs py-[2px] rounded-full bg-surface-2 text-text-muted font-inter font-semibold text-xs flex-shrink-0">
-            Udføres i perioden {formatDateRange(order.startDate, order.endDate)}
-          </span>
-          <span
-            className={`px-xs py-[2px] rounded-full font-inter font-semibold text-xs flex-shrink-0 ${STATUS_CLASS_V3[order.status]}`}
-          >
-            {STATUS_LABEL[order.status]}
-          </span>
+          {/* Hovedordre-mærke — dark-teal + gul Layers spejler samleordre-ankerets visuelle identitet */}
+          {isAnchor && (
+            <span className="inline-flex items-center gap-xxxs px-xs py-[2px] rounded-full bg-dark-teal text-yellow font-inter font-semibold text-xs flex-shrink-0">
+              <Layers size={11} aria-hidden="true" />
+              Hovedordre
+            </span>
+          )}
+          {/* Fjern fra samleordre — kun for rene, ikke-anchor ordrer (onRemove styrer dette) */}
+          {onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              aria-label={`Fjern ordre ${order.orderNumber} fra samleordre`}
+              className="inline-flex items-center gap-xxxs px-xs py-[2px] rounded-full border border-hairline-2 text-text-muted hover:text-deep-teal hover:border-deep-teal/40 hover:bg-soft-aqua font-inter font-semibold text-xs flex-shrink-0 transition-colors"
+            >
+              <X size={12} aria-hidden="true" />
+              Fjern
+            </button>
+          )}
         </div>
       </div>
 
@@ -707,6 +728,9 @@ export function DagsoversigtScreen() {
   // Bekræftelses-modal når formanden kombinerer ordrer
   const [showConfirmKombiner, setShowConfirmKombiner] = useState(false)
 
+  // Bekræftelses-modal når formanden ophæver en hel samleordre (id på den der ophæves)
+  const [ophaevSamleordreId, setOphaevSamleordreId] = useState<string | null>(null)
+
   // Add-mode: aktiveres når brugeren kommer fra Ordre-plan med
   // ?addToSamleordreId=samle-001 (URL-mode), ELLER når brugeren klikker
   // "+ Tilføj ordre" på en Connected Box (lokal-mode via localAddModeSamleordreId).
@@ -795,12 +819,48 @@ export function DagsoversigtScreen() {
       setLocalAddModeSamleordreId(null)
       return
     }
-    // Normal mode: opret ny samleordre
+    // Normal mode: opret ny samleordre.
+    // anchorOrderId = FØRST valgte ordre (Set bevarer insertion-order) → bliver hovedordre.
     const selectedArray = Array.from(selectedOrderIds)
     const newId = `samle-${Date.now()}`
-    updateSamleordrer(prev => [...prev, { id: newId, orderIds: selectedArray }])
+    updateSamleordrer(prev => [
+      ...prev,
+      { id: newId, orderIds: selectedArray, anchorOrderId: selectedArray[0] },
+    ])
     setSelectedOrderIds(new Set())
     setShowConfirmKombiner(false)
+  }
+
+  // ─── Adskil samleordre (split / fortrydelse) — FF Flow 11 Trin 0B ───────────
+
+  /**
+   * Fjern ÉN ren ordre fra en samleordre. Kun rene, ikke-anchor ordrer kan fjernes
+   * (styres af render-laget). Hvis der er færre end 2 tilbage, kollapser samleordren:
+   * den slettes, og hovedordren (anchor) bliver standalone igen.
+   * TODO: Erstat med Supabase når klar — flyt confirmed_vehicle til anchor_ordre_id ved kollaps
+   */
+  function handleRemoveFromSamleordre(samleId: string, orderId: string) {
+    updateSamleordrer(prev =>
+      prev.flatMap(s => {
+        if (s.id !== samleId) return [s]
+        const nextIds = s.orderIds.filter(id => id !== orderId)
+        // Kollaps: kun hovedordren tilbage → opløs samleordren (den resterende ordre
+        // falder automatisk tilbage i standaloneOrders). Bil-bestillingen overgår til anchor.
+        if (nextIds.length < 2) return []
+        return [{ ...s, orderIds: nextIds }]
+      })
+    )
+  }
+
+  /**
+   * Ophæv hele samleordren på én gang — alle children bliver standalone igen.
+   * Bil-bestillingen overgår til hovedordren (anchor), jf. FF Trin 0B.
+   * TODO: Erstat med Supabase når klar — flyt confirmed_vehicle til anchor_ordre_id
+   */
+  function confirmOphaevSamleordre() {
+    if (!ophaevSamleordreId) return
+    updateSamleordrer(prev => prev.filter(s => s.id !== ophaevSamleordreId))
+    setOphaevSamleordreId(null)
   }
 
   const canKombiner = isAddMode ? selectedOrderIds.size >= 1 : selectedOrderIds.size >= 2
@@ -1063,19 +1123,42 @@ export function DagsoversigtScreen() {
                       {/* Højre: child-ordrer + bundknap stacked vertikalt */}
                       <div className="flex-1 min-w-0 flex flex-col gap-md">
                         {/* Body: hver child-ordre via V3 */}
-                        {childOrders.map((order, idx) => (
-                          <div
-                            key={order.id}
-                            className={idx < childOrders.length - 1 ? 'border-b border-hairline' : ''}
-                          >
-                            <OrderCardBodyV3 order={order} />
-                          </div>
-                        ))}
+                        {childOrders.map((order, idx) => {
+                          const isAnchor = order.id === samle.anchorOrderId
+                          // Ren-regel: kun en ordre uden aktivitet ('aktiv' = "I gang" = har kørt
+                          // vejesedler) kan trækkes ud. Hovedordren kan aldrig fjernes.
+                          const canRemove = !isAnchor && order.status !== 'aktiv'
+                          return (
+                            <div
+                              key={order.id}
+                              className={idx < childOrders.length - 1 ? 'border-b border-hairline' : ''}
+                            >
+                              <OrderCardBodyV3
+                                order={order}
+                                isAnchor={isAnchor}
+                                onRemove={canRemove ? () => handleRemoveFromSamleordre(samle.id, order.id) : undefined}
+                              />
+                            </div>
+                          )
+                        })}
 
                         {/* Bundlinje: "+ Tilføj ordre" (sekundær) + Planlæg-knap (primær) — toggle-stil
                             Knappen får en aktiv "pille"-tilstand når denne samleordre er i lokal add-mode,
                             så formanden tydeligt kan se at han nu skal vælge ordrer at tilføje. */}
-                        <div className="border-t border-hairline px-sm py-xs flex justify-end gap-xs items-center">
+                        <div className="border-t border-hairline px-sm py-xs flex justify-between gap-xs items-center">
+                          {/* Venstre: Ophæv hele samleordren — opløser alle children på én gang */}
+                          <button
+                            type="button"
+                            onClick={() => setOphaevSamleordreId(samle.id)}
+                            aria-label={`Ophæv samleordre ${samleNr}`}
+                            className="inline-flex items-center gap-xxxs px-sm py-xs rounded-full text-text-muted hover:text-deep-teal hover:bg-soft-aqua font-poppins font-semibold text-xs transition-colors"
+                          >
+                            <Unlink size={14} aria-hidden="true" />
+                            Ophæv samleordre
+                          </button>
+
+                          {/* Højre-gruppe: tilføj ordre (sekundær) + planlæg (primær) */}
+                          <div className="flex items-center gap-xs">
                           {/* Sekundær: tilføj ordre lokalt fra Dagsoversigt */}
                           {isAddMode && !isAddModeFromUrl && targetSamleordre?.id === samle.id ? (
                             // Aktiv-tilstand: pille der spejler stilen på top-banneret
@@ -1122,6 +1205,7 @@ export function DagsoversigtScreen() {
                               </button>
                             )
                           })()}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1240,7 +1324,7 @@ export function DagsoversigtScreen() {
                   ? isAddModeFromUrl
                     ? 'Ordrerne tilføjes til den eksisterende samleordre. Du kommer tilbage til ordreplanen efter bekræftelse.'
                     : 'Ordrerne tilføjes til samleordren. Du forbliver på Dagsoversigt efter bekræftelse.'
-                  : 'Ordrerne samles til én samleordre der kan håndteres som en enhed. Du kan ophæve samleordren igen ved at fjerne fluebenene.'}
+                  : 'Den først valgte ordre bliver hovedordre. Ordrerne samles til én samleordre der kan håndteres som en enhed. Du kan altid fjerne en enkelt ordre igen eller ophæve hele samleordren fra Dagsoversigt.'}
               </p>
             </div>
             <div className="flex items-center justify-end gap-xs">
@@ -1257,6 +1341,55 @@ export function DagsoversigtScreen() {
                 className="font-poppins font-semibold text-sm text-white bg-deep-teal rounded-full px-md py-xs hover:opacity-90 transition-opacity"
               >
                 Bekræft
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bekræftelses-modal — Ophæv hele samleordren */}
+      {ophaevSamleordreId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-md"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ophaev-modal-title"
+        >
+          {/* Backdrop */}
+          <button
+            type="button"
+            aria-label="Luk dialog"
+            onClick={() => setOphaevSamleordreId(null)}
+            className="absolute inset-0 bg-deep-teal/40"
+          />
+          {/* Modal-card */}
+          <div className="relative bg-white rounded-2xl shadow-lg max-w-md w-full p-lg flex flex-col gap-md">
+            <div className="flex flex-col gap-xs">
+              <h2
+                id="ophaev-modal-title"
+                className="font-poppins font-semibold text-lg text-deep-teal leading-tight"
+              >
+                Ophæv samleordre {getSamleordreNr(ophaevSamleordreId)}?
+              </h2>
+              <p className="font-inter text-sm text-text-secondary leading-relaxed">
+                Ordrerne adskilles og bliver selvstændige opgaver igen. Eventuelle bestilte biler
+                overgår til hovedordren. Du kan altid kombinere ordrerne igen.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-xs">
+              <button
+                type="button"
+                onClick={() => setOphaevSamleordreId(null)}
+                className="font-inter font-medium text-sm text-text-secondary bg-white border border-hairline rounded-full px-md py-xs hover:bg-surface-2 transition-colors"
+              >
+                Annullér
+              </button>
+              <button
+                type="button"
+                onClick={confirmOphaevSamleordre}
+                className="font-poppins font-semibold text-sm text-white bg-deep-teal rounded-full px-md py-xs hover:opacity-90 transition-opacity"
+              >
+                Ophæv samleordre
               </button>
             </div>
           </div>
