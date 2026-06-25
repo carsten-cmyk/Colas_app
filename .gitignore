@@ -74,7 +74,10 @@ Transport_Løsning/
 # Verifikations-screenshots i repo-roden (artefakter, ikke kildekode)
 /*.png
 
-# Rådata fra PLAN/MAUS — kundedata, må IKKE committes (kun afledte .md)
-Docs/Datafiler/*.xlsx
-Docs/Datafiler/*.xls
-Docs/Datafiler/*.csv
+# Rådata fra PLAN/MAUS — kundedata, må IKKE committes.
+# Allowlist: ignorér ALT i mappen (robust mod alle dataformater) UNDTAGEN
+# afledte docs (.md) + generator-scripts. Erstatter de tidligere *.xlsx/*.xls/*.csv-regler.
+Docs/Datafiler/*
+!Docs/Datafiler/*.md
+!Docs/Datafiler/scripts/
+!Docs/Datafiler/scripts/**
