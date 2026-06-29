@@ -31,6 +31,20 @@ Begge kræver: France åbner firewall App→backend; bruger-auth via AD/Azure (F
 
 ---
 
+## 🧭 Navigations-note: TopBar-nav erstatter BottomTabBar på OrdrePlanScreen (LÅST 2026-06-29)
+
+**Beslutning (Carsten, 2026-06-29):** På formandens `OrdrePlanScreen` flyttes top-navigationen fra den nederste `BottomTabBar` op i `TopBar` via en ny `TopBarNav`-strip. BottomTabBar fjernes fra denne skærm.
+
+- **Bevarede nav-mål** (uændrede ruter): Kalenderoversigt → `/prototyper/gantt`, Dagens opgaver → `/prototyper/dagsoversigt`.
+- **Midlertidigt fjernet:** **Beskeder**-tab (inkl. message-badge, tidligere hardcoded `messageCount={2}`), **Kontakt** og **Dokumentation**. Disse havde i BottomTabBar kun lokal `setActiveTab`-state uden rute-mål. De **genindføres når en delt app-shell etableres på tværs af apps** (formand/vognmand/chauffeur-web deler i dag TopBar-mønstret men ikke en fælles shell-komponent).
+- **Fluid layout (Mulighed B):** OrdrePlan-shellens grid konverteres til fluid via `clamp()`/`minmax()`/`fr` (`gridTemplateColumns: 'clamp(220px, 22vw, 320px) minmax(0, 1fr)'`, aside `height: calc(100vh - 52px)`). **Ingen plugin, ingen `tailwind.config`-edit** — inline-værdierne er genuint viewport-beregnede.
+- **⏸ Udskudt cross-app-beslutning:** Et **container-query-plugin** (`@tailwindcss/container-queries`) blev overvejet til responsiv shell men er **parkeret** som en bredere cross-app-beslutning — vurderes når delt shell + responsive-strategi tages op samlet for alle web-apps. Indtil da: Mulighed B (clamp/minmax) er kanonisk for formand-shell.
+- **🌍 Cross-app-kandidat:** `TopBar` + `TopBarNav` bør flyttes til `shared/components/` når delt shell etableres (jf. COMPONENT_REGISTRY 🌍-mærkning). Indtil da bor de i `apps/formand/src/components/layout/`.
+
+SPEC-filer: `Docs/Formand/SPEC_TopBarNav.md`, `Docs/Formand/SPEC_TopBar_NavSlot.md`, `Docs/Formand/SPEC_OrdrePlan_ShellRefactor.md`.
+
+---
+
 ## Flow 1: Bilbestilling — Formand → Vognmand → Chauffør
 
 **Trigger:** Formand planlægger asfalt-kørsel på en dag

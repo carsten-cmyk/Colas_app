@@ -17,8 +17,6 @@ import {
   Unlink,
 } from 'lucide-react'
 import { TopBar } from '@/components/layout/TopBar'
-import { BottomTabBar } from '@/components/layout/BottomTabBar'
-import type { TabName } from '@/types/navigation'
 
 // ─── Types (inline — prototype) ──────────────────────────────────────────────
 
@@ -703,9 +701,6 @@ export function DagsoversigtScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('uge')
   const [offset, setOffset] = useState(0)
 
-  // Tab-state
-  const [activeTab, setActiveTab] = useState<TabName>('dagens-opgaver')
-
   // Valgte ordre-id'er til samleordre
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
 
@@ -742,11 +737,6 @@ export function DagsoversigtScreen() {
   const targetSamleordre = isAddMode
     ? samleordrer.find(s => s.id === addToSamleordreId)
     : null
-
-  function handleTabPress(tab: TabName) {
-    if (tab === 'mine-opgaver') { navigate('/prototyper/gantt'); return }
-    setActiveTab(tab)
-  }
 
   const viewDays = getViewDays(viewMode)
   const windowStart = getWindowStart(viewMode, offset)
@@ -888,9 +878,22 @@ export function DagsoversigtScreen() {
 
   return (
     <div className="min-h-screen bg-page flex flex-col">
-      <TopBar userInitials="OJ" userName="Ole J." onSettingsPress={() => {}} />
+      <TopBar
+        userInitials="OJ"
+        userName="Ole J."
+        onSettingsPress={() => {}}
+        onLogoPress={() => navigate('/prototyper/dagsoversigt')}
+        nav={{
+          items: [
+            { id: 'kalenderoversigt', label: 'Kalenderoversigt', to: '/prototyper/gantt' },
+            { id: 'dagens-opgaver',   label: 'Dagens opgaver',   to: '/prototyper/dagsoversigt' },
+          ],
+          activeId: 'dagens-opgaver',
+          onNavigate: (item) => navigate(item.to),
+        }}
+      />
 
-      <main className="flex-1 overflow-y-auto" style={{ paddingBottom: 70 }}>
+      <main className="flex-1 overflow-y-auto pb-lg">
         {/* Rettelse 5: w-[80%] mx-auto erstatter max-w-2xl */}
         <div className="w-[80%] mx-auto px-sm py-md">
 
@@ -1281,8 +1284,7 @@ export function DagsoversigtScreen() {
           aria-label={isAddMode
             ? `Tilføj ${selectedOrderIds.size} ordre${selectedOrderIds.size > 1 ? 'r' : ''} til samleordre`
             : `Kombiner ${selectedOrderIds.size} ordrer til samleordre`}
-          className="fixed bottom-[84px] right-md z-30 flex items-center gap-xs bg-yellow text-deep-teal rounded-full pl-sm pr-md py-sm font-poppins font-semibold text-sm hover:opacity-90 transition-colors shadow-lg"
-          // 84px = 70px BottomTabBar + 14px luft
+          className="fixed bottom-md right-md z-30 flex items-center gap-xs bg-yellow text-deep-teal rounded-full pl-sm pr-md py-sm font-poppins font-semibold text-sm hover:opacity-90 transition-colors shadow-lg"
         >
           <span className="flex items-center justify-center w-6 h-6 bg-deep-teal/20 rounded-full">
             <Layers size={16} aria-hidden="true" />
@@ -1396,7 +1398,6 @@ export function DagsoversigtScreen() {
         </div>
       )}
 
-      <BottomTabBar activeTab={activeTab} onTabPress={handleTabPress} messageCount={2} />
     </div>
   )
 }

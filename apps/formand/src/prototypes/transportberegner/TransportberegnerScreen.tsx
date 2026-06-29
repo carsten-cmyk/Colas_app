@@ -9,8 +9,6 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Truck, Clock, ChevronDown, ChevronUp, Factory, Plus, X, CheckCircle2, Coffee } from 'lucide-react'
 import { TopBar } from '@/components/layout/TopBar'
-import { BottomTabBar } from '@/components/layout/BottomTabBar'
-import type { TabName } from '@/types/navigation'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -326,7 +324,6 @@ const PHASE_LABEL: Record<TripSegment['phase'], string> = {
 
 export function TransportberegnerScreen() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState<TabName>('dagens-opgaver')
   const [params, setParams] = useState<Params>(DEFAULT_PARAMS)
   const [paramsOpen, setParamsOpen] = useState(true)
   const [simOpen, setSimOpen] = useState(false)
@@ -351,11 +348,6 @@ export function TransportberegnerScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProductId, dayIndex])
-
-  function handleTabPress(tab: TabName) {
-    if (tab === 'mine-opgaver') { navigate('/prototyper/gantt'); return }
-    setActiveTab(tab)
-  }
 
   function handleBack() {
     if (!savedDays.has(dayIndex)) {
@@ -401,9 +393,22 @@ export function TransportberegnerScreen() {
 
   return (
     <div className="min-h-screen bg-soft-aqua flex flex-col">
-      <TopBar userInitials="OJ" userName="Ole J." onSettingsPress={() => {}} />
+      <TopBar
+        userInitials="OJ"
+        userName="Ole J."
+        onSettingsPress={() => {}}
+        onLogoPress={() => navigate('/prototyper/dagsoversigt')}
+        nav={{
+          items: [
+            { id: 'kalenderoversigt', label: 'Kalenderoversigt', to: '/prototyper/gantt' },
+            { id: 'dagens-opgaver',   label: 'Dagens opgaver',   to: '/prototyper/dagsoversigt' },
+          ],
+          // activeId udeladt — TransportberegnerScreen er et sub-værktøj, intet nav-mål er aktivt
+          onNavigate: (item) => navigate(item.to),
+        }}
+      />
 
-      <main className="flex-1 overflow-y-auto" style={{ paddingBottom: 110 }}>
+      <main className="flex-1 overflow-y-auto pb-lg">
 
         <div className="px-sm pb-sm pt-sm flex flex-col gap-sm">
 
@@ -926,8 +931,6 @@ export function TransportberegnerScreen() {
 
         </div>
       </main>
-
-      <BottomTabBar activeTab={activeTab} onTabPress={handleTabPress} messageCount={2} />
 
       {/* ── Forlad-alert ─────────────────────────────────────────── */}
       {showLeaveAlert && (

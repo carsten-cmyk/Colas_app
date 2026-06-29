@@ -19,8 +19,6 @@ import {
   MessageSquare,
 } from 'lucide-react'
 import { TopBar } from '@/components/layout/TopBar'
-import { BottomTabBar } from '@/components/layout/BottomTabBar'
-import type { TabName } from '@/types/navigation'
 import { useRecept } from '@/hooks/useRecept'
 import { useDagsoverblik } from '@/hooks/useDagsoverblik'
 import { formatWeekday, formatLongDate } from '@/utils/date'
@@ -79,7 +77,6 @@ export function OrdrePlanScreen() {
   const [samleordreCtx, setSamleordreCtx] = useState<SamleordreContext | null>(
     isSamleordreMode ? MOCK_SAMLEORDRE : null
   )
-  const [activeTab, setActiveTab] = useState<TabName>('dagens-opgaver')
   // Samleordre Ordredetaljer tab: hvilken child-ordre vises i spec-grid
   const [samleordreTabOrderNr, setSamleordreTabOrderNr] = useState<string>(() =>
     MOCK_SAMLEORDRE.children.find(c => c.isAnchor)?.orderNumber ?? MOCK_SAMLEORDRE.children[0].orderNumber
@@ -831,17 +828,29 @@ export function OrdrePlanScreen() {
   return (
     <div className="min-h-screen bg-page">
       {/* ── TopBar ───────────────────────────────────────────────────── */}
-      <TopBar userInitials="OJ" userName="Ole J." onSettingsPress={() => {}} />
+      <TopBar
+        userInitials="OJ"
+        userName="Ole J."
+        onSettingsPress={() => {}}
+        nav={{
+          items: [
+            { id: 'kalenderoversigt', label: 'Kalenderoversigt', to: '/prototyper/gantt' },
+            { id: 'dagens-opgaver',   label: 'Dagens opgaver',   to: '/prototyper/dagsoversigt' },
+          ],
+          // OrdrePlan er ikke selv et nav-mål → ingen activeId
+          onNavigate: (item) => navigate(item.to),
+        }}
+      />
 
       <div
         className="grid"
-        style={{ gridTemplateColumns: '280px 1fr', paddingTop: 44 }}
+        style={{ gridTemplateColumns: 'clamp(220px, 22vw, 320px) minmax(0, 1fr)' }}
       >
 
         {/* ── Venstre rail ─────────────────────────────────────────── */}
         <aside
           className="sticky border-r border-hairline flex flex-col gap-md px-md pb-md pt-xs overflow-y-auto"
-          style={{ top: 52, height: 'calc(100vh - 52px - 70px)' }}
+          style={{ top: 52, height: 'calc(100vh - 52px)' }}
         >
           {/* Adresse + ordrenummer */}
           <div>
@@ -946,7 +955,7 @@ export function OrdrePlanScreen() {
         </aside>
 
         {/* ── Hoved-indhold ────────────────────────────────────────── */}
-        <main className="px-lg pb-[120px] pt-xs">
+        <main className="px-lg pb-lg pt-xs">
 
           {/* ── Mode-toggle + tilbage-link på samme række ──────────────────── */}
           <div className="flex items-center justify-between flex-wrap gap-sm mb-md">
@@ -2400,15 +2409,6 @@ export function OrdrePlanScreen() {
         </div>
       )}
 
-      <BottomTabBar
-        activeTab={activeTab}
-        onTabPress={tab => {
-          if (tab === 'mine-opgaver') { navigate('/prototyper/gantt'); return }
-          if (tab === 'dagens-opgaver') { navigate('/prototyper/dagsoversigt'); return }
-          setActiveTab(tab)
-        }}
-        messageCount={2}
-      />
     </div>
   )
 }

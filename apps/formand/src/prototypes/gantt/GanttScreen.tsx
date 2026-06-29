@@ -8,8 +8,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import { TopBar } from '@/components/layout/TopBar'
-import { BottomTabBar } from '@/components/layout/BottomTabBar'
-import type { TabName } from '@/types/navigation'
 
 type ViewMode = 'uge' | '14-dage' | 'maaned'
 
@@ -169,17 +167,11 @@ function getViewDays(mode: ViewMode): number {
 
 export function GanttScreen() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState<TabName>('mine-opgaver')
   const [viewMode, setViewMode] = useState<ViewMode>('14-dage')
   const [offset, setOffset] = useState(0) // i dage fra TODAY
   // aktivRegionId — fremtidig brug: vis aktivt regionnavn i header-subtitle eller skift datasæt
   const aktivRegionId = '2900-CON West Sydjylland'
   const [comparisonRegionId, setComparisonRegionId] = useState<string | null>(null)
-
-  function handleTabPress(tab: TabName) {
-    if (tab === 'dagens-opgaver') { navigate('/prototyper/ordre-plan'); return }
-    setActiveTab(tab)
-  }
 
   const viewDays = getViewDays(viewMode)
 
@@ -210,9 +202,22 @@ export function GanttScreen() {
 
   return (
     <div className="min-h-screen bg-page flex flex-col">
-      <TopBar userInitials="OJ" userName="Ole J." onSettingsPress={() => {}} />
+      <TopBar
+        userInitials="OJ"
+        userName="Ole J."
+        onSettingsPress={() => {}}
+        onLogoPress={() => navigate('/prototyper/dagsoversigt')}
+        nav={{
+          items: [
+            { id: 'kalenderoversigt', label: 'Kalenderoversigt', to: '/prototyper/gantt' },
+            { id: 'dagens-opgaver',   label: 'Dagens opgaver',   to: '/prototyper/dagsoversigt' },
+          ],
+          activeId: 'kalenderoversigt',
+          onNavigate: (item) => navigate(item.to),
+        }}
+      />
 
-      <main className="flex-1 overflow-y-auto" style={{ paddingBottom: 70 }}>
+      <main className="flex-1 overflow-y-auto pb-md">
         <div className="w-[80%] mx-auto px-sm pt-md pb-md">
 
           {/* Page header */}
@@ -539,7 +544,6 @@ export function GanttScreen() {
         </div>
       </main>
 
-      <BottomTabBar activeTab={activeTab} onTabPress={handleTabPress} messageCount={2} />
     </div>
   )
 }
