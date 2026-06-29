@@ -36,3 +36,57 @@ export const LangtNavn: Story = {
     onSettingsPress: () => {},
   },
 }
+
+// Nav-slot stories — round 2 (TopBar NavSlot udvidelse)
+
+export const MedNav: Story = {
+  args: {
+    onSettingsPress: () => alert('Indstillinger'),
+    nav: {
+      items: [
+        { id: 'kalenderoversigt', label: 'Kalenderoversigt', to: '/kalenderoversigt' },
+        { id: 'dagens-opgaver', label: 'Dagens opgaver', to: '/dagens-opgaver' },
+      ],
+      activeId: undefined,
+      onNavigate: (item) => alert(`Navigerer til ${item.label}`),
+    },
+  },
+}
+
+export const MedNavKalenderAktiv: Story = {
+  args: {
+    onSettingsPress: () => {},
+    nav: {
+      items: [
+        { id: 'kalenderoversigt', label: 'Kalenderoversigt', to: '/kalenderoversigt' },
+        { id: 'dagens-opgaver', label: 'Dagens opgaver', to: '/dagens-opgaver' },
+      ],
+      activeId: 'kalenderoversigt',
+      onNavigate: () => {},
+    },
+  },
+}
+
+export const MedNavDagensOpgaverAktiv: Story = {
+  args: {
+    onSettingsPress: () => {},
+    nav: {
+      items: [
+        { id: 'kalenderoversigt', label: 'Kalenderoversigt', to: '/kalenderoversigt' },
+        { id: 'dagens-opgaver', label: 'Dagens opgaver', to: '/dagens-opgaver' },
+      ],
+      activeId: 'dagens-opgaver',
+      onNavigate: () => {},
+    },
+  },
+}
+
+export const MedNavTomItems: Story = {
+  args: {
+    onSettingsPress: () => {},
+    nav: {
+      items: [],
+      onNavigate: () => {},
+    },
+  },
+}

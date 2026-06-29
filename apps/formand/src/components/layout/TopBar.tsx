@@ -1,4 +1,6 @@
 import { Settings } from 'lucide-react'
+import type { TopBarNavProps } from './TopBarNav'
+import { TopBarNav } from './TopBarNav'
 
 export interface TopBarProps {
   /** Initialer til avatar-cirkel, fx "OJ" */
@@ -6,20 +8,53 @@ export interface TopBarProps {
   /** Kort navn vist i avatar-pill, fx "Ole J." */
   userName: string
   onSettingsPress?: () => void
+  /**
+   * Valgfri navigations-slot vist mellem logo og avatar.
+   * Når undefined renderes ingen nav (bagudkompatibelt — eksisterende
+   * brug af TopBar uden nav er uændret).
+   */
+  nav?: TopBarNavProps
+  /**
+   * Valgfri klik-handler på COLAS-logoet (fx naviger til Dagens opgaver).
+   * Når sat bliver logoet en klikbar knap; ellers et statisk billede
+   * (bagudkompatibelt — eksisterende brug uden onLogoPress er uændret).
+   */
+  onLogoPress?: () => void
 }
 
-export function TopBar({ userInitials, userName, onSettingsPress }: TopBarProps) {
+export function TopBar({ userInitials, userName, onSettingsPress, nav, onLogoPress }: TopBarProps) {
+  const logo = (
+    <img
+      src="/colas-logo.png"
+      alt="Colas"
+      className="object-contain"
+      style={{ height: 32 }}
+    />
+  )
+
   return (
     <header
       className="bg-deep-teal flex items-center justify-between px-sm sticky top-0 z-50"
       style={{ height: 52 }}
     >
-      <img
-        src="/colas-logo.png"
-        alt="Colas"
-        className="object-contain"
-        style={{ height: 32 }}
-      />
+      {onLogoPress ? (
+        <button
+          onClick={onLogoPress}
+          aria-label="Gå til Dagens opgaver"
+          className="flex items-center min-h-touch -mx-xxxs px-xxxs rounded-md hover:bg-white/10 transition-colors"
+        >
+          {logo}
+        </button>
+      ) : (
+        logo
+      )}
+
+      {/* Nav-slot: renderes kun når nav-prop er sat — bagudkompatibelt */}
+      {nav && (
+        <div className="flex-1 ml-md">
+          <TopBarNav {...nav} />
+        </div>
+      )}
 
       <div className="flex items-center gap-xs">
         {/* Avatar pill */}
