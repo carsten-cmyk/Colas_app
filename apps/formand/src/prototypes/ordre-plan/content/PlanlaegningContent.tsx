@@ -102,6 +102,14 @@ export interface PlanlaegningContentProps {
   // ── Samleordre ──────────────────────────────────────────────────────────
   isSamleordreMode: boolean
   samleordreCtx: SamleordreContext | null
+  /** Aktivt ordrenummer i samleordre-tab (delt root-state) */
+  samleordreTabOrderNr?: string
+  /**
+   * Callback der skifter aktiv child-ordre i delt root-state.
+   * Eksponeres som callback (ikke rå setter) for at holde containere agnostiske.
+   * Sektionerne forbruger den i Round 2.
+   */
+  onSelectSamleordreTab?: (orderNumber: string) => void
 
   // ── Kørsel-state (root-ejet — delt med Afregning) ───────────────────────
   kørselOrders: Record<string, VehicleOrder[]>
@@ -179,6 +187,8 @@ export function PlanlaegningContent({
   onSetProductSamles,
   isSamleordreMode,
   samleordreCtx,
+  samleordreTabOrderNr,
+  onSelectSamleordreTab,
   kørselOrders,
   onSetKørselOrders,
   kørselParams,
@@ -248,6 +258,10 @@ export function PlanlaegningContent({
           onRemovePhoto={onRemovePhoto}
           noteComments={noteComments}
           onAddComment={onAddComment}
+          isSamleordreMode={isSamleordreMode}
+          samleordreCtx={samleordreCtx}
+          samleordreTabOrderNr={samleordreTabOrderNr}
+          onSelectSamleordreTab={onSelectSamleordreTab}
         />
 
         {/* hr-skille: kopieret ORDRET fra OrdrePlanScreen.tsx L1214 */}

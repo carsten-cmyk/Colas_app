@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Camera, Plus } from 'lucide-react'
 import { EkstraarbejdeBlok } from '../../../components/EkstraarbejdeBlok'
 import { ForCheckbox } from '../../../components/ForCheckbox'
 import { JaNejToggle } from '../../../components/JaNejToggle'
+import { SamleordreChildTabs } from '../../../components/SamleordreChildTabs'
 import { UNDERLAG_OPTIONS, AARSAG_OPTIONS } from '../../../mocks'
 import type {
   MockPhoto,
@@ -23,6 +24,11 @@ export interface ForundersoegelsesSectionProps {
   samleordreCtx?: SamleordreContext | null
   /** Aktivt ordrenummer i samleordre-tab — bruges til per-child preview i Forundersøgelse-header */
   samleordreTabOrderNr?: string
+  /**
+   * Callback der skifter aktivt child-ordrenummer — løftes opad til container.
+   * Optional så typecheck er grøn inden container-wiring er færdig.
+   */
+  onSelectSamleordreTab?: (orderNumber: string) => void
   /** Ekstralinjer — løftet til root så AfregningContent kan aflæse dem */
   ekstraLinjer: EkstraLinje[]
   setEkstraLinjer: React.Dispatch<React.SetStateAction<EkstraLinje[]>>
@@ -37,6 +43,7 @@ export function ForundersoegelseSection({
   isSamleordreMode,
   samleordreCtx,
   samleordreTabOrderNr,
+  onSelectSamleordreTab,
   ekstraLinjer,
   setEkstraLinjer,
   ekstraSent,
@@ -92,9 +99,29 @@ export function ForundersoegelseSection({
     setEkstraLinjer(prev => prev.filter(l => l.id !== id))
   }
 
+  // Beregn om tab-blokken skal vises — bruges til betinget afrunding af boks-wrapper
+  const showChildTabs = Boolean(
+    isSamleordreMode && samleordreCtx && samleordreCtx.children.length > 1 && samleordreTabOrderNr
+  )
+
   return (
     // TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate)
     <section>
+      {/* Child-tabs øverst — kun i samleordre-mode med 2+ children.
+          PATTERN: variant='attached' kobler tab-rækken visuelt til boks-wrapperen nedenunder
+          via -mb-[1px] på aktiv tab (SamleordreChildTabs intern klasse). */}
+      {showChildTabs && samleordreCtx && samleordreTabOrderNr && (
+        <SamleordreChildTabs
+          children={samleordreCtx.children.map(c => ({
+            orderNumber: c.orderNumber,
+            stedLabel: c.stedLabel,
+            isAnchor: c.isAnchor,
+          }))}
+          activeOrderNumber={samleordreTabOrderNr}
+          onSelect={(nr: string) => onSelectSamleordreTab?.(nr)}
+          variant="attached"
+        />
+      )}
       {/* Header: vis aktiv child-sted i samleordre-mode så formanden ser hvilken ordre detaljer tilhører */}
       <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">
         Forundersøgelse
@@ -106,7 +133,15 @@ export function ForundersoegelseSection({
         })()}
       </h2>
       {/* Hint-banner fjernet — aktiv ordre er synlig via tabs på Ordredetaljer-rækken */}
-      <div className={`w-full bg-surface border border-hairline rounded-2xl shadow-sm overflow-hidden mb-sm`}>
+      {/*
+        PATTERN: Når tabs vises oven over boksen, fjernes det øverste venstre hjørne (første tab
+        sidder venstre-justeret). Det øverste højre hjørne beholdes (rounded-tr-2xl).
+        Matcher SPEC §1 "rounded-tr-2xl rounded-b-2xl" — bevidst afvigelse fra default rounded-2xl.
+        PATTERN DEVIATION: SPEC nævner rounded-tr-2xl rounded-b-2xl men sektionen bruger allerede
+        2xl-radius (ikke xl som makeOrdredetaljerCard) — beholder 2xl for konsistens med sektionens
+        eksisterende æstetik. Enkelt-ordre (ingen tabs) → fuld rounded-2xl (uændret).
+      */}
+      <div className={`w-full bg-surface border border-hairline shadow-sm overflow-hidden mb-sm ${showChildTabs ? 'rounded-tr-2xl rounded-b-2xl' : 'rounded-2xl'}`}>
         <button
           type="button"
           onClick={() => setForundersoegelseOpen(o => !o)}

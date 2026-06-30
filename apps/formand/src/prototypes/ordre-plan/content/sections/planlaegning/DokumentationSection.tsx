@@ -3,6 +3,10 @@
  * Udskilt fra OrdrePlanScreen.tsx L1044–1212 (Fase 2, Round 3, #8).
  * Extraction ORDRET — adfærd 100% uændret.
  * Må ikke importeres i produktionskode.
+ *
+ * Round 2 (child-tabs): SamleordreChildTabs indsat øverst (Fase A).
+ * Indholdet er delt (remountes pr. child via key={samleordreTabOrderNr}).
+ * Ingen per-child mock-felter i Dokumentation — tabs + sted-suffix er nok.
  */
 import { useState } from 'react'
 import {
@@ -11,8 +15,9 @@ import {
   Mic,
   Camera,
 } from 'lucide-react'
-import type { MockPhoto, NoteComment } from '../../../types'
+import type { MockPhoto, NoteComment, SamleordreContext } from '../../../types'
 import { DocRow } from '../../../components/DocRow'
+import { SamleordreChildTabs } from '../../../components/SamleordreChildTabs'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +42,26 @@ export interface DokumentationSectionProps {
 
   /** Callback der tilføjer en ny note til root-state i orkestratoren. */
   onAddComment: (comment: NoteComment) => void
+
+  // ─── Samleordre child-tabs (Round 2 — optional, container wires bagefter) ─
+
+  /**
+   * Samleordre-kontekst med children-liste.
+   * Tabs vises kun når isSamleordreMode=true og children.length > 1.
+   */
+  samleordreCtx?: SamleordreContext | null
+
+  /** Ordrenummer på det aktuelt valgte child-tab. */
+  samleordreTabOrderNr?: string
+
+  /** Callback når bruger vælger et andet child-tab. */
+  onSelectSamleordreTab?: (orderNumber: string) => void
+
+  /**
+   * True når ordren er en samleordre (parent-ordre med 2+ children).
+   * Gates hele tab-blokken — ingen tabs i enkelt-ordre-mode.
+   */
+  isSamleordreMode?: boolean
 }
 
 // ─── Komponent ────────────────────────────────────────────────────────────────
@@ -48,6 +73,10 @@ export function DokumentationSection({
   onRemovePhoto,
   noteComments,
   onAddComment,
+  samleordreCtx,
+  samleordreTabOrderNr,
+  onSelectSamleordreTab,
+  isSamleordreMode,
 }: DokumentationSectionProps) {
   // Planlægning-lokal state — bruges KUN i denne sektion (L123–127 i orkestrator).
   const [opmaalingOpen, setOpmaalingOpen] = useState(false)
@@ -58,13 +87,58 @@ export function DokumentationSection({
 
   if (!visible) return null
 
+  // ─── Samleordre: gate for tab-synlighed ─────────────────────────────────────
+  // Tabs vises kun ved isSamleordreMode=true + 2+ children + aktivt tab-nr.
+  const showChildTabs =
+    isSamleordreMode === true &&
+    samleordreCtx != null &&
+    samleordreCtx.children.length > 1 &&
+    samleordreTabOrderNr != null
+
+  // Sted-suffix i overskriften for valgt child (Fase A: kun label — ingen per-child data).
+  const activeChild = showChildTabs
+    ? samleordreCtx!.children.find(c => c.orderNumber === samleordreTabOrderNr)
+    : undefined
+
   // ─── JSX — ORDRET fra OrdrePlanScreen.tsx L1044–1212 ──────────────────────
   // Wrapper-`{planlaegningOrdredetaljerExpanded && ...}` er erstattet af `visible`-prop.
+  // Round 2: rendering-kontrakt for tab-on-card-kobling:
+  //   tabs vises → rounded-tr-xl rounded-b-xl (aktiv tab danner øverste kant)
+  //   ingen tabs  → rounded-xl (uændret fra prototype)
+  const boxRoundedClass = showChildTabs
+    ? 'rounded-tr-xl rounded-b-xl'
+    : 'rounded-xl'
+
   return (
     <section>
-      <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Dokumentation</h2>
+      {/* Child-tabs øverst (kun ved samleordre med 2+ children) */}
+      {showChildTabs && (
+        <SamleordreChildTabs
+          children={samleordreCtx!.children.map(c => ({
+            orderNumber: c.orderNumber,
+            stedLabel: c.stedLabel,
+            isAnchor: c.isAnchor,
+          }))}
+          activeOrderNumber={samleordreTabOrderNr!}
+          onSelect={(nr) => onSelectSamleordreTab?.(nr)}
+          variant="attached"
+        />
+      )}
 
-      <div className="bg-white border border-hairline rounded-xl overflow-hidden">
+      <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">
+        {/* Sted-suffix i overskriften for valgt child (Fase A) */}
+        Dokumentation{activeChild ? ` — ${activeChild.stedLabel}` : ''}
+      </h2>
+
+      {/*
+        key={samleordreTabOrderNr} remounter lokal state (opmaalingOpen osv.)
+        ved tab-skift — sikrer at hver child starter med lukket tilstand.
+        Fase A: indholdet er delt (samme photos/noteComments for alle children).
+      */}
+      <div
+        key={samleordreTabOrderNr}
+        className={`bg-white border border-hairline ${boxRoundedClass} overflow-hidden`}
+      >
         {/* Toggle-header */}
         <button
           onClick={() => setDocsOpen(o => !o)}

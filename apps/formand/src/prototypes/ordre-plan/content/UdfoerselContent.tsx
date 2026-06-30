@@ -17,7 +17,7 @@ import { ForundersoegelseSection } from './sections/udfoersel/ForundersoegelseSe
 import { KsRapporteringSection } from './sections/udfoersel/KsRapporteringSection'
 import { KoerselSection } from './sections/udfoersel/KoerselSection'
 
-export function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeftelse, vognmandMaterielBekraeftelse, products, isSamleordreMode, samleordreCtx, samleordreTabOrderNr, makeOrdredetaljerCard, renderOrdredetaljerCollapsedPille, selectedDate, onSelectDate, ekstraLinjer, setEkstraLinjer, ekstraSent, setEkstraSent, materielUiState, etaper, transportPlaner }: {
+export function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandBekraeftelse, vognmandMaterielBekraeftelse, products, isSamleordreMode, samleordreCtx, samleordreTabOrderNr, onSelectSamleordreTab, makeOrdredetaljerCard, renderOrdredetaljerCollapsedPille, selectedDate, onSelectDate, ekstraLinjer, setEkstraLinjer, ekstraSent, setEkstraSent, materielUiState, etaper, transportPlaner }: {
   forundersoegelseFotos: MockPhoto[]
   onAddPhotos: (p: MockPhoto[]) => void
   vognmandBekraeftelse?: VognmandBekraeftelse
@@ -30,6 +30,11 @@ export function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandB
   samleordreCtx?: SamleordreContext | null
   /** Aktivt ordrenummer i samleordre-tab — bruges til per-child dagsoverblik */
   samleordreTabOrderNr?: string
+  /**
+   * Callback der skifter aktiv child-ordre i delt root-state.
+   * Modtages af containeren og trådes til ForundersoegelseSection + KsRapporteringSection i Round 2.
+   */
+  onSelectSamleordreTab?: (orderNumber: string) => void
   /** Factory-funktion til Ordredetaljer-visning — kald med hideTabs=true for at skjule tab-rækken.
    *  cardMode='udfoersel' viser AFLYSNING-cellen i dag-kontekst (selectedDate). */
   makeOrdredetaljerCard: (
@@ -144,6 +149,7 @@ export function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandB
             isSamleordreMode={isSamleordreMode}
             samleordreCtx={samleordreCtx}
             samleordreTabOrderNr={samleordreTabOrderNr}
+            onSelectSamleordreTab={onSelectSamleordreTab}
             ekstraLinjer={ekstraLinjer}
             setEkstraLinjer={setEkstraLinjer}
             ekstraSent={ekstraSent}
@@ -153,6 +159,10 @@ export function UdfoerselContent({ forundersoegelseFotos, onAddPhotos, vognmandB
           <KsRapporteringSection
             products={products}
             selectedDate={selectedDate}
+            isSamleordreMode={isSamleordreMode}
+            samleordreCtx={samleordreCtx}
+            samleordreTabOrderNr={samleordreTabOrderNr}
+            onSelectSamleordreTab={onSelectSamleordreTab}
             ekstraLinjer={ekstraLinjer}
             addEkstraLinje={addEkstraLinje}
             updateEkstraLinje={updateEkstraLinje}

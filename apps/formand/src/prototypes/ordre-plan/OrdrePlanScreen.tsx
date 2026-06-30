@@ -34,6 +34,7 @@ import {
 } from './mocks'
 import { AflysningCell } from './components/AflysningCell'
 import { CommentCell } from './components/CommentCell'
+import { SamleordreChildTabs } from './components/SamleordreChildTabs'
 import { PlanlaegningContent } from './content/PlanlaegningContent'
 import { UdfoerselContent } from './content/UdfoerselContent'
 import { AfregningContent } from './content/AfregningContent'
@@ -538,34 +539,15 @@ export function OrdrePlanScreen() {
   ) => (
     isSamleordreMode && samleordreCtx ? (
       <div className="mb-lg">
-        {/* Tabs ovenpå spec-grid — skjules i Udførsel-mode (tabs er på Ordredetaljer-rækken) */}
+        {/* Tabs ovenpå spec-grid — skjules i Udførsel-mode (tabs er på Ordredetaljer-rækken).
+            Genbruger den kanoniske SamleordreChildTabs (variant='attached'). */}
         {!hideTabs && (
-        <div className="inline-flex gap-xxxs">
-          {samleordreCtx.children.map(child => {
-            const isActive = child.orderNumber === samleordreTabOrderNr
-            return (
-              <button
-                key={child.orderNumber}
-                onClick={() => setSamleordreTabOrderNr(child.orderNumber)}
-                aria-pressed={isActive}
-                className={[
-                  'inline-flex items-center gap-xs px-md py-xs border border-hairline rounded-t-lg transition-colors font-inter text-xs font-semibold',
-                  isActive
-                    ? 'bg-white border-b-white text-deep-teal relative z-10 -mb-[1px]'
-                    : 'bg-surface-2 text-text-muted hover:text-deep-teal',
-                ].join(' ')}
-              >
-                {child.isAnchor && (
-                  <span
-                    className="w-[6px] h-[6px] rounded-full bg-yellow flex-shrink-0"
-                    aria-label="Primær ordre"
-                  />
-                )}
-                <span>{child.stedLabel}</span>
-              </button>
-            )
-          })}
-        </div>
+          <SamleordreChildTabs
+            children={samleordreCtx.children.map(c => ({ orderNumber: c.orderNumber, stedLabel: c.stedLabel, isAnchor: c.isAnchor }))}
+            activeOrderNumber={samleordreTabOrderNr}
+            onSelect={setSamleordreTabOrderNr}
+            variant="attached"
+          />
         )}
         {/* Hjørner: rounded-tr-xl kun når tabs vises (de danner en "browser-tab" kant); fuldt rounded ved hideTabs */}
         <div className={`bg-white border border-hairline overflow-hidden ${hideTabs ? 'rounded-xl' : 'rounded-tr-xl rounded-b-xl'}`}>
@@ -989,6 +971,8 @@ export function OrdrePlanScreen() {
               onSetProductSamles={setProductSamles}
               isSamleordreMode={isSamleordreMode}
               samleordreCtx={samleordreCtx}
+              samleordreTabOrderNr={samleordreTabOrderNr}
+              onSelectSamleordreTab={setSamleordreTabOrderNr}
               kørselOrders={kørselOrders}
               onSetKørselOrders={setKørselOrders}
               kørselParams={kørselParams}
@@ -1049,6 +1033,7 @@ export function OrdrePlanScreen() {
               isSamleordreMode={isSamleordreMode}
               samleordreCtx={samleordreCtx}
               samleordreTabOrderNr={samleordreTabOrderNr}
+              onSelectSamleordreTab={setSamleordreTabOrderNr}
               makeOrdredetaljerCard={makeOrdredetaljerCard}
               renderOrdredetaljerCollapsedPille={renderOrdredetaljerCollapsedPille}
               selectedDate={selectedPlanDate}
@@ -1088,6 +1073,7 @@ export function OrdrePlanScreen() {
               isSamleordreMode={isSamleordreMode}
               samleordreCtx={samleordreCtx}
               samleordreTabOrderNr={samleordreTabOrderNr}
+              onSelectSamleordreTab={setSamleordreTabOrderNr}
               recept={recept}
               tonsAnkommet={tonsAnkommet}
               forventetUdlagtM2={forventetUdlagtM2}

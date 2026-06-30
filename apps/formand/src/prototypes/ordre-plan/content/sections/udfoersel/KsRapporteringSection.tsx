@@ -3,7 +3,8 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import { OvrigeOplysningerSkema3a } from '../../../components/ks/OvrigeOplysningerSkema3a'
 import { OvrigeOplysningerSkema } from '../../../components/ks/OvrigeOplysningerSkema'
 import { MksSkema } from '../../../components/ks/MksSkema'
-import type { MockProduct, EkstraLinje } from '../../../types'
+import { SamleordreChildTabs } from '../../../components/SamleordreChildTabs'
+import type { MockProduct, EkstraLinje, SamleordreContext } from '../../../types'
 
 export interface KsRapporteringProps {
   /** Alle produkter i ordren — bruges til entreprisekontrol/temperaturmaaling-gate + sendes til KS-skemaerne */
@@ -24,6 +25,15 @@ export interface KsRapporteringProps {
   setEkstraSent: (b: boolean) => void
   /** Reset ekstralinjer + ekstraSent — samlet callback fra container (erstatter setEkstraLinjer([]) + setEkstraSent(false)) */
   onResetEkstra: () => void
+  // ── Samleordre child-tabs (Fase 2, Round 2) ─────────────────────────────────
+  /** Samleordre-kontekst — children bruges til at bygge child-tab-rækken */
+  samleordreCtx?: SamleordreContext | null
+  /** Ordrenummer på aktuelt valgt child-tab — delt state fra root */
+  samleordreTabOrderNr?: string
+  /** Callback når bruger skifter child-tab — løfter valg til root */
+  onSelectSamleordreTab?: (orderNumber: string) => void
+  /** True når ordren er en samleordre med 2+ children — gater child-tab-blokken */
+  isSamleordreMode?: boolean
 }
 
 export function KsRapporteringSection({
@@ -36,6 +46,10 @@ export function KsRapporteringSection({
   ekstraSent,
   setEkstraSent,
   onResetEkstra,
+  samleordreCtx,
+  samleordreTabOrderNr,
+  onSelectSamleordreTab,
+  isSamleordreMode,
 }: KsRapporteringProps) {
   // ── KS-rapportering state ────────────────────────────────────────────────────
   const [ksExpanded, setKsExpanded] = useState(false)
@@ -68,9 +82,45 @@ export function KsRapporteringSection({
         // Niveau 2 (mindst ét produkt kræver det) → alle 3 tabs
         const showAllTabs = maxEntreprisekontrol === 2 || maxTemperaturmaaling === 2
 
+        // ── Samleordre: child-tabs + sted-suffix ────────────────────────────────
+        // Gate: kun ved samleordre med 2+ children (enkelt-ordre = ingen tabs)
+        const showChildTabs =
+          isSamleordreMode === true &&
+          samleordreCtx != null &&
+          samleordreCtx.children.length > 1 &&
+          samleordreTabOrderNr != null
+
+        // Aktiv child til header-suffix
+        const activeChild = showChildTabs
+          ? samleordreCtx?.children.find(c => c.orderNumber === samleordreTabOrderNr)
+          : undefined
+
+        // Tab-data: kun felterne SamleordreChildTabs forventer
+        const childTabData = showChildTabs
+          ? (samleordreCtx?.children ?? []).map(c => ({
+              orderNumber: c.orderNumber,
+              stedLabel: c.stedLabel,
+              isAnchor: c.isAnchor,
+            }))
+          : []
+
         return (
           <section>
-            <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">KS-rapportering</h2>
+            {/* Child-tabs — vises direkte over h2 og boks (attached-variant kobler sig til boksen nedenunder) */}
+            {showChildTabs && (
+              <div className="mb-sm">
+                <SamleordreChildTabs
+                  children={childTabData}
+                  activeOrderNumber={samleordreTabOrderNr!}
+                  onSelect={(nr) => onSelectSamleordreTab?.(nr)}
+                  variant="attached"
+                />
+              </div>
+            )}
+            {/* PATTERN MATCH: font-poppins font-semibold text-xl text-text-primary mb-sm — KsRapporteringSection.tsx:73 */}
+            <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">
+              KS-rapportering{activeChild ? ` — ${activeChild.stedLabel}` : ''}
+            </h2>
             <div className="w-full bg-surface border border-hairline rounded-2xl shadow-sm overflow-hidden mb-sm">
               <button
                 type="button"
@@ -144,8 +194,13 @@ export function KsRapporteringSection({
                   </button>
                 </div>
 
-                {/* Tab-content — box-pattern identisk med Udlægning-tab-content */}
-                <div className="bg-white border border-hairline overflow-hidden rounded-tr-xl rounded-b-xl p-md space-y-md">
+                {/* Tab-content — box-pattern identisk med Udlægning-tab-content.
+                    key={samleordreTabOrderNr}: remount pr. child-skift → frisk intern skema-state pr. child (Fase A).
+                    Ægte per-child KS-data kræver SamleordreChild.ksDetails + MockProduct[] pr. child → separat sub-issue. */}
+                <div
+                  key={samleordreTabOrderNr}
+                  className="bg-white border border-hairline overflow-hidden rounded-tr-xl rounded-b-xl p-md space-y-md"
+                >
                   {ksActiveTab === 'a3' && showAllTabs && (
                     <OvrigeOplysningerSkema3a
                       products={products}

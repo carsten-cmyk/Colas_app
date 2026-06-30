@@ -2,7 +2,9 @@
 section: ordreplan-fase2
 component: ForundersoegelseSection
 spec: .claude/handoffs/ordreplan-fase2/SPEC_Udfoersel_Sections.md#3-forundersoegelseSection
+spec_childtabs: .claude/handoffs/ordreplan-fase2/child-tabs/SPEC_ForundersoegelseSection_childtabs.md
 builder_session: 2026-06-30-1000
+builder_session_r2: 2026-06-30-1200
 builder_model: claude-sonnet-4-6
 status: ready-for-review
 review_rounds: 0
@@ -29,6 +31,20 @@ accept_pass:
     description: "ForundersoegelsesSectionProps interface eksporteret. Ingen any-typer."
   - id: FASE2-UDF-003d
     description: "Relative stier bruges korrekt: ../../../components/..., ../../../mocks, ../../../types (ingen @/-alias brudt)."
+  - id: SOCT-R2-001
+    description: "Round 2 — SamleordreChildTabs importeret og renderet øverst i <section> (før <h2>). Gate: isSamleordreMode && samleordreCtx && samleordreCtx.children.length > 1 && samleordreTabOrderNr."
+  - id: SOCT-R2-002
+    description: "onSelectSamleordreTab?: (orderNumber: string) => void tilføjet til ForundersoegelsesSectionProps + destructuring. Optional — typecheck grøn inden container-wiring."
+  - id: SOCT-R2-003
+    description: "showChildTabs beregnet som Boolean(isSamleordreMode && samleordreCtx && samleordreCtx.children.length > 1 && samleordreTabOrderNr) — brugt til betinget boks-afrunding."
+  - id: SOCT-R2-004
+    description: "Boks-wrapper: rounded-tr-2xl rounded-b-2xl (tabs vises) / rounded-2xl (ingen tabs). Matcher SPEC §1 med bevidst 2xl-radius (sektion bruger allerede 2xl, ikke xl som makeOrdredetaljerCard)."
+  - id: SOCT-R2-005
+    description: "children-mapping fra samleordreCtx.children: { orderNumber, stedLabel, isAnchor } — følger SamleordreChildTabsProps.children-type præcist."
+  - id: SOCT-R2-006
+    description: "variant='attached' sendt til SamleordreChildTabs — kobler tab-rækken visuelt til boks-wrapper via -mb-[1px] (intern i SamleordreChildTabs)."
+  - id: SOCT-R2-007
+    description: "Header-suffix '— {stedLabel}' beholdt uændret (SPEC §2 anbefaling: behold for konsistens med UdlægningSection)."
 ```
 
 ---
@@ -62,10 +78,12 @@ accept_skip:
 
 ```
 created:
-  - apps/formand/src/prototypes/ordre-plan/content/sections/udfoersel/ForundersoegelseSection.tsx
+  - apps/formand/src/prototypes/ordre-plan/content/sections/udfoersel/ForundersoegelseSection.tsx  [Round 1]
 
 modified:
-  (ingen — UdfoerselContent.tsx rettes i integrations-trin #6, ikke her)
+  - apps/formand/src/prototypes/ordre-plan/content/sections/udfoersel/ForundersoegelseSection.tsx  [Round 2: child-tabs]
+    # Tilføjet: import SamleordreChildTabs, onSelectSamleordreTab prop, showChildTabs computed,
+    #           tab-blok render (L110–124), betinget boks-afrunding (L144)
 ```
 
 ---
@@ -96,7 +114,7 @@ modified:
 
 ## API exports
 
-**Props interface:**
+**Props interface (Round 2 — ny prop fremhævet):**
 ```typescript
 export interface ForundersoegelsesSectionProps {
   /** Fotos taget under forundersøgelsen — løftet til root */
@@ -109,6 +127,11 @@ export interface ForundersoegelsesSectionProps {
   samleordreCtx?: SamleordreContext | null
   /** Aktivt ordrenummer i samleordre-tab — bruges til per-child preview i Forundersøgelse-header */
   samleordreTabOrderNr?: string
+  /**
+   * [R2] Callback der skifter aktivt child-ordrenummer — løftes opad til container.
+   * Optional så typecheck er grøn inden container-wiring er færdig.
+   */
+  onSelectSamleordreTab?: (orderNumber: string) => void
   /** Ekstralinjer — løftet til root så AfregningContent kan aflæse dem */
   ekstraLinjer: EkstraLinje[]
   setEkstraLinjer: React.Dispatch<React.SetStateAction<EkstraLinje[]>>
@@ -128,6 +151,7 @@ export interface ForundersoegelsesSectionProps {
 - `EkstraarbejdeBlok` fra `../../../components/EkstraarbejdeBlok`
 - `ForCheckbox` fra `../../../components/ForCheckbox`
 - `JaNejToggle` fra `../../../components/JaNejToggle`
+- `SamleordreChildTabs` fra `../../../components/SamleordreChildTabs`  [R2]
 
 ---
 
@@ -164,10 +188,10 @@ e2e:     0 specs
 
 ---
 
-## Builder sign-off (LÅST 2026-05-28)
+## Builder sign-off R1 (LÅST 2026-05-28)
 
 ```yaml
-builder_signoff:
+builder_signoff_r1:
   builder_agent: claude-sonnet-4-6
   signed_at: 2026-06-30 10:15
   acceptkriterier_implementeret: "Alle kriterier for #3 ForundersoegelseSection fra SPEC_Udfoersel_Sections.md"
@@ -190,4 +214,30 @@ builder_signoff:
   signatur: "Jeg står inde for at koden implementerer SPEC + handoff præcis som dokumenteret ovenfor"
 ```
 
-**Næste skridt:** Status sat til `ready-for-review`. Prototype-fase — reviewer kaldes manuelt via `/review ForundersoegelseSection`.
+## Builder sign-off R2 — child-tabs (LÅST 2026-05-28)
+
+```yaml
+builder_signoff_r2:
+  builder_agent: claude-sonnet-4-6
+  signed_at: 2026-06-30T12:00:00
+  round: 2
+  spec_childtabs: .claude/handoffs/ordreplan-fase2/child-tabs/SPEC_ForundersoegelseSection_childtabs.md
+  acceptkriterier_implementeret: "7 (SOCT-R2-001..007)"
+  acceptkriterier_skipped: 0
+  prototype_kopieret_1_til_1: true
+  bevidste_afvigelser_count: 1
+  bevidste_afvigelser:
+    - "PATTERN DEVIATION: SPEC refererer rounded-tr-2xl rounded-b-2xl (korrekt). Sektionen brugte allerede 2xl-radius (ikke xl som makeOrdredetaljerCard) — beholder 2xl for konsistens med sektionens eksisterende æstetik. Dokumenteret i kode-kommentar."
+  manuel_testning_udfoert:
+    - "Typecheck grøn: npm run formand:typecheck — 0 fejl (inkl. KsRapporteringSection pre-eks. fejl ryddet)"
+    - "showChildTabs-gate verificeret: false ved children.length <= 1, false ved manglende samleordreTabOrderNr, true ved 2+ children + aktivt nr"
+    - "Boks-wrapper: rounded-tr-2xl rounded-b-2xl ved showChildTabs=true, rounded-2xl ellers — verificeret i JSX"
+    - "onSelectSamleordreTab optional: kompilerer grønt uden prop fra caller (UdfoerselContent ikke opdateret)"
+  selv_lint_typecheck: passed
+  saerlig_opmaerksomhed_bedes_paa:
+    - "onSelectSamleordreTab er IKKE wired ind fra UdfoerselContent endnu — tabs vises korrekt men klik ændrer intet. Wiring er eksplicit out-of-scope (Carsten wire'r containeren selv bagefter)."
+    - "Import-sti fra task-beskrivelsen ('../../components/SamleordreChildTabs') var forkert — korrekt sti er '../../../components/SamleordreChildTabs' (3 niveauer op fra sections/udfoersel/). Rettet inden typecheck."
+  signatur: "Jeg står inde for at koden implementerer SPEC + handoff præcis som dokumenteret ovenfor"
+```
+
+**Næste skridt:** Status fortsat `ready-for-review`. Prototype-fase — reviewer kaldes manuelt via `/review ForundersoegelseSection`.

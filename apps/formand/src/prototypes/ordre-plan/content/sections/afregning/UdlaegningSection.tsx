@@ -5,8 +5,16 @@
  * Viser "Udlægning"-sektionen i Afregning-mode — inde i Ordredetaljer-wrapper-div'en
  * som sibling til <hr>. Matches med Planlægning + Udførsel-pattern.
  *
+ * Round 2 — child-tabs + 3 tweaks (SPEC: SPEC_UdlaegningSection_childtabs_tweaks.md):
+ *   (a) <h2> "Udlægning" flyttes ud af boksen — over tab-rækken (som Ordredetaljer)
+ *   (b) Produkt-tabs erstattet af segmented control INDE i boksen
+ *   (c) "I gang · startet"-pillen fjernet
+ *   (+) Adresse-child-tabs (SamleordreChildTabs variant='attached') koblet på boksen
+ *       — kun i samleordre-mode med 2+ children
+ *
  * State ejet af container (AfregningContent):
- *   selectedAfregningProductId / setSelectedAfregningProductId (per-produkt tabs)
+ *   selectedAfregningProductId / setSelectedAfregningProductId (per-produkt toggle)
+ *   samleordreTabOrderNr / onSelectSamleordreTab (adresse-child-tabs)
  *
  * Lokal mock (kun brugt i denne sektion):
  *   perProduktUdlaegning — TODO: Erstat med Supabase per-produkt udlægnings-data
@@ -24,6 +32,7 @@ import type {
   SamleordreContext,
 } from '../../../types'
 import { formatTimestamp } from '../../../utils'
+import { SamleordreChildTabs } from '../../../components/SamleordreChildTabs'
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -48,7 +57,7 @@ export interface UdlaegningSection_Props {
   demoTykkelse?: number
   /** Viser ekstraarbejde-flag i Udlægning-fanen — true når ekstraSent && ekstraLinjer.length > 0 */
   harEkstraarbejde?: boolean
-  /** Alle produkter på ordren — bruges til per-produkt tabs */
+  /** Alle produkter på ordren — bruges til per-produkt toggle */
   products?: MockProduct[]
   /** True når Ordre-plan vises i samleordre-kontekst */
   isSamleordreMode?: boolean
@@ -56,7 +65,13 @@ export interface UdlaegningSection_Props {
   samleordreCtx?: SamleordreContext | null
   /** Ordrenummer på valgt child-ordre i samleordre-tabs */
   samleordreTabOrderNr?: string
-  /** Valgt produkt-id til per-produkt tabs — ejet af container (AfregningContent) */
+  /**
+   * Callback når brugeren skifter child-tab — ejet af container (AfregningContent).
+   * Optional: container kan wire denne op til sin samleordreTabOrderNr-state.
+   * Container SKAL sende denne prop for at adresse-tabs virker i samleordre-mode.
+   */
+  onSelectSamleordreTab?: (orderNumber: string) => void
+  /** Valgt produkt-id til per-produkt toggle — ejet af container (AfregningContent) */
   selectedAfregningProductId: string | null
   /** Setter for valgt produkt-id — ejet af container */
   setSelectedAfregningProductId: (id: string) => void
@@ -80,10 +95,11 @@ export function UdlaegningSection({
   isSamleordreMode,
   samleordreCtx,
   samleordreTabOrderNr,
+  onSelectSamleordreTab,
   selectedAfregningProductId,
   setSelectedAfregningProductId,
 }: UdlaegningSection_Props) {
-  // Bestemmer hvilke produkter der vises tabs for i Udlægning-sektionen.
+  // Bestemmer hvilke produkter der vises toggle for i Udlægning-sektionen.
   // I samleordre-mode: produkter på den aktuelt valgte child-ordre (samleordreTabOrderNr).
   // I normal mode: produkter på ordren (products-prop).
   const produkterForUdlaegning = (() => {
@@ -117,12 +133,6 @@ export function UdlaegningSection({
   {/* TODO (produktion): Sektion filtreres på (selectedProductId, selectedDate) */}
   return recept ? (() => {
     const fmtTal = (n: number, d = 0) => new Intl.NumberFormat('da-DK', { maximumFractionDigits: d }).format(n)
-    // Per-child udlægning i samleordre-mode
-    const activeChildForU = isSamleordreMode && samleordreCtx
-      ? samleordreCtx.children.find(c => c.orderNumber === samleordreTabOrderNr)
-      : undefined
-    const childUdlaegning = activeChildForU?.udlaegningDetails
-
     // Per-produkt data: hent fra perProduktUdlaegning mock — fallback til globale demo-props
     // TODO: Erstat med Supabase per-produkt udlægnings-data
     const aktivtProduktId = selectedAfregningProductId ?? produkterForUdlaegning[0]?.id
@@ -146,57 +156,73 @@ export function UdlaegningSection({
     const tillaegsareal4A = ppu?.tillaegsarealM2
     const arealRegistreret4A = ppu?.arealRegistreret4A
 
+    // Adresse-child-tabs: vises kun i samleordre-mode med 2+ children
+    const visAdresseTabs = isSamleordreMode && samleordreCtx && samleordreCtx.children.length >= 2
+    const childTabs = visAdresseTabs && samleordreCtx
+      ? samleordreCtx.children.map(c => ({
+          orderNumber: c.orderNumber,
+          stedLabel: c.stedLabel,
+          isAnchor: c.isAnchor,
+        }))
+      : []
+
     return (
       <div>
-        {/* Produkt-tabs — vises kun hvis 2+ produkter. Pattern identisk med makeOrdredetaljerCard-tabs (linje 1103-1128). */}
-        {harFlereProdukter && (
-          <div className="inline-flex gap-xxxs">
-            {produkterForUdlaegning.map(p => {
-              const isActive = p.id === (selectedAfregningProductId ?? produkterForUdlaegning[0]?.id)
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setSelectedAfregningProductId(p.id)}
-                  aria-pressed={isActive}
-                  className={[
-                    'inline-flex items-center gap-xs px-md py-xs border border-hairline rounded-t-lg transition-colors font-inter text-xs font-semibold',
-                    isActive
-                      ? 'bg-deep-teal border-deep-teal text-white relative z-10 -mb-[1px]'
-                      : 'bg-surface-2 text-text-muted hover:text-deep-teal',
-                  ].join(' ')}
-                >
-                  {INITIAL_RECEPTER[p.recipeCode]?.navn ?? p.recipeCode}
-                </button>
-              )
-            })}
-          </div>
+        {/* TWEAK (a): <h2> "Udlægning" FRI over tab-rækken — som Ordredetaljer
+            (OrdredetaljerSection.tsx L34: font-poppins font-semibold text-xl text-text-primary).
+            Sted-suffix fjernet — adressen vises nu på adresse-tab'en i samleordre-mode. */}
+        <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">
+          Udlægning
+        </h2>
+
+        {/* Adresse-tabs koblet på boksen (samleordre 2+ children).
+            Visual Pattern Reference — OrdrePlanScreen.tsx:543 (makeOrdredetaljerCard).
+            SamleordreChildTabs returnerer null ved <= 1 child (enkelt-ordre guard). */}
+        {visAdresseTabs && samleordreTabOrderNr && (
+          <SamleordreChildTabs
+            children={childTabs}
+            activeOrderNumber={samleordreTabOrderNr}
+            onSelect={(orderNumber) => onSelectSamleordreTab?.(orderNumber)}
+            variant="attached"
+          />
         )}
-        {/* Indhold-wrapper: border-boks kun ved 2+ produkter (browser-tab-stil) */}
-        <div className={harFlereProdukter ? 'bg-white border border-hairline overflow-hidden rounded-tr-xl rounded-b-xl p-md' : ''}>
-          <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">
-            Udlægning
-            {isSamleordreMode && activeChildForU && (
-              <span className="font-inter text-sm font-normal text-text-muted ml-xs">— {activeChildForU.stedLabel}</span>
-            )}
-          </h2>
-          {/* Per-child noter vises som info-banner i samleordre-mode */}
-          {isSamleordreMode && childUdlaegning && (
-            <div className="flex items-center gap-xs bg-surface border border-hairline rounded-xl px-sm py-xs mb-xs">
-              <div className={`w-[8px] h-[8px] rounded-full flex-shrink-0 ${
-                childUdlaegning.status === 'færdig' ? 'bg-good' :
-                childUdlaegning.status === 'i-gang' ? 'bg-warning' : 'bg-text-muted'
-              }`} />
-              <span className="font-inter text-xs font-medium text-text-primary">
-                {childUdlaegning.status === 'færdig' ? 'Færdig'
-                  : childUdlaegning.status === 'i-gang' ? `I gang${childUdlaegning.startTid ? ` · startet ${childUdlaegning.startTid}` : ''}`
-                  : 'Ikke startet'}
-              </span>
-              {childUdlaegning.noter && (
-                <span className="font-inter text-xs text-text-muted">· {childUdlaegning.noter}</span>
-              )}
+
+        {/* Indhold-wrapper: browser-tab-kobling til adresse-tabs (samleordre) eller fuldt afrundet (enkelt).
+            Visual Pattern Reference — OrdrePlanScreen.tsx:571 — rounded-tr-xl rounded-b-xl (tabs) / rounded-xl (ingen tabs).
+            p-md tilføjet for at give boksen indre luft (var implicit i den gamle struktur). */}
+        <div className={`bg-white border border-hairline overflow-hidden p-md ${
+          visAdresseTabs ? 'rounded-tr-xl rounded-b-xl' : 'rounded-xl'
+        }`}>
+          {/* TWEAK (b): Produkt-toggle INDE i boksen — erstat browser-tabs (konkurrerede visuelt med adresse-tab-rækken).
+              Segmented control: vises kun ved harFlereProdukter (2+ produkter).
+              Valgt-state: bg-white shadow-sm text-deep-teal (semantisk selected-token-æstetik uden hex). */}
+          {harFlereProdukter && (
+            <div className="flex gap-xxxs bg-surface-2 rounded-lg p-xxxs mb-sm self-start inline-flex">
+              {produkterForUdlaegning.map(p => {
+                const isActive = p.id === (selectedAfregningProductId ?? produkterForUdlaegning[0]?.id)
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setSelectedAfregningProductId(p.id)}
+                    aria-pressed={isActive}
+                    className={[
+                      'inline-flex items-center px-sm py-xxxs rounded-md transition-colors font-inter text-xs font-semibold min-h-touch',
+                      isActive
+                        ? 'bg-white shadow-sm text-deep-teal'
+                        : 'text-text-muted hover:text-deep-teal',
+                    ].join(' ')}
+                  >
+                    {INITIAL_RECEPTER[p.recipeCode]?.navn ?? p.recipeCode}
+                  </button>
+                )
+              })}
             </div>
           )}
+
+          {/* TWEAK (c): "I gang · startet"-pillen FJERNET (L184–199 i original).
+              childUdlaegning.noter bevares IKKE — hele banneret er fjernet jf. SPEC §Tweak(c) default. */}
+
           {/* ── Ekstraarbejde-flag (3a) — vises kun når harEkstraarbejde === true ── */}
           {harEkstraarbejde && (
             <div className="flex justify-end mb-xs">

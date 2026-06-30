@@ -58,6 +58,7 @@ Forhindre at architect/builder genbygger eksisterende komponenter. **Architect S
 | # | Komponent | Status | Beskrivelse | Brugt i |
 |---|---|---|---|---|
 | 1 | `PeriodeDatoVaelger` | 🟡 prototype-lokal — kandidat til shared ved produktions-promotion | Horisontal stribe af dato-piller for en ordres planlagte dage. Props: `heading`, `days` (ISO-array), `selectedDate`, `onSelectDate`. Passerede dage gennemstreges, valgt dag highlightes. Returnerer null ved tom days-array. | OrdrePlan Planlægning/Udførsel/Afregning-mode (wires Round 2-4) |
+| 2 | `SamleordreChildTabs` | 🟡 prototype-lokal — cross-app kandidat ved produktions-promotion (hvis vognmand får samleordre-visning) | Tab-række til at skifte mellem child-ordrer i en samleordre. Props: `children` (SamleordreChildTab[]), `activeOrderNumber`, `onSelect`, `variant?` ('attached'\|'standalone'). Returnerer null ved children.length <= 1 (enkelt-ordre). Aktiv tab "smelter" ind i kort nedenunder via border-b-white + -mb-[1px] (attached). Anchor-child viser gul dot. Extraction af inline-mønster fra makeOrdredetaljerCard (OrdrePlanScreen.tsx L543-568). | OrdrePlan — makeOrdredetaljerCard + Udlægning-sektionen (wires Round 2-3) |
 
 ### Hooks (`apps/formand/src/hooks/`)
 

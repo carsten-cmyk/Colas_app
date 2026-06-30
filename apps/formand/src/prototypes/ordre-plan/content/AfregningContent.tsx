@@ -27,7 +27,7 @@ import { TimeafregningSection } from './sections/afregning/TimeafregningSection'
 // "Afslut dag"-CTA + valideringsmodal + PLAN-modal. De 4 afregnings-sektioner
 // er udflyttet til sections/afregning/ og trådes ned via props.
 
-export function AfregningContent({ vognmandBekraeftelse, todayDay, isSamleordreMode, samleordreCtx, samleordreTabOrderNr,
+export function AfregningContent({ vognmandBekraeftelse, todayDay, isSamleordreMode, samleordreCtx, samleordreTabOrderNr, onSelectSamleordreTab,
   recept, tonsAnkommet, forventetUdlagtM2, faktiskRegistrering,
   visUdlaegningInput, onSetVisUdlaegningInput, onGemFaktisk,
   demoTonsIDag, demoArealIDag, demoTykkelse, makeOrdredetaljerCard, renderOrdredetaljerCollapsedPille,
@@ -40,6 +40,11 @@ export function AfregningContent({ vognmandBekraeftelse, todayDay, isSamleordreM
   isSamleordreMode?: boolean
   samleordreCtx?: SamleordreContext | null
   samleordreTabOrderNr?: string
+  /**
+   * Callback der skifter aktiv child-ordre i delt root-state.
+   * Modtages af containeren og trådes til UdlaegningSection i Round 2.
+   */
+  onSelectSamleordreTab?: (orderNumber: string) => void
   /** Recept-objekt fra useRecept — bruges til Udlægning-sektion */
   recept?: ReturnType<typeof useRecept>['recept']
   /** Ankomne tons — fra useDagsoverblik */
@@ -390,6 +395,7 @@ export function AfregningContent({ vognmandBekraeftelse, todayDay, isSamleordreM
           isSamleordreMode={isSamleordreMode}
           samleordreCtx={samleordreCtx}
           samleordreTabOrderNr={samleordreTabOrderNr}
+          onSelectSamleordreTab={onSelectSamleordreTab}
           selectedAfregningProductId={selectedAfregningProductId}
           setSelectedAfregningProductId={setSelectedAfregningProductId}
         />
