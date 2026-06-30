@@ -222,7 +222,7 @@ export function BekraeftedeBilerSection({
                                   {erSendt ? (
                                     <>
                                       <span
-                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-good bg-good-bg border border-good/40 rounded-md px-xs min-h-[44px] min-w-[44px]"
+                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-good bg-good-bg border border-good/40 rounded-md px-xs min-h-touch min-w-touch"
                                         aria-label={`Ordre sendt til chauffør ${b.chauffoer}`}
                                       >
                                         Ordre sendt til chauffør
@@ -231,7 +231,7 @@ export function BekraeftedeBilerSection({
                                         type="button"
                                         onClick={() => sendSms(b.regnr)}
                                         aria-label={`Gensend ordre til ${b.chauffoer}`}
-                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-[44px] min-w-[44px]"
+                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-touch min-w-touch"
                                       >
                                         Gensend ordre
                                       </button>
@@ -239,7 +239,7 @@ export function BekraeftedeBilerSection({
                                   ) : smsStatus === 'aendret_siden_afsendelse' ? (
                                     <>
                                       <span
-                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-warning bg-warning-bg border border-warning/40 rounded-md px-xs min-h-[44px] min-w-[44px]"
+                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-warning bg-warning-bg border border-warning/40 rounded-md px-xs min-h-touch min-w-touch"
                                         aria-label={`Ordre opdateret siden afsendelse — ${b.chauffoer}`}
                                       >
                                         Ordre opdateret
@@ -248,7 +248,7 @@ export function BekraeftedeBilerSection({
                                         type="button"
                                         onClick={() => sendSms(b.regnr)}
                                         aria-label={`Gensend ordre til ${b.chauffoer}`}
-                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-[44px] min-w-[44px]"
+                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-touch min-w-touch"
                                       >
                                         Gensend ordre
                                       </button>
@@ -256,7 +256,7 @@ export function BekraeftedeBilerSection({
                                   ) : (
                                     <>
                                       <span
-                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs text-text-muted border border-hairline rounded-md px-xs min-h-[44px] min-w-[44px]"
+                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs text-text-muted border border-hairline rounded-md px-xs min-h-touch min-w-touch"
                                         aria-label={`Ordre afventer afsendelse — ${b.chauffoer}`}
                                       >
                                         Afventer afsendelse
@@ -265,7 +265,7 @@ export function BekraeftedeBilerSection({
                                         type="button"
                                         onClick={() => sendSms(b.regnr)}
                                         aria-label={`Send ordre til ${b.chauffoer} nu`}
-                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-[44px] min-w-[44px]"
+                                        className="inline-flex items-center justify-center gap-xxxs font-inter text-xxs font-semibold text-deep-teal bg-white border border-deep-teal/40 rounded-md px-xs hover:bg-soft-aqua hover:border-deep-teal transition-colors min-h-touch min-w-touch"
                                       >
                                         Send ordre nu
                                       </button>
@@ -506,16 +506,6 @@ export function BekraeftedeBilerSection({
             </div>
           )
         })()}
-        {/* REPLACED: old 2-row layout (inline-flex + DagsoverblikSection) replaced by unified grid above.
-              <span>dead_code_placeholder–'}
-              </span>
-              <span className={`font-inter text-xs ${forundersoegelseForetaget ? 'text-text-muted' : 'text-bad/80'}`}>
-                {forundersoegelseForetaget ? (tilfredsstillende ? 'Tilfredsstillende' : 'Ikke tilfredsstillende') : 'Mangler vurdering'}
-              </span>
-              {/* NOTE:
-                {forundersoegelseForetaget ? (tilfredsstillende ? 'Tilfredsstillende' : 'Ikke tilfredsstillende') : ' '}
-              </span>
-        */}
       </div>
     </>
   )

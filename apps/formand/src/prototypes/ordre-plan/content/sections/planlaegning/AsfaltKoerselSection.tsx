@@ -704,7 +704,7 @@ export function AsfaltKoerselSection({
                 <button
                   type="button"
                   onClick={() => onSetSendtTilVognmandDates(prev => new Set([...prev, ...usendteDage.map(d => d.date)]))}
-                  className="inline-flex items-center font-inter text-sm font-semibold text-deep-teal bg-yellow px-sm py-xs rounded-lg hover:opacity-90 active:scale-[0.98] transition-all min-h-[44px]"
+                  className="inline-flex items-center font-inter text-sm font-semibold text-deep-teal bg-yellow px-sm py-xs rounded-lg hover:opacity-90 active:scale-[0.98] transition-all min-h-touch"
                 >
                   Send til vognmand
                 </button>
@@ -712,7 +712,7 @@ export function AsfaltKoerselSection({
                 <button
                   type="button"
                   disabled
-                  className="inline-flex items-center font-inter text-sm font-semibold text-white bg-good px-sm py-xs rounded-lg min-h-[44px] cursor-default"
+                  className="inline-flex items-center font-inter text-sm font-semibold text-white bg-good px-sm py-xs rounded-lg min-h-touch cursor-default"
                 >
                   Sendt til vognmand
                 </button>

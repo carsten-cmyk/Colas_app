@@ -23,6 +23,7 @@
 import {
   ChevronDown, ChevronUp, CheckCircle2, Layers, MessageSquare, AlertTriangle,
 } from 'lucide-react'
+import { Fragment } from 'react'
 import { formatPhone, toE164 } from '@shared/utils/phone'
 import { formatRegnr } from '@shared/utils/regnr'
 import type {
@@ -191,7 +192,7 @@ export function BilTonsAfregningSection({
                     })
 
                     return (
-                      <>
+                      <Fragment key={afregKey}>
                         <tr key={bil.regnr} className={(!isLast || isOpen || isGodkendt) ? 'border-b border-hairline' : ''}>
                           <td className="align-middle font-inter text-xs font-semibold text-text-primary px-xs py-xs tabular-nums">{formatRegnr(bil.regnr)}</td>
                           <td className="align-middle font-inter text-xs text-text-primary px-xs py-xs">{bil.chauffoer}</td>
@@ -784,7 +785,7 @@ export function BilTonsAfregningSection({
                           </tr>
                           )
                         })()}
-                      </>
+                      </Fragment>
                     )
                   })}
                 </tbody>

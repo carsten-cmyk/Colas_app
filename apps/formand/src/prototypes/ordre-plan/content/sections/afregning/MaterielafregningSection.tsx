@@ -34,10 +34,6 @@ export interface MaterielafregningProps {
   /** Liste af materiel-enheder fra holdpakken — fra MATERIEL_ENHEDER mock.
    *  TODO: Erstat med Supabase når klar */
   MATERIEL_ENHEDER: MaterielEnhed[]
-
-  /** Ubrugt nu — tilgængelig til fremtidig materiel-per-hold expansion.
-   *  @deprecated Bruges ikke i nuværende sektion-render */
-  vognmandMaterielBekraeftelse?: unknown
 }
 
 export function MaterielafregningSection({

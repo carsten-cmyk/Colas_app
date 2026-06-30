@@ -251,7 +251,7 @@ export function UdlaegningSection({
                 <button
                   type="button"
                   onClick={() => onSetVisUdlaegningInput?.(true)}
-                  className="bg-dark-teal text-white font-inter font-medium text-sm px-sm py-xs rounded-lg min-h-[44px] hover:opacity-90 transition-all"
+                  className="bg-dark-teal text-white font-inter font-medium text-sm px-sm py-xs rounded-lg min-h-touch hover:opacity-90 transition-all"
                 >
                   Registrer udlægning
                 </button>

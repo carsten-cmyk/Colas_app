@@ -480,7 +480,7 @@ export function AfregningContent({ vognmandBekraeftelse, todayDay, isSamleordreM
             <button
               type="button"
               onClick={handleRetDag}
-              className="shrink-0 font-inter font-semibold text-xs text-text-secondary underline cursor-pointer hover:text-text-primary transition-colors min-h-[44px] px-xs"
+              className="shrink-0 font-inter font-semibold text-xs text-text-secondary underline cursor-pointer hover:text-text-primary transition-colors min-h-touch px-xs"
             >
               Ret
             </button>

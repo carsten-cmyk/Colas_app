@@ -339,7 +339,7 @@ export function MaterielleveringSection({
                       onTilfoejResource(mat)
                       setTilfoejMaterielOpen(false)
                     }}
-                    className="flex items-center justify-between gap-sm py-xs min-h-[44px] text-left hover:bg-surface-2 transition-colors rounded-lg -mx-xs px-xs"
+                    className="flex items-center justify-between gap-sm py-xs min-h-touch text-left hover:bg-surface-2 transition-colors rounded-lg -mx-xs px-xs"
                   >
                     <div className="flex flex-col gap-xxs min-w-0">
                       <span className="font-inter text-sm font-semibold text-text-primary truncate">{mat.description}</span>
