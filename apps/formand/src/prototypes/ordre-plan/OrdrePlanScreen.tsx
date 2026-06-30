@@ -7,29 +7,14 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import {
-  Truck,
-  X,
-  Plus,
-  ChevronDown,
   ChevronLeft,
-  Mic,
-  Info,
-  Camera,
-  CheckCircle2,
-  MessageSquare,
+  Plus,
 } from 'lucide-react'
 import { TopBar } from '@/components/layout/TopBar'
 import { useRecept } from '@/hooks/useRecept'
 import { useDagsoverblik } from '@/hooks/useDagsoverblik'
-import { formatWeekday, formatLongDate } from '@/utils/date'
 import { clusterEtaper, getMaterielUiState, DEMO_TRANSPORT_PLANER, transportKey } from './etape'
 import type { Etape, MaterielUiState, MaterielTransportPlan } from './etape'
-import {
-  MaterielPlanlaegTilstand,
-  MaterielNyEtapeTilstand,
-  MaterielPaaPladsenTilstand,
-  MaterielDvaleTilstand,
-} from './MaterielTilstande'
 import type { TransportPlanPatch, MaterielEnhed as MaterielEnhedTilstand } from './MaterielTilstande'
 import { formatPhone, toE164 } from '@shared/utils/phone'
 // ─── Interne moduler (udskilt fra denne fil) ──────────────────────────────────
@@ -40,20 +25,16 @@ import type {
   VognmandBekraeftelse, VognmandMaterielBekraeftelse, EkstraLinje,
 } from './types'
 import {
-  getEffectiveTons, getEffectiveProductTotalTons, TODAY, dateToString,
+  getEffectiveProductTotalTons,
 } from './utils'
 import {
-  STANDARD_MATERIEL_KATALOG, VEHICLE_TYPES, MOCK_VOGNMAEND, DEFAULT_VOGNMAND_ID,
   DEFAULT_KØRSEL_PARAMS, INITIAL_PRODUCTS, INITIAL_RESOURCES,
   INITIAL_COMMENTS, INITIAL_PHOTOS, MOCK_SAMLEORDRE,
   INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE, INITIAL_VOGNMAND_BEKRAEFTELSER,
 } from './mocks'
-import { OrdredetaljerSection } from './components/OrdredetaljerSection'
 import { AflysningCell } from './components/AflysningCell'
-import { ProductBoxV2, EkstraBestillingBox } from './components/ProductBoxV2'
 import { CommentCell } from './components/CommentCell'
-import { DocRow } from './components/DocRow'
-import { FjernModal } from './components/FjernModal'
+import { PlanlaegningContent } from './content/PlanlaegningContent'
 import { UdfoerselContent } from './content/UdfoerselContent'
 import { AfregningContent } from './content/AfregningContent'
 
@@ -100,38 +81,26 @@ export function OrdrePlanScreen() {
   function setProductSamles(productId: string, dayId: string, value: boolean) {
     setProductSamlesFlags(prev => ({ ...prev, [`${productId}__${dayId}`]: value }))
   }
-  // Bekræftelses-modal før afsendelse til fabrik
-  const [showConfirmSend, setShowConfirmSend] = useState(false)
-  // "Bestilling for sent"-flag: deadline = kl 11 DAGEN FØR udlægningsdagen (selectedPlanDate).
-  // Efter deadline kan ordren stadig sendes, men formanden skal ringe til fabrik for at sikre
-  // produktionskapacitet. Vises pr. DEFAULT i prototypen så flowet kan ses uden tidssimulering.
-  // TODO: Erstat med Supabase/PLAN — reel beregning: nu > (selectedPlanDate − 1 dag, kl 11:00).
-  const bestillingForSent = true
-  // TODO: Erstat med Supabase når klar — kommentar gemmes på ordren ved afsendelse
-  const [kommentar, setKommentar] = useState('')
-  // TODO: Erstat med Supabase når klar — kommentarer gemmes på ordren/dagen
-  const [sentKommentarer, setSentKommentarer] = useState<Record<string, string>>({})
+  // showConfirmSend, bestillingForSent, kommentar, sentKommentarer, sentDayIds, fabrikSendtDates
+  // → FLYTTET til AsfaltbestillingSection (lokal state) [Fase 2, Round 3, #9]
+  //
+  // tilfoejMaterielOpen, materielSoeg, fjernModalId
+  // → FLYTTET til MaterielleveringSection (lokal state) [Fase 2, Round 3, #11]
   const [resources, setResources] = useState<MockResource[]>(INITIAL_RESOURCES)
-  const [tilfoejMaterielOpen, setTilfoejMaterielOpen] = useState(false)
-  const [materielSoeg, setMaterielSoeg] = useState('')
-  const [fjernModalId, setFjernModalId] = useState<string | null>(null)
   const [cancellingDayId, setCancellingDayId] = useState<string | null>(null)
   // Aflys-celle (i ordredetalje-grid): inline picker-state — uafhængig pr. produkt
   const [aflysPickerProductId, setAflysPickerProductId] = useState<string | null>(null)
   const [aflysPickerDayId, setAflysPickerDayId] = useState<string | null>(null)
   const [photos, setPhotos] = useState<MockPhoto[]>(INITIAL_PHOTOS)
-  const [opmaalingOpen, setOpmaalingOpen] = useState(false)
-  const [photosOpen, setPhotosOpen] = useState(false)
-  const [notesOpen, setNotesOpen] = useState(false)
-  const [docsOpen, setDocsOpen] = useState(false)
-  const [besigtigelseComment, setBesigtigelseComment] = useState('')
+  // opmaalingOpen, photosOpen, notesOpen, docsOpen, besigtigelseComment
+  // → FLYTTET til DokumentationSection (lokal state) [Fase 2, Round 3, #8]
   const [noteComments, setNoteComments] = useState<NoteComment[]>(INITIAL_COMMENTS)
-  const [sentDayIds, setSentDayIds] = useState<Set<string>>(new Set())
+  // sentDayIds → FLYTTET til AsfaltbestillingSection (lokal state) [Fase 2, Round 3, #9]
   // afhentningAdresse, afhentningPostnr, afhentningKlarDato/Tid, afhentningLeveringDato/Tid,
   // sammeAflæsning og materielKommentar er MIGRERET til transportPlaner (MaterielTransportPlan
   // pr. enhed × etape). Se transportPlaner-state nedenfor.
   // TODO Round 4b: swap til faktiskPlanlagteDage + reel transport-state fra Supabase.
-  const [kørselExpandedId, setKørselExpandedId] = useState<string | null>(null)
+  // kørselExpandedId → FLYTTET til AsfaltKoerselSection (lokal state) [Fase 2, Round 3, #10]
   // TODO: Erstat med Supabase når klar — afsendelsesgate for ASFALT-biler til vognmand, keyed på selectedPlanDate (ISO-dato-streng).
   // Seeder demo-dage som "Sendt til vognmand" (planlægnings-end-state: d2-1 = 16. marts, d2-2 = 17. marts).
   const [sendtTilVognmandDates, setSendtTilVognmandDates] = useState<Set<string>>(new Set(['2026-03-16', '2026-03-17']))
@@ -143,8 +112,7 @@ export function OrdrePlanScreen() {
       INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE.items.map(it => transportKey(it.resourceId, 0))
     )
   )
-  // TODO: Erstat med Supabase når klar — fabrik-bestilling sendt pr. dag, keyed på selectedPlanDate (ISO-dato-streng)
-  const [fabrikSendtDates, setFabrikSendtDates] = useState<Set<string>>(new Set())
+  // fabrikSendtDates → FLYTTET til AsfaltbestillingSection (lokal state) [Fase 2, Round 3, #9]
   // TODO: Erstat med Supabase — d2-1 og d2-2 er forudfyldte til demo
   const [kørselPlanlagtIds, setKørselPlanlagtIds] = useState<Set<string>>(new Set(['d2-1', 'd2-2']))
   // TODO: Erstat med Supabase — forudfyldte kørselordre til demo
@@ -465,17 +433,11 @@ export function OrdrePlanScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Send alle ikke-sendte morgen-bestillinger for valgt dag samtidigt
-  function sendAlleForSelectedDate() {
-    const dayIds = productsForSelectedDate
-      .filter(({ day }) => !sentDayIds.has(day.id))
-      .map(({ day }) => day.id)
-    setSentDayIds(prev => new Set([...prev, ...dayIds]))
-  }
+  // sendAlleForSelectedDate → FLYTTET til AsfaltbestillingSection (lokal) [Fase 2, Round 3, #9]
 
   function removeResource(id: string) {
     setResources(prev => prev.filter(r => r.id !== id))
-    setFjernModalId(null)
+    // setFjernModalId → FLYTTET til MaterielleveringSection (lokal state) [Fase 2, Round 3, #11]
   }
 
   /**
@@ -548,6 +510,12 @@ export function OrdrePlanScreen() {
     setMaterielSendteEnhederIds(prev => new Set([...prev, ...nyeSendte]))
   }
 
+  // gemKørsel: kørselExpandedId sættes IKKE til null her — det er nu lokal state i AsfaltKoerselSection [Fase 2, Round 3, #10].
+  // onGemKørsel-callback trådes ned til sektionen og SKAL bevare:
+  //   1. setKørselPlanlagtIds → sætter dag som planlagt
+  //   2. setBekraeftedeDagIds → fjerner dag fra bekræftet (revert-on-edit)
+  //   3. setSendtTilVognmandDates → fjerner dato (revert-on-edit via day.date lookup)
+  // AsfaltKoerselSection-handoff: kalderen SKAL rydde sendtTilVognmandDates[dayDate].
   function gemKørsel(dayId: string) {
     setKørselPlanlagtIds(prev => new Set([...prev, dayId]))
     // Gem → "Planlagt" (fjern fra bekræftet-sæt). "Bekræftet vognmand" gensættes
@@ -557,10 +525,10 @@ export function OrdrePlanScreen() {
     // formanden ændrer bestillingen, så sendt-status nulstilles og dagen skal sendes igen.
     const dayDate = days.find(d => d.id === dayId)?.date
     if (dayDate) setSendtTilVognmandDates(prev => { const next = new Set(prev); next.delete(dayDate); return next })
-    setKørselExpandedId(null)
+    // NOTE: setKørselExpandedId(null) fjernet — kørselExpandedId er nu lokal i AsfaltKoerselSection
   }
 
-  const fjernModalResource = fjernModalId ? resources.find(r => r.id === fjernModalId) : null
+  // fjernModalResource beregnes nu lokalt i MaterielleveringSection [Fase 2, Round 3, #11]
 
   // Genbrugbar Ordredetaljer-visning: samleordre split-view med tabs ELLER fuld bredde Spec-grid.
   // Bruges både på Planlægning-mode (direkte synlig) og Udførsel-mode (i collapsed-expander).
@@ -989,1175 +957,82 @@ export function OrdrePlanScreen() {
             </button>
           </div>
 
+          {/* ── Planlægning-mode — løftet til PlanlaegningContent [Fase 2, Round 3, #12] ── */}
+          {/* Originalkilde: OrdrePlanScreen.tsx ~L992–2160 */}
           {activeMode === 'planlaegning' && (
-          <div className="flex flex-col gap-[48px]">
-
-          {/* ── Asfaltbestilling — unified datovælger i toppen (matcher Udførsel/Afregning) ──
-              Flyttet hertil 2026-06-15: datovælgeren placeres øverst på alle tre modes for
-              ensartethed. 1:1 samme picker som Udførsels "Udføres i perioden" — fuld ordre-
-              periode, overståede dage gennemstreget, ingen grøn afsendt-state. */}
-          {planDays.length > 0 && (
-            <section>
-              <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight mb-sm">Udføres i perioden</h2>
-              <div className="flex items-center gap-xs flex-wrap">
-                {planDays.map(ds => {
-                  const isSelected = ds === selectedPlanDate
-                  // Dato-pille-konvention (2026-06-05): passerede dage → hvid + gennemstreget
-                  const isPast = ds < dateToString(TODAY)
-                  return (
-                    <button
-                      key={ds}
-                      onClick={() => setSelectedPlanDate(ds)}
-                      aria-pressed={isSelected}
-                      aria-label={`${formatLongDate(ds)}${isPast ? ' (overstået)' : ''}`}
-                      className={[
-                        'flex items-center gap-xxxs px-sm py-xs rounded-full font-poppins font-semibold text-sm transition-colors',
-                        isSelected
-                          ? 'bg-deep-teal text-white shadow-sm'
-                          : isPast
-                            ? 'bg-white border border-hairline text-text-muted line-through hover:border-dark-teal'
-                            : 'bg-white border border-hairline text-text-muted hover:border-dark-teal hover:text-deep-teal',
-                      ].join(' ')}
-                    >
-                      {formatLongDate(ds)}
-                    </button>
-                  )
-                })}
-              </div>
-            </section>
-          )}
-
-          {/* ── Sektion: Udlægning ───────────────────────────────── */}
-          <div>
-
-            {/* Header-row (h2 + Skjul/Vis-toggle) + spec-grid/collapsed-pille
-                indkapslet i OrdredetaljerSection. Identisk markup på tværs af
-                Planlægning/Udførsel/Afregning — kun state og renderCard()-args
-                varierer per mode. */}
-            <OrdredetaljerSection
-              expanded={planlaegningOrdredetaljerExpanded}
-              onToggle={() => setPlanlaegningOrdredetaljerExpanded(prev => !prev)}
-              renderCard={() => makeOrdredetaljerCard()}
-              renderCollapsedPille={renderOrdredetaljerCollapsedPille}
+            <PlanlaegningContent
+              planDays={planDays}
+              selectedPlanDate={selectedPlanDate}
+              onSelectPlanDate={setSelectedPlanDate}
+              planlaegningOrdredetaljerExpanded={planlaegningOrdredetaljerExpanded}
+              onTogglePlanlaegningOrdredetaljer={() => setPlanlaegningOrdredetaljerExpanded(prev => !prev)}
+              makeOrdredetaljerCard={makeOrdredetaljerCard}
+              renderOrdredetaljerCollapsedPille={renderOrdredetaljerCollapsedPille}
+              products={products}
+              productsForSelectedDate={productsForSelectedDate}
+              activeDays={activeDays}
+              activeProductId={activeProductId}
+              onSetActiveProductId={setActiveProductId}
+              onUpdateTons={updateTons}
+              onUpdateMorgenTons={updateMorgenTons}
+              photos={photos}
+              onAddPhotos={(newPhotos) => setPhotos(prev => [...prev, ...newPhotos])}
+              onRemovePhoto={(id) => setPhotos(prev => prev.filter(p => p.id !== id))}
+              noteComments={noteComments}
+              onAddComment={(comment) => setNoteComments(prev => [...prev, comment])}
+              cancellingDayId={cancellingDayId}
+              onCancelDay={(dayId) => setCancellingDayId(dayId)}
+              onAbortCancel={() => setCancellingDayId(null)}
+              onConfirmCancel={(productId, dayId, reason) => cancelDay(productId, dayId, reason)}
+              onRestoreDay={restoreDay}
+              productSamlesFlags={productSamlesFlags}
+              onSetProductSamles={setProductSamles}
+              isSamleordreMode={isSamleordreMode}
+              samleordreCtx={samleordreCtx}
+              kørselOrders={kørselOrders}
+              onSetKørselOrders={setKørselOrders}
+              kørselParams={kørselParams}
+              onSetKørselParams={setKørselParams}
+              startRaekkefoelge={startRaekkefoelge}
+              onUpdateStartRaekkefoelge={updateStartRaekkefoelge}
+              startTider={startTider}
+              onUpdateStartTid={updateStartTid}
+              kørselPlanlagtIds={kørselPlanlagtIds}
+              bekraeftedeDagIds={bekraeftedeDagIds}
+              sendtTilVognmandDates={sendtTilVognmandDates}
+              onSetSendtTilVognmandDates={setSendtTilVognmandDates}
+              kørselKommentar={kørselKommentar}
+              onSetKørselKommentar={setKørselKommentar}
+              dagVognmand={dagVognmand}
+              onSetDagVognmand={setDagVognmand}
+              dagAfregning={dagAfregning}
+              onSetDagAfregning={setDagAfregning}
+              onGemKørsel={gemKørsel}
+              factoryKm={factoryKm}
+              resources={resources}
+              transportPlaner={transportPlaner}
+              etaper={etaper}
+              materielUiState={materielUiState}
+              materielResources={materielResources}
+              aktivEtape={aktivEtape}
+              bekraeftedeEnhederIds={bekraeftedeEnhederIds}
+              materielSendteEnhederIds={materielSendteEnhederIds}
+              onTransportChange={handleTransportChange}
+              onTransportGem={markTransportPlanlagt}
+              onMaterielSend={handleMaterielSend}
+              onFjernResource={removeResource}
+              onTilfoejResource={(katalogItem) => {
+                setResources(prev => [...prev, {
+                  id: `mat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                  plantNumber: katalogItem.plantNumber,
+                  description: katalogItem.description,
+                  transportTag: katalogItem.transportTag,
+                  status: 'ikke-planlagt',
+                }])
+              }}
             />
-
-            {planlaegningOrdredetaljerExpanded && (
-              <section>
-                <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Dokumentation</h2>
-
-                <div className="bg-white border border-hairline rounded-xl overflow-hidden">
-                  {/* Toggle-header */}
-                  <button
-                    onClick={() => setDocsOpen(o => !o)}
-                    className="w-full flex items-center justify-between px-sm py-sm hover:bg-[#F5F5F5] transition-colors"
-                  >
-                    <span className="flex items-center gap-md">
-                      <span className="font-poppins font-semibold text-sm text-text-primary">Dokumentation</span>
-                      <span className="flex items-center gap-sm font-inter text-xs text-text-muted">
-                        {[
-                          { label: 'Opmåling', ok: true },
-                          { label: 'Billeder', ok: true },
-                          { label: 'Noter', ok: false },
-                        ].map(item => (
-                          <span key={item.label} className="flex items-center gap-xxxs">
-                            <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 ${item.ok ? 'bg-[#1F8A5B]' : 'bg-[#C8372D]'}`} />
-                            <span className={item.ok ? 'text-text-muted' : 'text-[#C8372D] font-medium'}>{item.label}</span>
-                          </span>
-                        ))}
-                      </span>
-                    </span>
-                    <ChevronDown size={16} className={`text-text-muted transition-transform ${docsOpen ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {docsOpen && (
-                    <div className="border-t border-hairline">
-
-                      {/* Opmåling */}
-                      <DocRow
-                        title="Opmåling af område"
-                        meta="PDF · 2,1 MB"
-                        status="ok"
-                        open={opmaalingOpen}
-                        onToggle={() => setOpmaalingOpen(o => !o)}
-                      >
-                        <div className="flex flex-col gap-sm">
-                          <img src="/opmaalings-kort.png" alt="Opmåling af område" className="w-full rounded-lg border border-hairline grayscale-[30%]" />
-                          <label className="flex items-center justify-center gap-xs border border-dashed border-hairline-2 rounded-lg py-sm cursor-pointer hover:border-dark-teal hover:bg-[#F5F9FA] transition-colors group">
-                            <input type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden"
-                              onChange={e => { if (e.target.files?.length) { /* TODO: håndter upload */ } }}
-                            />
-                            <Plus size={14} className="text-text-muted group-hover:text-dark-teal transition-colors" />
-                            <span className="font-inter text-xs text-text-muted group-hover:text-dark-teal transition-colors">Upload fil (PDF eller billede)</span>
-                          </label>
-                        </div>
-                      </DocRow>
-
-                      {/* Billeder */}
-                      <DocRow
-                        title="Billedmateriale"
-                        meta={`${photos.length} billeder`}
-                        status="ok"
-                        open={photosOpen}
-                        onToggle={() => setPhotosOpen(o => !o)}
-                      >
-                        <div className="grid grid-cols-4 gap-xs">
-                          {photos.map(photo => (
-                            <div key={photo.id} className={`aspect-square rounded-lg ${photo.color} flex flex-col items-center justify-center relative group border border-hairline overflow-hidden`}>
-                              <span className="font-inter text-xxs text-text-muted text-center px-xxxs leading-tight">{photo.label}</span>
-                              {photo.source === 'forundersoegelse' && (
-                                <span className="absolute bottom-0 left-0 right-0 bg-dark-teal/80 font-inter text-[9px] font-semibold text-white text-center py-[2px] leading-none">
-                                  Forundersøgelse
-                                </span>
-                              )}
-                              <button
-                                onClick={() => setPhotos(prev => prev.filter(p => p.id !== photo.id))}
-                                className="absolute top-[4px] right-[4px] w-[16px] h-[16px] bg-white/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <X size={8} className="text-bad" />
-                              </button>
-                            </div>
-                          ))}
-                          <label className="aspect-square rounded-lg border border-dashed border-hairline-2 flex flex-col items-center justify-center cursor-pointer hover:border-text-muted hover:bg-[#F5F5F5] transition-colors">
-                            <input type="file" accept="image/*" capture="environment" className="hidden"
-                              onChange={e => {
-                                if (e.target.files?.length) {
-                                  setPhotos(prev => [...prev, { id: `ph${Date.now()}`, color: 'bg-yellow/20', label: `Foto ${prev.length + 1}` }])
-                                }
-                              }}
-                            />
-                            <Camera size={16} className="text-text-muted" />
-                            <span className="font-inter text-xxs text-text-muted mt-xxxs">Kamera</span>
-                          </label>
-                          <label className="aspect-square rounded-lg border border-dashed border-hairline-2 flex flex-col items-center justify-center cursor-pointer hover:border-text-muted hover:bg-[#F5F5F5] transition-colors">
-                            <input type="file" accept="image/*" className="hidden"
-                              onChange={e => {
-                                if (e.target.files?.length) {
-                                  setPhotos(prev => [...prev, { id: `ph${Date.now()}`, color: 'bg-light-aqua/30', label: `Foto ${prev.length + 1}` }])
-                                }
-                              }}
-                            />
-                            <Plus size={16} className="text-text-muted" />
-                            <span className="font-inter text-xxs text-text-muted mt-xxxs">Upload</span>
-                          </label>
-                        </div>
-                      </DocRow>
-
-                      {/* Noter */}
-                      <DocRow
-                        title="Noter til opgave"
-                        meta={`${noteComments.length} noter`}
-                        status="bad"
-                        open={notesOpen}
-                        onToggle={() => setNotesOpen(o => !o)}
-                        isLast
-                      >
-                        <div className="flex flex-col gap-sm">
-                          {noteComments.map(c => (
-                            <div key={c.id} className="flex gap-xs">
-                              <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${c.initials === 'OJ' ? 'bg-deep-teal' : 'bg-[#F5F5F5]'}`}>
-                                <span className={`font-inter font-bold text-[9px] ${c.initials === 'OJ' ? 'text-white' : 'text-deep-teal'}`}>{c.initials}</span>
-                              </div>
-                              <div className="flex-1 bg-[#F5F5F5] rounded-xl px-xs py-xs">
-                                <div className="flex items-baseline gap-xs mb-xxxs">
-                                  <b className="font-inter font-semibold text-xs text-text-primary">{c.name}</b>
-                                  <time className="font-inter text-xxs text-text-muted">{c.timestamp}</time>
-                                </div>
-                                <p className="font-inter text-xs text-text-secondary leading-relaxed">{c.text}</p>
-                              </div>
-                            </div>
-                          ))}
-                          <div className="flex gap-xs">
-                            <div className="w-7 h-7 rounded-full bg-deep-teal flex items-center justify-center flex-shrink-0">
-                              <span className="font-inter font-bold text-[9px] text-white">OJ</span>
-                            </div>
-                            <div className="flex-1">
-                              <div className="relative">
-                                <textarea
-                                  value={besigtigelseComment}
-                                  onChange={e => setBesigtigelseComment(e.target.value)}
-                                  placeholder="Tilføj bemærkning..."
-                                  rows={2}
-                                  className="w-full rounded-xl border border-hairline bg-white px-xs py-xs pr-[40px]
-                                             font-inter text-xs text-text-primary placeholder:text-text-muted
-                                             focus:outline-none focus:border-dark-teal resize-none"
-                                />
-                                <button
-                                  className="absolute bottom-[10px] right-[10px] w-7 h-7 rounded-full bg-dark-teal
-                                             flex items-center justify-center hover:bg-deep-teal transition-colors"
-                                  aria-label="Dikter bemærkning"
-                                >
-                                  <Mic size={12} className="text-white" />
-                                </button>
-                              </div>
-                              {besigtigelseComment.trim().length > 0 && (
-                                <button
-                                  onClick={() => {
-                                    setNoteComments(prev => [...prev, { id: `nc${Date.now()}`, initials: 'OJ', name: 'Ole Jensen', timestamp: 'Nu', text: besigtigelseComment.trim() }])
-                                    setBesigtigelseComment('')
-                                  }}
-                                  className="mt-xxxs self-end float-right bg-dark-teal text-white font-inter font-semibold text-xxs px-sm py-xxxs rounded-lg hover:bg-deep-teal transition-colors"
-                                >
-                                  Gem
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </DocRow>
-
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
-
-            <hr className="my-lg border-t border-hairline" />
-
-            {/* ── Bestillings-række for valgt dag ──────────────────────── */}
-            {/* Produkter (én boks pr. produkt) + "Send alle"-knap */}
-            {/* Samleordre: produkter samles per recipeCode på tværs af ordrer */}
-            {/* TODO: Erstat med Supabase når klar — produktdata fra samleordre-join */}
-            <div className="flex flex-col gap-sm">
-              <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight mb-sm">Asfaltbestilling</h2>
-              {/* Datovælgeren er flyttet til toppen af Planlægning-mode (unified picker —
-                  se sektionen øverst). Bestillings-rækken viser produkterne for den valgte dato. */}
-              {productsForSelectedDate.length === 0 && (
-                <span className="font-inter text-xs text-text-muted">Ingen produkter denne dag</span>
-              )}
-
-              {/* Flow 9b (OPDATERET 2026-06-09): "Tons opdateret af Fabrik"-banner ERSTATTET
-                  af synlig EkstraBestillingBox + "Bekræftet fabrik"-pille per produkt med ekstra-tons.
-                  Se EkstraBestillingBox-komponenten.
-                  Bevaret som dokumentation: ./v1/TonsOpdateretBanner.v1.tsx */}
-
-              {/* items-stretch + flex-1 på bokse: alle kolonner stretcher til samme højde
-                  (drevet af højeste boks). */}
-              <div className="flex gap-xs flex-wrap items-stretch">
-                {/* Produkt-bokse for valgt dag — status-pill under (ingen send-knap, kun statusfelt) */}
-                {(() => {
-                  // Samleordre: beregn ordre-tags per recipeCode
-                  // Produkter samles per recipeCode — vises KUN ÉN gang selv om begge ordrer har det
-                  // TODO: Erstat med Supabase når klar
-                  const samleordreTags: Record<string, string[]> = {}
-                  if (isSamleordreMode && samleordreCtx) {
-                    // Byg map: recipeCode → [stedLabel] for alle ordrer der har produktet
-                    const rcToChildren: Record<string, { stedLabel: string }[]> = {}
-                    for (const child of samleordreCtx.children) {
-                      for (const cp of child.products) {
-                        if (!rcToChildren[cp.recipeCode]) rcToChildren[cp.recipeCode] = []
-                        rcToChildren[cp.recipeCode].push({ stedLabel: child.stedLabel })
-                      }
-                    }
-                    for (const [rc, entries] of Object.entries(rcToChildren)) {
-                      samleordreTags[rc] = entries.map(e => e.stedLabel)
-                    }
-                  }
-                  return productsForSelectedDate.flatMap(({ product, day }) => {
-                    const isSent = sentDayIds.has(day.id)
-                    const isFocused = product.id === activeProductId
-                    const ordreTagLabels = isSamleordreMode ? (samleordreTags[product.recipeCode] ?? [product.recipeName]) : undefined
-                    const nodes = [
-                      <div key={product.id} className="flex flex-col gap-xs">
-                        <ProductBoxV2
-                          product={product}
-                          day={day}
-                          isFocused={isFocused}
-                          isSelectingReason={cancellingDayId === day.id}
-                          isSent={isSent}
-                          onFocus={() => setActiveProductId(product.id)}
-                          onUpdateTons={(v) => updateTons(product.id, day.id, v)}
-                          onUpdateMorgenTons={(v) => updateMorgenTons(product.id, day.id, v)}
-                          onCancel={() => setCancellingDayId(day.id)}
-                          onAbortCancel={() => setCancellingDayId(null)}
-                          onConfirmCancel={(r) => cancelDay(product.id, day.id, r)}
-                          onRestore={() => restoreDay(day.id)}
-                          ordreTagLabels={ordreTagLabels}
-                          samlesPaaEnBil={productSamlesFlags[`${product.id}__${day.id}`] ?? false}
-                          onSamlesPaaEnBilChange={(v) => setProductSamles(product.id, day.id, v)}
-                        />
-                        {/* Status-pills fjernet 2026-06-19: aflyst-tilstand vises af ProductBoxV2 selv
-                            (rød kant + "Aflyst"-tekst + Fortryd-link). Sendt/afventer-status
-                            afspejles af den fælles "Send til fabrik"-knap nedenfor. */}
-                      </div>,
-                    ]
-                    // Flow 9b (OPDATERET 2026-06-09): PLAN-pushet ekstra-bestilling vises som
-                    // selvstændig boks ved siden af produktet — med "Bekræftet fabrik"-pille under.
-                    if (day.ekstraTons) {
-                      nodes.push(
-                        <div key={`${product.id}-ekstra`} className="flex flex-col gap-xs">
-                          <EkstraBestillingBox product={product} day={day} />
-                          {/* "Bekræftet fabrik"-pille fjernet 2026-06-19: bekræftelsestilstand
-                              håndteres nu af den fælles fabrikSendtDates-state nedenfor */}
-                        </div>
-                      )
-                    }
-                    return nodes
-                  })
-                })()}
-
-                {/* "Send til fabrik" CTA — gul knap → grøn sendt-tilstand + Ret-link (samme model som bilbestilling) */}
-                {productsForSelectedDate.length > 0 && (
-                  /* h-full + flex-1: wrapper stretcher til samme højde som items-stretch-parent.
-                     flex flex-col + flex-1 på boksen: boksen fylder wrapperens fulde højde → matcher ProductBoxV2. */
-                  <div className="relative flex flex-col gap-xs">
-                    {fabrikSendtDates.has(selectedPlanDate) ? (
-                      /* ── Sendt-tilstand: grøn ikon-boks (ingen Ret — afsendelse til fabrik er endelig) ── */
-                      <div className="w-[160px] min-h-[172px] flex-1 rounded-xl flex flex-col items-center justify-center gap-xs p-sm border border-good/30 bg-good/5">
-                        <div className="my-auto flex flex-col items-center gap-xs">
-                          <div className="w-10 h-10 rounded-full bg-good/15 flex items-center justify-center">
-                            <CheckCircle2 size={20} className="text-good" />
-                          </div>
-                          <span className="font-poppins font-medium text-sm text-good text-center leading-tight">
-                            Sendt til fabrik
-                          </span>
-                          <span className="font-inter text-xxs text-text-muted text-center px-xxs leading-tight">
-                            PROD A EAST KØGE PH
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      /* ── Ikke sendt: gul boks-knap (beholder boks-form + ikon) ── */
-                      (() => {
-                        const ikkeSendteProdukter = productsForSelectedDate.filter(({ day }) => !sentDayIds.has(day.id))
-                        const disabled = ikkeSendteProdukter.length === 0
-                        return (
-                          <button
-                            onClick={() => setShowConfirmSend(true)}
-                            disabled={disabled}
-                            className={[
-                              'w-[160px] min-h-[172px] flex-1 rounded-xl flex flex-col items-center p-sm transition-all border',
-                              disabled
-                                ? 'bg-surface border-hairline opacity-40 cursor-not-allowed'
-                                : 'bg-yellow border-yellow hover:opacity-90 active:scale-[0.98]',
-                            ].join(' ')}
-                          >
-                            <div className="my-auto flex flex-col items-center gap-xs">
-                              <div className={`w-10 h-10 rounded-full ${disabled ? 'bg-white' : 'bg-deep-teal/15'} flex items-center justify-center`}>
-                                <Truck size={20} className="text-deep-teal" />
-                              </div>
-                              <span className="font-poppins font-medium text-sm text-deep-teal text-center leading-tight">
-                                Send til fabrik
-                              </span>
-                              <span className="font-inter text-xxs text-deep-teal/70 text-center px-xxs leading-tight">
-                                {disabled ? 'Intet at sende' : 'Bestilling skal ske inden kl 11'}
-                              </span>
-                            </div>
-                            <span className="font-inter text-xxs text-deep-teal/70 text-center leading-tight">
-                              PROD A EAST KØGE PH
-                            </span>
-                          </button>
-                        )
-                      })()
-                    )}
-                    {/* Kommentar-/placeholder-række tages UD af flow (absolut, under boksen) så
-                        send-boksen kan fylde wrapperens fulde højde og matche produktboksene. */}
-                    <div className="absolute top-full inset-x-0 mt-xxxs flex justify-center">
-                    {sentKommentarer[selectedPlanDate] ? (
-                      <span
-                        className="group relative inline-flex items-center gap-xxxs px-xs py-xxxs font-inter text-xs font-medium text-text-muted hover:text-deep-teal cursor-help w-[180px] justify-center"
-                        aria-label={`Kommentarer sendt til fabrik: ${sentKommentarer[selectedPlanDate]}`}
-                      >
-                        <MessageSquare size={12} />
-                        Kommentarer sendt til fabrik
-                        <span
-                          role="tooltip"
-                          className="pointer-events-none absolute bottom-full right-0 mb-xxxs z-50 hidden group-hover:block bg-deep-teal text-white text-xs font-inter font-normal px-sm py-xs rounded-md shadow-lg whitespace-pre-line max-w-[280px] min-w-[180px] text-left leading-snug"
-                        >
-                          {sentKommentarer[selectedPlanDate]}
-                        </span>
-                      </span>
-                    ) : (
-                      <div className="w-[180px] h-[24px]" aria-hidden="true" />
-                    )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-            </div>
-          </div>
-
-            {/* Kørsel */}
-            <div className="mt-lg">
-              <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Asfalt kørsel</h2>
-              <div className="bg-white border border-hairline rounded-xl overflow-hidden">
-                {activeDays.filter(day => day.date === selectedPlanDate).length === 0 && (
-                  <p className="font-inter text-xs text-text-muted px-sm py-sm">Ingen kørsel denne dag</p>
-                )}
-                {activeDays.filter(day => day.date === selectedPlanDate).map((day, i, shownDays) => {
-                  const isExpanded = kørselExpandedId === day.id
-                  const isPlanlagt = kørselPlanlagtIds.has(day.id)
-                  const erBekraeftet = bekraeftedeDagIds.has(day.id)
-                  const orders = kørselOrders[day.id] ?? []
-                  const params = kørselParams[day.id] ?? DEFAULT_KØRSEL_PARAMS
-                  const singleLoadCapacity = orders.reduce((sum, o) => {
-                    const vt = VEHICLE_TYPES.find(v => v.label === o.type)
-                    return sum + (vt ? vt.tons * o.antal : 0)
-                  }, 0)
-                  const totalTrucks = orders.reduce((s, o) => s + o.antal, 0)
-                  // Køretid = Google Maps-køreafstand (km × 1 min) + 10% buffer (reel kørsel vs. Google-estimat).
-                  // FUNCTIONAL_FLOWS Flow 1, Trin 1 (Bilbehov-dashboard): +10% er kanonisk køretid og slår
-                  // igennem i ALLE afledte tal (Afstand, Rundtid, Anbefalet).
-                  const koeretidMin = Math.round(factoryKm * 1.1)
-                  const aflaesningstidMin = params.aflaesningstidMin ?? 15
-                  const dagInterval = params.intervalMinutes ?? 20
-                  // Rundtid = 2× køretid + 15 min læsning + aflæsningstid (editerbar, prefill 15)
-                  const roundTime = koeretidMin * 2 + 15 + aflaesningstidMin
-                  // Starttidspunkt plads bruger editerbartfelt (startTider[0]) med prefill 06:00
-                  const startPladsTid = startTider[day.id]?.[0] ?? '06:00'
-                  const [rsh, rsm] = startPladsTid.split(':').map(Number)
-                  const workEndMinutes = 15 * 60 + 30 // 15:30
-                  const roundsPerTruck = Math.max(0, Math.floor((workEndMinutes - (rsh * 60 + rsm)) / roundTime))
-
-                  // effective tons = planlagt + evt. ekstra fra PLAN
-                  const dayTons = getEffectiveTons(day)
-
-                  function updateOrder(id: string, field: 'type' | 'antal' | 'afregning_type', value: string | number) {
-                    setKørselOrders(prev => ({
-                      ...prev,
-                      [day.id]: (prev[day.id] ?? []).map(o => o.id === id ? { ...o, [field]: value } : o),
-                    }))
-                  }
-                  function removeOrder(id: string) {
-                    setKørselOrders(prev => ({ ...prev, [day.id]: (prev[day.id] ?? []).filter(o => o.id !== id) }))
-                  }
-                  function addOrder() {
-                    const newOrder: VehicleOrder = { id: `vo-${Date.now()}`, type: VEHICLE_TYPES[0].label, antal: 1 }
-                    setKørselOrders(prev => ({ ...prev, [day.id]: [...(prev[day.id] ?? []), newOrder] }))
-                  }
-                  function updateParam<K extends keyof KørselDayParams>(key: K, value: KørselDayParams[K]) {
-                    setKørselParams(prev => ({ ...prev, [day.id]: { ...(prev[day.id] ?? DEFAULT_KØRSEL_PARAMS), [key]: value } }))
-                  }
-
-                  return (
-                    <div key={day.id} className={i < shownDays.length - 1 || isExpanded ? 'border-b border-hairline' : ''}>
-                      {/* Hoved-række */}
-                      <div className={`grid items-center gap-md px-sm py-sm transition-colors ${!isExpanded ? 'hover:bg-[#F5F5F5]' : ''}`}
-                        style={{ gridTemplateColumns: '1fr auto' }}>
-                        <div>
-                          <p className="font-inter text-sm font-medium text-text-primary">
-                            {formatWeekday(day.date)} · {formatLongDate(day.date)}
-                          </p>
-                          {/* effective tons = planlagt + evt. ekstra fra PLAN */}
-                          <p className="font-inter text-xs text-text-muted">{dayTons} tons</p>
-                        </div>
-                        <div className="flex items-center gap-xxxs">
-                          {isPlanlagt && !isExpanded ? (
-                            <div className="flex items-center gap-xs flex-wrap justify-end">
-                              <span className="inline-flex items-center gap-sm px-sm py-xxxs rounded-lg bg-[#E7F4EE] font-inter text-xs font-medium text-text-primary whitespace-nowrap">
-                                <span>{orders.reduce((s, o) => s + o.antal, 0)} biler bestilt</span>
-                                {/* Multi-produkt: vis "Multi-produkt" i stedet for ét sæt tal */}
-                                {(() => {
-                                  const dagProdukter = products.filter(p => p.days.some(d => d.date === day.date))
-                                  if (dagProdukter.length >= 2) {
-                                    return (
-                                      <>
-                                        <span className="text-text-muted">·</span>
-                                        <span>{dagProdukter.length} produkter · per-produkt interval</span>
-                                      </>
-                                    )
-                                  }
-                                  return (
-                                    <>
-                                      <span className="text-text-muted">·</span>
-                                      <span>Interval {params.intervalMinutes != null ? `${params.intervalMinutes} min` : '–'}</span>
-                                      <span className="text-text-muted">·</span>
-                                      <span>Første læs {params.firstLoadTime || '–'}</span>
-                                    </>
-                                  )
-                                })()}
-                              </span>
-                              {/* Vognmand status badge — 3-state: Planlagt / Sendt til vognmand / Bekræftet */}
-                              {erBekraeftet ? (
-                                // downstream/Udførsel-tilstand — ikke seedet i planlægnings-demoen
-                                <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good font-inter text-xs font-semibold text-white whitespace-nowrap">
-                                  Bekræftet vognmand
-                                </span>
-                              ) : sendtTilVognmandDates.has(day.date) ? (
-                                <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-yellow/25 font-inter text-xs font-semibold text-[#8A6A00] whitespace-nowrap">
-                                  Sendt til vognmand
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-[#F5F5F5] font-inter text-xs font-semibold text-text-muted whitespace-nowrap">
-                                  Planlagt
-                                </span>
-                              )}
-                              {/* Ret-knap skjules når dagen er bekræftet af vognmand (FUNCTIONAL_FLOWS Trin 2) */}
-                              {!erBekraeftet && (
-                                <div className="flex">
-                                  <button
-                                    onClick={() => {
-                                      setKørselExpandedId(day.id)
-                                      // Seed defaults så number-inputs ikke snapper tilbage ved redigering
-                                      setKørselParams(prev => ({
-                                        ...prev,
-                                        [day.id]: {
-                                          ...DEFAULT_KØRSEL_PARAMS,
-                                          ...(prev[day.id] ?? {}),
-                                          aflaesningstidMin: prev[day.id]?.aflaesningstidMin ?? 15,
-                                          intervalMinutes: prev[day.id]?.intervalMinutes ?? 20,
-                                          firstLoadTime: prev[day.id]?.firstLoadTime ?? '06:00',
-                                        },
-                                      }))
-                                      if (startTider[day.id]?.[0] == null) {
-                                        updateStartTid(day.id, 0, '06:00')
-                                      }
-                                    }}
-                                    className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-lg border border-hairline font-inter text-xs font-medium text-dark-teal hover:bg-surface-2 transition-colors whitespace-nowrap min-h-touch"
-                                  >
-                                    Ret
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                if (isExpanded) {
-                                  gemKørsel(day.id)
-                                } else {
-                                  setKørselExpandedId(day.id)
-                                  if ((kørselOrders[day.id] ?? []).length === 0) {
-                                    setKørselOrders(prev => ({
-                                      ...prev,
-                                      [day.id]: [{ id: `vo-${Date.now()}`, type: '', antal: 1 }],
-                                    }))
-                                  }
-                                  // Seed defaults så number-inputs ikke snapper tilbage ved redigering
-                                  setKørselParams(prev => ({
-                                    ...prev,
-                                    [day.id]: {
-                                      ...DEFAULT_KØRSEL_PARAMS,
-                                      ...(prev[day.id] ?? {}),
-                                      aflaesningstidMin: prev[day.id]?.aflaesningstidMin ?? 15,
-                                      intervalMinutes: prev[day.id]?.intervalMinutes ?? 20,
-                                      firstLoadTime: prev[day.id]?.firstLoadTime ?? '06:00',
-                                    },
-                                  }))
-                                  if (startTider[day.id]?.[0] == null) {
-                                    updateStartTid(day.id, 0, '06:00')
-                                  }
-                                }
-                              }}
-                              className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap"
-                            >
-                              {isExpanded ? 'Gem kørsel' : 'Planlæg kørsel'}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-
-                      {/* Expand */}
-                      {isExpanded && (
-                        <div className="mx-sm mb-lg rounded-xl border border-dark-teal/20 bg-soft-aqua shadow-sm flex flex-col gap-md p-md">
-
-                          {/* Bilbehov — read-only beregningsoverblik (FLYTTET ØVERST 2026-06-15). FUNCTIONAL_FLOWS Flow 1, Trin 1 — LÅST 2026-06-10 */}
-                          {orders.length > 0 && (() => {
-                            const harBiler = totalTrucks > 0 && singleLoadCapacity > 0
-                            // avgTons fra de faktisk valgte biler; 30 = synligt fallback (FF Flow 1 Trin 1, præcisering 2026-06-15)
-                            const avgTons = harBiler ? Math.round(singleLoadCapacity / totalTrucks) : 30
-                            const recommended = roundsPerTruck > 0 ? Math.ceil(dayTons / (avgTons * roundsPerTruck)) : 0
-                            // Kapacitet-dækket: valgte bilers kapacitet over dagen = kapacitet/runde × runder pr. bil
-                            const totalCapacity = singleLoadCapacity * roundsPerTruck
-                            const capacityOk = harBiler && totalCapacity >= dayTons
-                            const tonsMangler = Math.max(0, dayTons - totalCapacity)
-                            const dagProdukter = products
-                              .map(p => ({ product: p, dayEntry: p.days.find(d => d.date === day.date) }))
-                              .filter((x): x is { product: MockProduct; dayEntry: DayPlan } => !!x.dayEntry)
-                            // Forventet sidste bil pr. produkt — P1: startPladsTid + dagInterval.
-                            // P2+: altid sekventielt direkte efter forrige produkts slut (samme biler i loop).
-                            let cursorMin: number | null = null
-                            const slutPerProdukt = dagProdukter.map(({ product, dayEntry }, pi) => {
-                              const tons = getEffectiveTons(dayEntry)
-                              const runder = harBiler ? Math.ceil(tons / singleLoadCapacity) : 0
-                              let startMin: number | null = null
-                              if (pi === 0) {
-                                // Produkt 1: bruger startPladsTid (prefill 06:00) + dagInterval (prefill 20)
-                                const [h, m] = startPladsTid.split(':').map(Number)
-                                startMin = h * 60 + m
-                              } else {
-                                // P2+: starter sekventielt direkte efter forrige produkts slut
-                                startMin = cursorMin
-                              }
-                              const slut = (harBiler && startMin != null) ? startMin + runder * roundTime : null
-                              cursorMin = slut
-                              return { product, slut }
-                            })
-                            const nogenKendt = slutPerProdukt.some(s => s.slut != null)
-                            const fmtTime = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}.${String(m % 60).padStart(2, '0')}`
-                            return (
-                              <div>
-                                <div className="flex items-center gap-sm mb-xs flex-wrap">
-                                  <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest">Bilbehov</p>
-                                  <span className="inline-flex items-center gap-xxxs font-inter text-xxs text-text-muted">
-                                    <Info size={13} className="text-light-aqua" />
-                                    Beregnet ud fra tonnage, fabrik og rundtid
-                                  </span>
-                                  {/* Kapacitet-dækket-indikator — grøn når valgte biler dækker forventet tons (genindført 2026-06-15) */}
-                                  <span className={`inline-flex items-center gap-xxxs px-xs py-xxxs rounded-md border font-inter text-xxs font-semibold ${capacityOk ? 'bg-good-bg border-good/30 text-good' : 'bg-bad-bg border-bad/30 text-bad'}`}>
-                                    {capacityOk ? 'Kapacitet dækket' : `${tonsMangler} Tons mangler`}
-                                  </span>
-                                </div>
-                                {/* 8 bokse: 3 editerbare (gul) + 5 read-only (hvid) */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-xs">
-                                  {/* Boks 1: Forventet tons (grøn, read-only) */}
-                                  <div className="bg-good-bg border border-good/20 rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
-                                    <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Forventet tons</span>
-                                    <span className="font-poppins text-xl font-bold text-deep-teal tabular-nums leading-none mt-auto">{dayTons}<span className="font-inter text-xs font-medium text-text-muted ml-xxxs">Tons</span></span>
-                                    <span className="font-inter text-xxs text-text-muted">Incl. ekstra best.</span>
-                                  </div>
-                                  {/* Boks 2: Starttidspunkt plads (gul, editerbar) — to-vejs via startTider[0] */}
-                                  <div className="bg-warn-bg border border-hairline rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
-                                    <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Starttidspunkt plads</span>
-                                    <input
-                                      type="time"
-                                      value={startTider[day.id]?.[0] ?? '06:00'}
-                                      onChange={e => updateStartTid(day.id, 0, e.target.value || null)}
-                                      className="font-poppins text-xl font-bold text-deep-teal bg-transparent border-0 p-0 tabular-nums focus:outline-none mt-auto leading-none h-[1lh] [&::-webkit-calendar-picker-indicator]:hidden"
-                                    />
-                                    <span className="font-inter text-xxs text-text-muted">Kan rettes</span>
-                                  </div>
-                                  {/* Boks 3: Forventet aflæsning (gul, editerbar) */}
-                                  <div className="bg-warn-bg border border-hairline rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
-                                    <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Forventet aflæsning (Minutter)</span>
-                                    <input
-                                      type="text"
-                                      inputMode="numeric"
-                                      min={1}
-                                      value={params.aflaesningstidMin ?? ''}
-                                      onChange={e => updateParam('aflaesningstidMin', e.target.value === '' ? undefined : Math.max(1, Number(e.target.value)))}
-                                      className="font-poppins text-xl font-bold text-deep-teal bg-transparent border-0 p-0 tabular-nums focus:outline-none mt-auto leading-none h-[1lh] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                                    />
-                                    <span className="font-inter text-xxs text-text-muted">Kan rettes</span>
-                                  </div>
-                                  {/* Boks 4: Interval (gul, editerbar) — flyttet fra "Starttider"-sektion */}
-                                  <div className="bg-warn-bg border border-hairline rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
-                                    <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Interval (Minutter)</span>
-                                    <input
-                                      type="text"
-                                      inputMode="numeric"
-                                      min={1}
-                                      value={params.intervalMinutes ?? ''}
-                                      onChange={e => updateParam('intervalMinutes', e.target.value === '' ? undefined : Math.max(1, Number(e.target.value)))}
-                                      className="font-poppins text-xl font-bold text-deep-teal bg-transparent border-0 p-0 tabular-nums focus:outline-none mt-auto leading-none h-[1lh] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                                    />
-                                    <span className="font-inter text-xxs text-text-muted">Kan rettes</span>
-                                  </div>
-                                  {/* Boks 5: Anbefalet (grøn, read-only) */}
-                                  <div className="bg-good-bg border border-good/20 rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
-                                    <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Anbefalet</span>
-                                    <span className="font-poppins text-xl font-bold text-deep-teal tabular-nums leading-none mt-auto">{recommended}<span className="font-inter text-xs font-medium text-text-muted ml-xxxs">biler</span></span>
-                                    <span className="font-inter text-xxs text-text-muted">{harBiler ? `á gns. ${avgTons} Tons` : `antaget gns. ${avgTons} Tons`}</span>
-                                  </div>
-                                  {/* Boks 6: Runder (grøn, read-only) */}
-                                  <div className="bg-good-bg border border-good/20 rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
-                                    <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Runder</span>
-                                    <span className="font-poppins text-xl font-bold text-deep-teal tabular-nums leading-none mt-auto">{roundsPerTruck}<span className="font-inter text-xs font-medium text-text-muted ml-xxxs">pr. bil</span></span>
-                                    <span className="font-inter text-xxs text-text-muted">{roundTime} M. pr. runde</span>
-                                  </div>
-                                  {/* Boks 7: Afstand til fabrik (grøn, read-only) */}
-                                  <div className="bg-good-bg border border-good/20 rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
-                                    <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Afstand til fabrik</span>
-                                    <span className="font-poppins text-xl font-bold text-deep-teal tabular-nums leading-none mt-auto">{factoryKm}<span className="font-inter text-xs font-medium text-text-muted ml-xxxs">km</span></span>
-                                    <span className="font-inter text-xxs text-text-muted">{koeretidMin} Minutter</span>
-                                  </div>
-                                  {/* Boks 8: Forventet sidste bil (grøn, read-only) — nu altid beregnet for P1 via prefill */}
-                                  <div className="bg-good-bg border border-good/20 rounded-lg p-sm flex flex-col gap-xxxs min-h-[78px]">
-                                    <span className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-wider">Forventet sidste bil</span>
-                                    {!harBiler ? (
-                                      <span className="font-inter text-xs text-text-muted mt-auto">Vælg biler først</span>
-                                    ) : !nogenKendt ? (
-                                      <span className="font-inter text-xs text-text-muted mt-auto leading-snug">Afventer starttider og interval</span>
-                                    ) : (
-                                      <div className="flex flex-col gap-xxs mt-auto">
-                                        {slutPerProdukt.map((s, i) => (
-                                          <div key={s.product.id} className="flex items-center gap-xs">
-                                            <span className="font-inter text-xxs font-bold text-white bg-deep-teal rounded-sm px-xxxs tracking-wide">P{i + 1}</span>
-                                            <span className="font-poppins text-md font-bold text-deep-teal tabular-nums leading-none">{s.slut != null ? fmtTime(s.slut) : '–'}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            )
-                          })()}
-
-                          <hr className="border-hairline" />
-
-                          {/* Vognmand + Afregning — på én række */}
-                          <div className="flex items-end gap-sm">
-                            {/* Vognmand */}
-                            <div className="flex-1">
-                              <p className="font-inter text-xs font-semibold text-text-primary mb-xs">Vognmand</p>
-                              <select
-                                value={dagVognmand[day.id] ?? DEFAULT_VOGNMAND_ID}
-                                onChange={e => setDagVognmand(prev => ({ ...prev, [day.id]: e.target.value }))}
-                                className="w-full font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                              >
-                                {MOCK_VOGNMAEND.map(vm => (
-                                  <option key={vm.id} value={vm.id}>{vm.navn}{vm.id === DEFAULT_VOGNMAND_ID ? ' (primær)' : ''}</option>
-                                ))}
-                              </select>
-                            </div>
-
-                            {/* Afregning */}
-                            <div>
-                              <p className="font-inter text-xs font-semibold text-text-primary mb-xs">Afregning</p>
-                              {/* Segmented control — samme mønster som Produkt 2+ direktekørsel-toggle */}
-                              <div className="flex bg-surface-2 rounded-md p-xxxs border border-hairline w-fit">
-                                {(['akkord', 'time'] as const).map(type => {
-                                  const isActive = (dagAfregning[day.id] ?? 'akkord') === type
-                                  const label = type === 'akkord' ? 'Akkord' : 'Timeløn'
-                                  return (
-                                    <button
-                                      key={type}
-                                      onClick={() => setDagAfregning(prev => ({ ...prev, [day.id]: type }))}
-                                      aria-pressed={isActive}
-                                      className={[
-                                        'px-xs py-xxxs rounded-sm font-inter text-xxs font-semibold transition-colors',
-                                        isActive
-                                          ? 'bg-dark-teal text-white'
-                                          : 'text-text-muted hover:bg-soft-aqua',
-                                      ].join(' ')}
-                                    >
-                                      {label}
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Biler — vognmandens flåde (kompakt liste) */}
-                          <div>
-                            <p className="font-inter text-xxs font-semibold text-text-muted uppercase tracking-widest mb-xxxs">Biler — vognmandens flåde</p>
-                            {/* Hver bestilt bil får et unikt bil-ordrenummer (ordrenr-DDMMYY-NN, løbenr pr. dag) der
-                                sendes til vognmanden — som behandler hver bil som en separat ordre. LÅST 2026-06-13. */}
-                            <p className="font-inter text-xxs text-text-muted mb-xs">Hver bil sendes som separat ordre med eget nummer til vognmanden.</p>
-                            {orders.length > 0 && (
-                              <div className="rounded-lg border border-hairline overflow-hidden bg-white">
-                                {orders.map((o, idx) => {
-                                  const vt = VEHICLE_TYPES.find(v => v.label === o.type)
-                                  return (
-                                    <div
-                                      key={o.id}
-                                      className={idx < orders.length - 1 ? 'border-b border-hairline' : ''}
-                                    >
-                                      <div
-                                        className="grid items-center gap-xs px-xs"
-                                        style={{ gridTemplateColumns: '2rem 1fr 5.625rem 4rem 7.5rem 2rem' }}
-                                      >
-                                        <span className="w-8 h-8 rounded-md bg-soft-aqua text-deep-teal flex items-center justify-center flex-shrink-0">
-                                          <Truck size={16} />
-                                        </span>
-                                        {/* Biltype — én linje */}
-                                        <div className="min-w-0 py-xs">
-                                          <select
-                                            value={o.type}
-                                            onChange={e => updateOrder(o.id, 'type', e.target.value)}
-                                            className="min-w-0 font-inter text-xs font-medium text-text-primary bg-transparent border-none outline-none cursor-pointer focus:text-deep-teal"
-                                          >
-                                            <option value="">Vælg biltype</option>
-                                            <option value="Egen bil">Egen bil</option>
-                                            {VEHICLE_TYPES.map(v => (
-                                              <option key={v.label} value={v.label}>{v.label} · {v.tons} Tons</option>
-                                            ))}
-                                          </select>
-                                        </div>
-                                        <div className="flex items-center border border-hairline rounded-md overflow-hidden bg-white">
-                                          <button onClick={() => updateOrder(o.id, 'antal', Math.max(1, o.antal - 1))} className="w-8 h-8 font-inter text-sm text-text-muted hover:bg-soft-aqua transition-colors" aria-label="Færre">−</button>
-                                          <span className="px-xxs font-inter text-xs font-semibold text-text-primary w-[26px] text-center tabular-nums">{o.antal}</span>
-                                          <button onClick={() => updateOrder(o.id, 'antal', o.antal + 1)} className="w-8 h-8 font-inter text-sm text-text-muted hover:bg-soft-aqua transition-colors" aria-label="Flere">+</button>
-                                        </div>
-                                        <span className="font-poppins text-xs font-semibold text-deep-teal tabular-nums w-[64px] text-right whitespace-nowrap">
-                                          {vt ? vt.tons * o.antal : 0} Tons
-                                        </span>
-                                        {/* Per-række afregnings-toggle — arver dag-default, sticky override ved klik.
-                                            FF-regel: Egen bil = altid timeløn (disabled). Placeret som selvst. grid-kolonne til højre for Tons. */}
-                                        {(() => {
-                                          const isEgenBil = o.type === 'Egen bil'
-                                          const rowAfr: 'akkord' | 'time' = isEgenBil
-                                            ? 'time'
-                                            : (o.afregning_type ?? (dagAfregning[day.id] ?? 'akkord'))
-                                          return (
-                                            <div className={['flex bg-surface-2 rounded-md p-xxxs border border-hairline justify-self-end', isEgenBil ? 'opacity-60' : ''].join(' ').trim()}>
-                                              {(['akkord', 'time'] as const).map(type => {
-                                                const isActive = rowAfr === type
-                                                const label = type === 'akkord' ? 'Akkord' : 'Timeløn'
-                                                return (
-                                                  <button
-                                                    key={type}
-                                                    disabled={isEgenBil}
-                                                    onClick={() => !isEgenBil && updateOrder(o.id, 'afregning_type', type)}
-                                                    aria-pressed={isActive}
-                                                    className={[
-                                                      'px-xs py-xxxs rounded-sm font-inter text-xxs font-semibold transition-colors',
-                                                      isActive
-                                                        ? 'bg-dark-teal text-white'
-                                                        : 'text-text-muted hover:bg-soft-aqua',
-                                                      isEgenBil ? 'cursor-not-allowed' : '',
-                                                    ].join(' ')}
-                                                  >
-                                                    {label}
-                                                  </button>
-                                                )
-                                              })}
-                                            </div>
-                                          )
-                                        })()}
-                                        <button onClick={() => removeOrder(o.id)} className="w-8 h-8 rounded-md text-text-muted hover:bg-bad-bg hover:text-bad flex items-center justify-center transition-colors" aria-label="Fjern">
-                                          <X size={15} />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )}
-                            <button
-                              onClick={addOrder}
-                              className="inline-flex items-center gap-xs font-inter text-xs font-semibold text-dark-teal bg-white border border-dashed border-light-aqua rounded-full px-sm py-xs hover:bg-soft-aqua hover:border-dark-teal transition-colors mt-xs"
-                            >
-                              <Plus size={15} />
-                              Tilføj biltype
-                            </button>
-                          </div>
-
-                          {/* Starttider og intervaller — produkter stablet LODRET med connector (skalerer til 3+) */}
-                          {orders.length > 0 && (() => {
-                            const dagProdukter = products
-                              .map(p => ({ product: p, dayEntry: p.days.find(d => d.date === day.date) }))
-                              .filter((x): x is { product: MockProduct; dayEntry: DayPlan } => !!x.dayEntry)
-                            if (dagProdukter.length === 0) return null
-                            const availableTypes = Array.from(new Set(orders.filter(o => o.antal > 0).map(o => o.type)))
-                            return (
-                              <>
-                                <hr className="border-hairline" />
-                                <div>
-                                  <h4 className="font-poppins text-lg font-semibold text-deep-teal">Starttider og intervaller</h4>
-                                  <p className="font-inter text-xs text-text-muted mb-sm">Anbefaling til vognmand for de første biler. Ikke bindende — vognmand kan afvige.</p>
-                                  <div className="flex flex-col">
-                                    {dagProdukter.map(({ product, dayEntry }, pi) => {
-                                      const tons = getEffectiveTons(dayEntry)
-                                      const isFirst = pi === 0
-                                      // P2+ fjernet — sektionen viser kun Produkt 1 (Bil 1/2/3 start-rækkefølge + starttider)
-                                      if (!isFirst) return null
-                                      return (
-                                        <div key={product.id}>
-                                          <div className="bg-white border border-hairline rounded-lg p-sm">
-                                            {/* Samlet blød pille: Produkt N · navn · tons */}
-                                            <div className="mb-sm">
-                                              <span className="inline-flex items-center bg-soft-aqua rounded-full px-sm py-xxs font-inter text-xs">
-                                                <span className="font-semibold text-deep-teal">Produkt {pi + 1}</span>
-                                                <span className="text-light-aqua mx-xxs">·</span>
-                                                <span className="font-poppins font-semibold text-text-primary">{product.recipeName}</span>
-                                                <span className="text-light-aqua mx-xxs">·</span>
-                                                <span className="font-poppins font-semibold text-deep-teal tabular-nums">{tons} Tons</span>
-                                              </span>
-                                            </div>
-
-                                            {isFirst ? (
-                                              /* Produkt 1: start-rækkefølge (3 første biler) + starttider.
-                                                 Interval er flyttet til Bilbehov-dashboardet (Boks 4).
-                                                 Bil-select: defaults til de 3 første bestilte biler (flåde[pos]).
-                                                 Starttid: pos 0 = startPladsTid (to-vejs via dashboard); pos 1/2 = pos 0 + pos×dagInterval. */
-                                              <div className="flex flex-col gap-xs">
-                                                {(() => {
-                                                  // Præudfyld flåde fra bestilte biler — reaktiv default, manuelle ændringer vinder
-                                                  const flåde = orders.flatMap(o => Array(o.antal).fill(o.type) as string[])
-                                                  // Beregn default starttid for pos N: startPladsTid + N×dagInterval
-                                                  function defaultStartTid(pos: number): string {
-                                                    const [bh, bm] = startPladsTid.split(':').map(Number)
-                                                    const total = bh * 60 + bm + pos * dagInterval
-                                                    return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
-                                                  }
-                                                  return ([0, 1, 2] as const).map(pos => {
-                                                    const currentValue = (startRaekkefoelge[day.id] ?? [null, null, null])[pos]
-                                                    const currentTid = (startTider[day.id] ?? [null, null, null])[pos]
-                                                    return (
-                                                      <div key={pos} className="grid gap-xs items-end" style={{ gridTemplateColumns: '1fr 130px' }}>
-                                                        <div className="min-w-0">
-                                                          <p className="font-inter text-xxs text-text-muted mb-xxxs">Bil nr. {pos + 1}</p>
-                                                          <select
-                                                            value={currentValue ?? (flåde[pos] ?? '')}
-                                                            onChange={e => updateStartRaekkefoelge(day.id, pos, e.target.value || null)}
-                                                            className="w-full font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                                                          >
-                                                            <option value="">Ingen anbefaling</option>
-                                                            {availableTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                                                          </select>
-                                                        </div>
-                                                        <div>
-                                                          <p className="font-inter text-xxs text-text-muted mb-xxxs">Starttid plads</p>
-                                                          <input
-                                                            type="time"
-                                                            value={currentTid ?? defaultStartTid(pos)}
-                                                            onChange={e => updateStartTid(day.id, pos, e.target.value || null)}
-                                                            className="w-full font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal"
-                                                          />
-                                                        </div>
-                                                      </div>
-                                                    )
-                                                  })
-                                                })()}
-                                              </div>
-                                            ) : null}
-                                          </div>
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                </div>
-                              </>
-                            )
-                          })()}
-
-                          {/* Kommentar til chauffør — sendes med ordren til chauffør-appen (se FUNCTIONAL_FLOWS Flow 1 Trin 8) */}
-                          <div className="flex flex-col gap-xxxs">
-                            <label className="font-inter text-xxs text-text-muted">Kommentar til chauffør</label>
-                            <textarea
-                              value={kørselKommentar[day.id] ?? ''}
-                              onChange={e => setKørselKommentar(prev => ({ ...prev, [day.id]: e.target.value }))}
-                              rows={2}
-                              placeholder="Fx 'Brug bagvejen', 'Aflæsningssted flyttet 50m mod vest', 'Støjrestriktion efter 22'..."
-                              className="w-full font-inter text-xs text-text-primary bg-white border border-hairline rounded-lg px-xs py-xs focus:outline-none focus:border-dark-teal transition-colors resize-none leading-relaxed"
-                            />
-                          </div>
-
-                          {/* Gem */}
-                          <div className="flex justify-end gap-xs pt-xxxs">
-                            <button
-                              onClick={() => setKørselExpandedId(null)}
-                              className="font-inter text-xs text-text-muted hover:text-text-primary px-xs py-xxxs"
-                            >Annullér</button>
-                            <button
-                              onClick={() => gemKørsel(day.id)}
-                              className="font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90"
-                            >Gem kørsel</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-                {/* Send til vognmand — section-level afledt tilstand.
-                    Vises KUN når der er mindst én planlagt dag.
-                    Gul = usendte planlagte dage findes; grøn = alle planlagte dage er sendt.
-                    Klik sender ALLE usendte planlagte dage (allerede-sendte røres ikke).
-                    TODO: Erstat med Supabase når klar — insert i vognmand_bestilling-tabel */}
-                {(() => {
-                  const planlagteDage = activeDays.filter(d => kørselPlanlagtIds.has(d.id))
-                  if (planlagteDage.length === 0) return null
-                  const usendteDage = planlagteDage.filter(d => !sendtTilVognmandDates.has(d.date))
-                  const harUsendte = usendteDage.length > 0
-                  return (
-                    <div className="border-t border-hairline px-sm py-sm flex items-center justify-between">
-                      {harUsendte ? (
-                        <button
-                          type="button"
-                          onClick={() => setSendtTilVognmandDates(prev => new Set([...prev, ...usendteDage.map(d => d.date)]))}
-                          className="inline-flex items-center font-inter text-sm font-semibold text-deep-teal bg-yellow px-sm py-xs rounded-lg hover:opacity-90 active:scale-[0.98] transition-all min-h-[44px]"
-                        >
-                          Send til vognmand
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled
-                          className="inline-flex items-center font-inter text-sm font-semibold text-white bg-good px-sm py-xs rounded-lg min-h-[44px] cursor-default"
-                        >
-                          Sendt til vognmand
-                        </button>
-                      )}
-                    </div>
-                  )
-                })()}
-              </div>
-            </div>
-
-          {/* ── Materiel ─────────────────────────────────────────── */}
-          <section>
-            <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">Materiellevering</h2>
-
-            {/* Ny-etape container-niveau notifikation.
-                NOTE: MaterielNyEtapeTilstand (presenter) indeholder allerede et internt
-                warn-bg-banner med samme budskab ("Planlæg materiel-transport for etape N").
-                Det banner er synligt øverst i presenter-kortet, umiddelbart under denne
-                overskrift — et yderligere container-banner her ville være redundant.
-                Vi stoler på presenter-banneret og tilføjer i stedet kun en diskret
-                sektion-label-tilføjelse via mb-justering nedenfor.
-                Kilde: Round 4b-opgave, kriterium (b). */}
-            {!isSamleordreMode && materielUiState === 'ny-etape' && (
-              <p className="font-inter text-xs text-text-muted mb-xs">
-                Ny etape planlagt — materiel-transport skal planlægges
-              </p>
-            )}
-
-            {/* Samleordre: vis sub-header pr. ordre */}
-            {isSamleordreMode && samleordreCtx && (
-              <>
-                {samleordreCtx.children.map((child, childIdx) => (
-                  <div key={child.orderNumber} className={childIdx > 0 ? 'mt-md' : undefined}>
-                    {/* Sub-header pr. ordre */}
-                    <div className="flex items-center gap-xs mb-xs">
-                      <span
-                        className={[
-                          'w-[8px] h-[8px] rounded-full flex-shrink-0',
-                          child.isAnchor
-                            ? 'bg-yellow shadow-[0_0_0_2px_rgba(254,238,50,0.35)]'
-                            : 'bg-transparent border-2 border-hairline-2',
-                        ].join(' ')}
-                        aria-hidden="true"
-                      />
-                      <h3 className="font-poppins font-semibold text-md text-deep-teal">
-                        {child.udfoerelseSted}
-                      </h3>
-                    </div>
-
-                    {child.resources.length > 0 ? (
-                      <div className="bg-white border border-hairline rounded-xl overflow-hidden mb-sm">
-                        {child.resources.map((r, i) => (
-                          <div key={r.id} className={i < child.resources.length - 1 ? 'border-b border-hairline' : ''}>
-                            <div
-                              className="grid items-center gap-md px-sm py-sm"
-                              style={{ gridTemplateColumns: '36px 1fr auto' }}
-                            >
-                              <div className="w-9 h-9 rounded-md bg-soft-aqua flex items-center justify-center text-deep-teal">
-                                <Truck size={16} />
-                              </div>
-                              <div>
-                                <p className="font-inter text-sm font-medium text-text-primary">{r.description}</p>
-                                <div className="flex items-center gap-xs mt-xxxs">
-                                  <span className="font-inter text-xs text-text-muted tabular-nums">{r.plantNumber}</span>
-                                </div>
-                              </div>
-                              <div>
-                                {/* Vognmand status badge — 3-state — re-keyed til transportKey(resourceId, etapeId) (Round 4a). */}
-                                {(() => {
-                                  const etapeId = aktivEtape?.id ?? 0
-                                  const key = transportKey(r.id, etapeId)
-                                  if (r.status !== 'planlagt') {
-                                    return (
-                                      <span className="inline-flex items-center px-xs py-xxxs rounded-lg font-inter text-xs font-semibold whitespace-nowrap bg-surface-2 text-text-muted">
-                                        Ikke planlagt
-                                      </span>
-                                    )
-                                  }
-                                  if (bekraeftedeEnhederIds.has(key)) {
-                                    return (
-                                      <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good-bg font-inter text-xs font-semibold text-good whitespace-nowrap">
-                                        Bekræftet vognmand
-                                      </span>
-                                    )
-                                  }
-                                  if (materielSendteEnhederIds.has(key)) {
-                                    return (
-                                      <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-warn-bg font-inter text-xs font-semibold text-text-secondary whitespace-nowrap">
-                                        Sendt til vognmand
-                                      </span>
-                                    )
-                                  }
-                                  return (
-                                    <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-surface-2 font-inter text-xs font-semibold text-text-muted whitespace-nowrap">
-                                      Planlagt
-                                    </span>
-                                  )
-                                })()}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="bg-white border border-hairline rounded-xl px-sm py-sm mb-sm flex items-center gap-xs text-text-muted">
-                        <span className="font-inter text-sm">Ingen materiel planlagt</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
-
-            {/* Normal mode: etape-bevidste presentere (Round 4a) */}
-            {!isSamleordreMode && (() => {
-              // Brancher på materielUiState — afledt af selectedPlanDate + etaper
-              if (materielUiState === 'planlaeg' && aktivEtape) {
-                return (
-                  <>
-                    <MaterielPlanlaegTilstand
-                      resources={materielResources}
-                      etape={aktivEtape}
-                      transportPlaner={transportPlaner}
-                      onChange={(resourceId, patch) =>
-                        handleTransportChange(resourceId, aktivEtape.id, patch)
-                      }
-                      onGem={(resourceId) =>
-                        markTransportPlanlagt(resourceId, aktivEtape.id)
-                      }
-                      onSend={() => handleMaterielSend(aktivEtape)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => { setTilfoejMaterielOpen(true); setMaterielSoeg('') }}
-                      className="w-full flex items-center justify-center gap-xs py-xs font-inter text-sm text-text-muted border border-hairline rounded-xl bg-surface hover:bg-surface-2 transition-colors mt-xxxs"
-                    >
-                      <Plus size={14} aria-hidden="true" />
-                      Tilføj materiel
-                    </button>
-                  </>
-                )
-              }
-              if (materielUiState === 'ny-etape' && aktivEtape) {
-                return (
-                  <>
-                    <MaterielNyEtapeTilstand
-                      resources={materielResources}
-                      etape={aktivEtape}
-                      transportPlaner={transportPlaner}
-                      onChange={(resourceId, patch) =>
-                        handleTransportChange(resourceId, aktivEtape.id, patch)
-                      }
-                      onGem={(resourceId) =>
-                        markTransportPlanlagt(resourceId, aktivEtape.id)
-                      }
-                      onSend={() => handleMaterielSend(aktivEtape)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => { setTilfoejMaterielOpen(true); setMaterielSoeg('') }}
-                      className="w-full flex items-center justify-center gap-xs py-xs font-inter text-sm text-text-muted border border-hairline rounded-xl bg-surface hover:bg-surface-2 transition-colors mt-xxxs"
-                    >
-                      <Plus size={14} aria-hidden="true" />
-                      Tilføj materiel
-                    </button>
-                  </>
-                )
-              }
-              if (materielUiState === 'paa-pladsen' && aktivEtape) {
-                return (
-                  <MaterielPaaPladsenTilstand
-                    resources={materielResources}
-                    etape={aktivEtape}
-                    transportPlaner={transportPlaner}
-                  />
-                )
-              }
-              // dvale (gap mellem etaper eller dag uden etape)
-              const naestEtape = etaper.find(e => e.firstDay > selectedPlanDate)
-              return (
-                <MaterielDvaleTilstand
-                  naestEtapeStartDato={naestEtape?.firstDay}
-                />
-              )
-            })()}
-
-          </section>
-
-          </div>
           )}
+
 
           {activeMode === 'udfoersel' && (
             <UdfoerselContent
@@ -2236,178 +1111,9 @@ export function OrdrePlanScreen() {
       </div>
 
 
-      {/* ── Fjern-modal ──────────────────────────────────────────────── */}
-      {fjernModalResource && (
-        <FjernModal
-          resource={fjernModalResource}
-          onConfirm={() => removeResource(fjernModalResource.id)}
-          onCancel={() => setFjernModalId(null)}
-        />
-      )}
-
-      {/* ── Tilføj materiel-modal ─────────────────────────────────── */}
-      {tilfoejMaterielOpen && (() => {
-        const soegLower = materielSoeg.toLowerCase()
-        const filtered = STANDARD_MATERIEL_KATALOG.filter(m =>
-          m.description.toLowerCase().includes(soegLower) ||
-          m.plantNumber.toLowerCase().includes(soegLower)
-        )
-        return (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center px-md"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="tilfoej-materiel-modal-title"
-          >
-            {/* Luk på klik udenfor */}
-            <button
-              type="button"
-              aria-label="Luk dialog"
-              onClick={() => setTilfoejMaterielOpen(false)}
-              className="absolute inset-0 bg-deep-teal/40"
-            />
-            <div className="relative bg-white rounded-2xl shadow-lg w-full max-w-md flex flex-col gap-md p-lg max-h-[80vh]">
-              {/* Header */}
-              <div className="flex items-center justify-between gap-sm">
-                <h2
-                  id="tilfoej-materiel-modal-title"
-                  className="font-poppins font-semibold text-lg text-deep-teal leading-tight"
-                >
-                  Tilføj materiel
-                </h2>
-                <button
-                  type="button"
-                  aria-label="Luk"
-                  onClick={() => setTilfoejMaterielOpen(false)}
-                  className="flex items-center justify-center w-[44px] h-[44px] rounded-xl border border-hairline text-text-muted hover:text-text-primary hover:border-hairline-2 transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-              {/* Søgefelt */}
-              <input
-                type="search"
-                placeholder="Søg på navn eller anlægsnr."
-                value={materielSoeg}
-                onChange={e => setMaterielSoeg(e.target.value)}
-                className="w-full font-inter text-sm text-text-primary bg-white border border-hairline rounded-lg px-sm py-xs focus:outline-none focus:border-deep-teal transition-colors"
-              />
-              {/* Katalog-liste */}
-              <div className="flex flex-col divide-y divide-hairline overflow-y-auto -mx-lg px-lg">
-                {filtered.length === 0 && (
-                  <p className="font-inter text-sm text-text-muted py-sm text-center">Ingen maskiner matcher søgningen.</p>
-                )}
-                {filtered.map(mat => (
-                  <button
-                    key={mat.plantNumber}
-                    type="button"
-                    onClick={() => {
-                      setResources(prev => [...prev, {
-                        id: `mat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-                        plantNumber: mat.plantNumber,
-                        description: mat.description,
-                        transportTag: mat.transportTag,
-                        status: 'ikke-planlagt',
-                      }])
-                      setTilfoejMaterielOpen(false)
-                    }}
-                    className="flex items-center justify-between gap-sm py-xs min-h-[44px] text-left hover:bg-surface-2 transition-colors rounded-lg -mx-xs px-xs"
-                  >
-                    <div className="flex flex-col gap-xxs min-w-0">
-                      <span className="font-inter text-sm font-semibold text-text-primary truncate">{mat.description}</span>
-                      <span className="font-inter text-xxs text-text-muted">{mat.plantNumber}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              {/* Annuller-knap */}
-              <button
-                type="button"
-                onClick={() => setTilfoejMaterielOpen(false)}
-                className="w-full py-xs rounded-xl border border-hairline font-inter font-semibold text-sm text-text-secondary hover:border-hairline-2 transition-colors"
-              >
-                Annuller
-              </button>
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* ── Bekræftelses-modal: Send til fabrik ────────────────────── */}
-      {/* Genbrug af Dagsoversigt-modal-mønster (DagsoversigtScreen linje 675-720) */}
-      {showConfirmSend && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center px-md"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="send-modal-title"
-        >
-          <button
-            type="button"
-            aria-label="Luk dialog"
-            onClick={() => { setShowConfirmSend(false); setKommentar('') }}
-            className="absolute inset-0 bg-deep-teal/40"
-          />
-          <div className="relative bg-white rounded-2xl shadow-lg max-w-md w-full p-lg flex flex-col gap-md">
-            <div className="flex flex-col gap-xs">
-              <h2
-                id="send-modal-title"
-                className="font-poppins font-semibold text-lg text-deep-teal leading-tight"
-              >
-                Send bestilling til fabrik?
-              </h2>
-              {bestillingForSent ? (
-                <p className="font-inter text-sm text-bad leading-relaxed bg-bad-bg border border-bad/30 rounded-lg px-sm py-xs">
-                  Bestillingen er lavet efter kl 11. Du skal derfor ringe til fabrikken for at sikre produktionskapacitet.
-                </p>
-              ) : (
-                <p className="font-inter text-sm text-text-secondary leading-relaxed">
-                  Ordren afsendes til fabrikken nu.
-                </p>
-              )}
-            </div>
-            <div className="flex flex-col gap-xxs">
-              <label className="font-inter font-medium text-sm text-deep-teal">
-                Vil du knytte en kommentar til ordren inden afsendelse?
-              </label>
-              <span className="font-inter text-xs text-text-muted leading-relaxed">
-                Kommentaren sendes med til fabrikken sammen med bestillingen.
-              </span>
-              <textarea
-                value={kommentar}
-                onChange={e => setKommentar(e.target.value)}
-                rows={3}
-                placeholder="Fx ekstra holdtid pga. mange biler i morgenmyldretid"
-                className="w-full font-inter text-sm text-text-primary bg-white border border-hairline rounded-lg px-sm py-xs resize-none focus:outline-none focus:border-deep-teal transition-colors"
-              />
-            </div>
-            <div className="flex items-center justify-end gap-xs">
-              <button
-                type="button"
-                onClick={() => { setShowConfirmSend(false); setKommentar('') }}
-                className="font-inter font-medium text-sm text-text-secondary bg-white border border-hairline rounded-lg px-md py-xs hover:bg-surface-2 transition-colors"
-              >
-                Annullér
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (kommentar.trim().length > 0) {
-                    setSentKommentarer(prev => ({ ...prev, [selectedPlanDate]: kommentar.trim() }))
-                  }
-                  sendAlleForSelectedDate()
-                  setFabrikSendtDates(prev => new Set([...prev, selectedPlanDate]))
-                  setShowConfirmSend(false)
-                  setKommentar('')
-                }}
-                className="font-poppins font-medium text-sm text-white bg-good rounded-lg px-md py-xs hover:opacity-90 transition-opacity"
-              >
-                Send til fabrik
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* FjernModal → FLYTTET til MaterielleveringSection [Fase 2, Round 3, #11] */}
+      {/* Tilføj materiel-modal → FLYTTET til MaterielleveringSection [Fase 2, Round 3, #11] */}
+      {/* Bekræftelses-modal (Send til fabrik) → FLYTTET til AsfaltbestillingSection [Fase 2, Round 3, #9] */}
 
     </div>
   )

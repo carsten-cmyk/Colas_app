@@ -32,7 +32,7 @@ export default [
 
       // Accessibility — WCAG 2.1 AA enforcement
       'jsx-a11y/alt-text': 'error',
-      'jsx-a11y/aria-labels': 'error',
+      'jsx-a11y/aria-props': 'error',
       'jsx-a11y/interactive-supports-focus': 'error',
       'jsx-a11y/no-noninteractive-element-interactions': 'warn',
       'jsx-a11y/click-events-have-key-events': 'error',

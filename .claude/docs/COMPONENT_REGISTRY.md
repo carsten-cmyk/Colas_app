@@ -53,6 +53,12 @@ Forhindre at architect/builder genbygger eksisterende komponenter. **Architect S
 | 12 | `BottomTabBar` | 🟡 | Bottom-navigation (Dashboard/Ordre/Profil) |
 | 13 | `TopBar` | 🟡 | Top-bar med logo + bruger-info |
 
+### Prototype-komponenter (`apps/formand/src/prototypes/ordre-plan/components/`)
+
+| # | Komponent | Status | Beskrivelse | Brugt i |
+|---|---|---|---|---|
+| 1 | `PeriodeDatoVaelger` | 🟡 prototype-lokal — kandidat til shared ved produktions-promotion | Horisontal stribe af dato-piller for en ordres planlagte dage. Props: `heading`, `days` (ISO-array), `selectedDate`, `onSelectDate`. Passerede dage gennemstreges, valgt dag highlightes. Returnerer null ved tom days-array. | OrdrePlan Planlægning/Udførsel/Afregning-mode (wires Round 2-4) |
+
 ### Hooks (`apps/formand/src/hooks/`)
 
 | # | Hook | Returns | Brugt i |
