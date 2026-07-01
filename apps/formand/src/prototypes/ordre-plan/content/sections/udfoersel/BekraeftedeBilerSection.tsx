@@ -35,42 +35,6 @@ import type { Etape, MaterielUiState, MaterielTransportPlan } from '../../../eta
 // Disse bruges i Trin B til per-child filtrering i samleordre-mode.
 // I Trin A er de defineret her men endnu ikke kaldt fra JSX.
 
-/**
- * Normaliser et ordre_id til ren talstreng og sammenlign med orderNumber.
- * Robust for begge formater: 'ord-1212400' og '1212400'.
- */
-export function matchOrdre(ordreId: string, orderNumber: string): boolean {
-  const normalize = (s: string) => s.replace(/^ord-/i, '')
-  return normalize(ordreId) === normalize(orderNumber)
-}
-
-/**
- * Returnér de biler fra `biler` hvor mindst én vejeseddel har en pre_fordeling
- * der matcher `child.orderNumber`.
- * En multilæs-bil kan matche flere børn — det er korrekt.
- */
-export function bilerForChild(
-  child: { orderNumber: string },
-  biler: import('../../../types').ConfirmedTruck[],
-): import('../../../types').ConfirmedTruck[] {
-  return biler.filter(b =>
-    (b.vejesedler ?? []).some(v =>
-      v.pre_fordeling.some(pf => matchOrdre(pf.ordre_id, child.orderNumber))
-    )
-  )
-}
-
-/**
- * Returnér materiel-items der tilhører dette child.
- * Materiel-transport vises KUN på anchor-barnet (jf. beslutning FF Flow 2).
- */
-export function materielForChild(
-  child: { isAnchor: boolean },
-  items: import('../../../types').ConfirmedMaterielItem[],
-): import('../../../types').ConfirmedMaterielItem[] {
-  return child.isAnchor ? items : []
-}
-
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 export interface BekraeftedeBilerSectionProps {
@@ -179,7 +143,7 @@ export function BekraeftedeBilerSection({
         {/* Tabel-header */}
         <div className="flex items-center justify-between px-sm py-xs border-b border-good/20">
           <div className="flex items-center gap-xs">
-            <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">Biler</span>
+            <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">Asfaltkørsel</span>
           </div>
           <span className="font-poppins font-semibold text-sm text-text-primary">{bilerTypeTekst}</span>
         </div>
@@ -337,7 +301,7 @@ export function BekraeftedeBilerSection({
       <div className="overflow-hidden rounded-xl border border-good/30 bg-good-bg">
         <div className="flex items-center justify-between px-sm py-xs border-b border-good/20">
           <div className="flex items-center gap-xs">
-            <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">Materiel transport</span>
+            <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">Materiel kørsel</span>
           </div>
           <span className="font-poppins font-semibold text-sm text-text-primary">{materielTypeTekst}</span>
         </div>
@@ -483,52 +447,9 @@ export function BekraeftedeBilerSection({
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
-  // ── Samleordre-mode: fulde tabeller pr. child-ordre (Trin B — LÅST 2026-07-01) ──
-  // Viser de SAMME fulde biler/materiel-tabeller som enkelt-ordre,
-  // men partitioneret pr. child via bilerForChild/materielForChild.
-  // Enkelt-ordre-branchen nedenfor forbliver uændret.
-  if (isSamleordreMode && samleordreCtx) {
-    const asfaltBilerAlle = (vognmandBekraeftelse?.biler ?? []).filter(b => !b.er_materiel_bil)
-    const materielItemsAlle = vognmandMaterielBekraeftelse?.items ?? []
-    return (
-      <div className="flex flex-col gap-xs -mt-[48px]">
-        <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight mb-sm">Bekræftede biler</h2>
-        <div className="flex flex-col gap-md">
-          {samleordreCtx.children.map((child, i) => {
-            const childBiler = bilerForChild(child, asfaltBilerAlle)
-            const childMateriel = materielForChild(child, materielItemsAlle)
-            return (
-              <div key={child.orderNumber} className={i > 0 ? 'mt-md' : undefined}>
-                {/* Sub-header pr. child — 1:1 kopi af MaterielleveringSection.tsx L229-242 */}
-                <div className="flex items-center gap-xs mb-xs">
-                  <span
-                    className={[
-                      'w-[8px] h-[8px] rounded-full flex-shrink-0',
-                      child.isAnchor
-                        ? 'bg-yellow shadow-[0_0_0_2px_rgba(254,238,50,0.35)]'
-                        : 'bg-transparent border-2 border-hairline-2',
-                    ].join(' ')}
-                    aria-hidden="true"
-                  />
-                  <h3 className="font-poppins font-semibold text-md text-deep-teal">
-                    {child.udfoerelseSted}
-                  </h3>
-                </div>
-                {childBiler.length > 0
-                  ? renderBilerTabel(childBiler, child.orderNumber)
-                  : (
-                    <div className="bg-white border border-hairline rounded-xl px-sm py-sm flex items-center gap-xs text-text-muted">
-                      <span className="font-inter text-sm">Ingen bekræftede biler</span>
-                    </div>
-                  )}
-                {child.isAnchor && childMateriel.length > 0 && renderMaterielTabel(childMateriel, child.orderNumber)}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
+  // BekræftedeBiler viser ÉN asfalt-bil-tabel + ÉN materiel-tabel (dagens fulde liste)
+  // i BÅDE enkelt-ordre og samleordre. Bekræftede biler er pr. DAG, ikke pr. child —
+  // en multilæs-bil betjener flere børn men er stadig én fysisk bil (LÅST 2026-07-01).
 
   return (
     <>
@@ -545,9 +466,10 @@ export function BekraeftedeBilerSection({
             ? samleordreCtx.children.find(c => c.orderNumber === samleordreTabOrderNr)
             : undefined
 
-          const displayBilerBekraeftet = activeChild !== undefined ? activeChild.vognmandBekraeftet : !!vognmandBekraeftelse
+          // Dagens confirmation driver tabellerne (IKKE per-child) — biler er pr. dag.
+          const displayBilerBekraeftet = !!vognmandBekraeftelse
           const displayAntalMateriel = activeChild !== undefined ? activeChild.antalMateriel : (vognmandMaterielBekraeftelse?.items.length ?? 0)
-          const displayMaterielBekraeftet = activeChild !== undefined ? activeChild.materielBekraeftet : !!(vognmandMaterielBekraeftelse && vognmandMaterielBekraeftelse.items.length > 0)
+          const displayMaterielBekraeftet = !!(vognmandMaterielBekraeftelse && vognmandMaterielBekraeftelse.items.length > 0)
           // ── Bekræftet detalje (LÅST 2026-06-13) ──────────────────────────
           // Bilbestillingen er en ønskeliste; vognmandens bekræftede data kan afvige.
           // Vises kun i enkelt-ordre (samleordre har ikke per-child bil-liste i mock).
@@ -555,11 +477,11 @@ export function BekraeftedeBilerSection({
 
           // Biler-boks: asfalt-biler (materiel-biler hører til Materiel-boksen)
           const asfaltBiler = (vognmandBekraeftelse?.biler ?? []).filter(b => !b.er_materiel_bil)
-          const visBilDetalje = activeChild === undefined && displayBilerBekraeftet && asfaltBiler.length > 0
+          const visBilDetalje = displayBilerBekraeftet && asfaltBiler.length > 0
 
           // Materiel-boks: alle items (tabel-sortering og slice beregnes i renderMaterielTabel)
           const materielItems = vognmandMaterielBekraeftelse?.items ?? []
-          const visMaterielDetalje = activeChild === undefined && displayMaterielBekraeftet && materielItems.length > 0
+          const visMaterielDetalje = displayMaterielBekraeftet && materielItems.length > 0
 
           return (
             <div className="flex flex-col gap-sm">
@@ -607,7 +529,7 @@ export function BekraeftedeBilerSection({
                 /* ── Materiel status-kort (ikke-bekræftet eller samleordre) — uændret ── */
                 <div className={`flex flex-col items-start min-w-0 w-full min-h-[120px] px-sm py-xs rounded-xl border ${displayMaterielBekraeftet ? 'bg-good-bg border-good/30' : 'bg-surface border-hairline'}`}>
                   <div className="w-full flex items-center justify-between gap-xs">
-                    <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">Materiel transport</span>
+                    <span className="font-inter text-xxs font-medium tracking-widest uppercase text-text-muted">Materiel kørsel</span>
                     {displayMaterielBekraeftet && (
                       <span className="font-inter text-xxs font-semibold text-good">Bekræftet</span>
                     )}
