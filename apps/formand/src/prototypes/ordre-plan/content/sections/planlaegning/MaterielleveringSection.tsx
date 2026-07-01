@@ -15,11 +15,10 @@
  */
 
 import React, { useState } from 'react'
-import { Truck, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import {
   type Etape,
   type MaterielTransportPlan,
-  transportKey,
 } from '../../../etape'
 import type { TransportPlanPatch, MaterielEnhed as MaterielEnhedTilstand } from '../../../MaterielTilstande'
 import {
@@ -182,8 +181,8 @@ export function MaterielleveringSection({
   materielResources,
   aktivEtape,
   selectedPlanDate,
-  bekraeftedeEnhederIds,
-  materielSendteEnhederIds,
+  bekraeftedeEnhederIds: _bekraeftedeEnhederIds,
+  materielSendteEnhederIds: _materielSendteEnhederIds,
   isSamleordreMode,
   samleordreCtx,
   onTransportChange,
@@ -242,65 +241,27 @@ export function MaterielleveringSection({
                   </h3>
                 </div>
 
-                {child.resources.length > 0 ? (
-                  <div className="bg-white border border-hairline rounded-xl overflow-hidden mb-sm">
-                    {child.resources.map((r, i) => (
-                      <div key={r.id} className={i < child.resources.length - 1 ? 'border-b border-hairline' : ''}>
-                        <div
-                          className="grid items-center gap-md px-sm py-sm"
-                          style={{ gridTemplateColumns: '36px 1fr auto' }}
-                        >
-                          <div className="w-9 h-9 rounded-md bg-soft-aqua flex items-center justify-center text-deep-teal">
-                            <Truck size={16} />
-                          </div>
-                          <div>
-                            <p className="font-inter text-sm font-medium text-text-primary">{r.description}</p>
-                            <div className="flex items-center gap-xs mt-xxxs">
-                              <span className="font-inter text-xs text-text-muted tabular-nums">{r.plantNumber}</span>
-                            </div>
-                          </div>
-                          <div>
-                            {/* Vognmand status badge — 3-state — re-keyed til transportKey(resourceId, etapeId) (Round 4a). */}
-                            {(() => {
-                              const etapeId = aktivEtape?.id ?? 0
-                              const key = transportKey(r.id, etapeId)
-                              if (r.status !== 'planlagt') {
-                                return (
-                                  <span className="inline-flex items-center px-xs py-xxxs rounded-lg font-inter text-xs font-semibold whitespace-nowrap bg-surface-2 text-text-muted">
-                                    Ikke planlagt
-                                  </span>
-                                )
-                              }
-                              if (bekraeftedeEnhederIds.has(key)) {
-                                return (
-                                  <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good-bg font-inter text-xs font-semibold text-good whitespace-nowrap">
-                                    Sendt til vognmand
-                                  </span>
-                                )
-                              }
-                              if (materielSendteEnhederIds.has(key)) {
-                                return (
-                                  <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good-bg font-inter text-xs font-semibold text-good whitespace-nowrap">
-                                    Sendt til vognmand
-                                  </span>
-                                )
-                              }
-                              return (
-                                <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-warn-bg font-inter text-xs font-semibold text-text-secondary whitespace-nowrap">
-                                  Planlagt
-                                </span>
-                              )
-                            })()}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="bg-white border border-hairline rounded-xl px-sm py-sm mb-sm flex items-center gap-xs text-text-muted">
-                    <span className="font-inter text-sm">Ingen materiel planlagt</span>
-                  </div>
-                )}
+                {child.resources.length > 0
+                  ? renderMaterielTilstand({
+                      materielResources: child.resources
+                        .filter(r => r.transportTag !== 'egen-korsel')
+                        .map(r => ({ id: r.id, plantNumber: r.plantNumber, description: r.description })),
+                      aktivEtape,
+                      materielUiState,
+                      transportPlaner,
+                      selectedPlanDate,
+                      etaper,
+                      onTransportChange,
+                      onTransportGem,
+                      onMaterielSend,
+                      setTilfoejMaterielOpen,
+                      setMaterielSoeg,
+                    })
+                  : (
+                    <div className="bg-white border border-hairline rounded-xl px-sm py-sm mb-sm flex items-center gap-xs text-text-muted">
+                      <span className="font-inter text-sm">Ingen materiel planlagt</span>
+                    </div>
+                  )}
               </div>
             ))}
           </>
