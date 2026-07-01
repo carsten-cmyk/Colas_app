@@ -117,9 +117,11 @@ Vognmanden modtager dette array (én ønske-bil pr. objekt, hver med sit `bil_or
 ### Trin 2 — Formand ser afventende status (badge-lifecycle, LÅST 2026-06-15)
 **App:** formand
 **Komponent:** `VognmandBekraeftelseBadge` (pille pr. dag på Asfalt kørsel)
-**Forretningsregel (3-state lifecycle, LÅST 2026-06-19):** Pillen har TRE tilstande, ikke to — den eksplicitte send-gate gør forskel på "planlagt" og "sendt":
-1. **"Planlagt"** (neutral/grå) — formanden har planlagt dagens kørsel (`planlagt = true`), men har endnu IKKE sendt til vognmand.
-2. **"Sendt til vognmand"** (gul) — formanden har trykket den eksplicitte **"Send til vognmand"-knap** (`sendt_til_vognmand = true`). Forbliver gul indtil data kommer RETUR. (label omdøbt 2026-06-23: tidl. "Afventer vognmand")
+> **⚠️ OPDATERET 2026-07-01 (Asfaltkørsel — afviger nu fra Materiellevering):** Da formanden kun planlægger **én dag ad gangen**, er den todelte "gem → send"-flow overkill for **Asfaltkørsel**. Ændret til ÉT klik: knappen **"Gem og send til vognmand"** (gul) gemmer OG sender i samme handling. Den separate section-level "Send til vognmand"-knap er **fjernet** (inkl. batch-send-logikken). Dermed bortfalder den grå **"Planlagt"**-mellemtilstand for Asfaltkørsel — en planlagt dag ER altid sendt → pillen springer direkte til grøn **"Sendt til vognmand"** (lys-grøn `bg-good-bg`/`text-good`, samme pille-stil som Materiellevering's "Bekræftet vognmand"). Collapsed re-åbnings-knap = **"Planlæg transport"** (dark-teal fyldt, samme stil som Materiellevering's "Planlæg transport"). **Materiellevering er IKKE ændret** (fortsat todelt gem-transport-pr-enhed → section-send-knap). Resten af reglen nedenfor gælder fortsat for Materiellevering; for Asfaltkørsel er "Planlagt"-tilstanden og den separate send-knap historik.
+
+**Forretningsregel (3-state lifecycle, LÅST 2026-06-19; Asfaltkørsel reduceret til 2-state 2026-07-01):** Pillen har TRE tilstande, ikke to — den eksplicitte send-gate gør forskel på "planlagt" og "sendt":
+1. **"Planlagt"** (neutral/grå) — formanden har planlagt dagens kørsel (`planlagt = true`), men har endnu IKKE sendt til vognmand. *(Asfaltkørsel: bortfaldet 2026-07-01 — gem = send.)*
+2. **"Sendt til vognmand"** (gul for Materiellevering; lys-grøn for Asfaltkørsel fra 2026-07-01) — formanden har trykket send (`sendt_til_vognmand = true`). Forbliver indtil data kommer RETUR. (label omdøbt 2026-06-23: tidl. "Afventer vognmand")
 3. **"Bekræftet vognmand"** (grøn) — vognmandens retur-data er ankommet.
 
 Samme 3-state gælder **materiellevering** (pr. enhed) — se Flow 2 Trin 5.
