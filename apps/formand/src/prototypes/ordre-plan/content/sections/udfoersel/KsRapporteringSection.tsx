@@ -110,18 +110,18 @@ export function KsRapporteringSection({
             <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">
               KS-rapportering{activeChild ? ` — ${activeChild.stedLabel}` : ''}
             </h2>
-            {/* Child-tabs — vises direkte under h2, over boks (attached-variant kobler sig til boksen nedenunder) */}
+            {/* Child-tabs — vises direkte under h2, KOBLET til boksen nedenunder (ingen gap).
+                attached-variant kræver at boksen står umiddelbart under (intet mb) + firkantet
+                top-venstre-hjørne, så fanen sidder fast på kortet (som Dokumentation/Forundersøgelse). */}
             {showChildTabs && (
-              <div className="mb-sm">
-                <SamleordreChildTabs
-                  children={childTabData}
-                  activeOrderNumber={samleordreTabOrderNr!}
-                  onSelect={(nr) => onSelectSamleordreTab?.(nr)}
-                  variant="attached"
-                />
-              </div>
+              <SamleordreChildTabs
+                children={childTabData}
+                activeOrderNumber={samleordreTabOrderNr!}
+                onSelect={(nr) => onSelectSamleordreTab?.(nr)}
+                variant="attached"
+              />
             )}
-            <div className="w-full bg-surface border border-hairline rounded-2xl shadow-sm overflow-hidden mb-sm">
+            <div className={`w-full bg-surface border border-hairline ${showChildTabs ? 'rounded-tr-2xl rounded-b-2xl' : 'rounded-2xl'} shadow-sm overflow-hidden mb-sm`}>
               <button
                 type="button"
                 onClick={() => setKsExpanded(o => !o)}
