@@ -111,7 +111,12 @@ export function DokumentationSection({
 
   return (
     <section>
-      {/* Child-tabs øverst (kun ved samleordre med 2+ children) */}
+      <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">
+        {/* Sted-suffix i overskriften for valgt child (Fase A) */}
+        Dokumentation{activeChild ? ` — ${activeChild.stedLabel}` : ''}
+      </h2>
+
+      {/* Child-tabs under overskrift, direkte over kortet (attached-variant kobler fane til kort) */}
       {showChildTabs && (
         <SamleordreChildTabs
           children={samleordreCtx!.children.map(c => ({
@@ -124,11 +129,6 @@ export function DokumentationSection({
           variant="attached"
         />
       )}
-
-      <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">
-        {/* Sted-suffix i overskriften for valgt child (Fase A) */}
-        Dokumentation{activeChild ? ` — ${activeChild.stedLabel}` : ''}
-      </h2>
 
       {/*
         key={samleordreTabOrderNr} remounter lokal state (opmaalingOpen osv.)
