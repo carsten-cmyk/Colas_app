@@ -52,18 +52,17 @@ function VognmandBadge({ plan }: VognmandBadgeProps) {
     )
   }
   if (plan.bekraeftet) {
+    // Solid grøn (PATTERNS §1b) — matcher Asfalt kørsel's "Bekræftet vognmand"
     return (
-      <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good-bg font-inter text-xs font-semibold text-good whitespace-nowrap">
+      <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good font-inter text-xs font-semibold text-white whitespace-nowrap">
         Bekræftet vognmand
       </span>
     )
   }
   if (plan.sendt) {
-    // PATTERN DEVIATION: OrdrePlanScreen bruger bg-yellow/25 + text-[#8A6A00].
-    // text-[#8A6A00] er ikke et token. Vi bruger warn-bg + text-text-secondary
-    // for at holde token-reglen — visuel effekt er ens (varm gul baggrund, mørk tekst).
+    // Lys grøn (bg-good-bg/text-good) — matcher Asfalt kørsel's "Sendt til vognmand"-pille.
     return (
-      <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-warn-bg font-inter text-xs font-semibold text-text-secondary whitespace-nowrap">
+      <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good-bg font-inter text-xs font-semibold text-good whitespace-nowrap">
         Sendt til vognmand
       </span>
     )
@@ -439,9 +438,9 @@ export function MaterielPlanlaegTilstand({
                 <button
                   type="button"
                   onClick={() => setExpandedId(r.id)}
-                  className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-lg border border-hairline font-inter text-xs font-medium text-dark-teal hover:bg-surface-2 transition-colors whitespace-nowrap min-h-touch"
+                  className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
                 >
-                  Ret
+                  Ret transport
                 </button>
               )}
             </div>
@@ -663,9 +662,9 @@ export function MaterielNyEtapeTilstand({
                   <button
                     type="button"
                     onClick={() => setExpandedId(r.id)}
-                    className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-lg border border-hairline font-inter text-xs font-medium text-dark-teal hover:bg-surface-2 transition-colors whitespace-nowrap min-h-touch"
+                    className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
                   >
-                    Ret
+                    Ret transport
                   </button>
                 )}
               </div>

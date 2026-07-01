@@ -184,7 +184,11 @@ Farve pr. rolle (ENESTE forskel):
 - **Commit (gem + send)** — "Gem og send til vognmand", "Send til vognmand": `bg-yellow text-deep-teal`
 - **Afsendt (done, `disabled`)** — "Sendt til vognmand" (section-knap): `bg-good text-white cursor-default`
 
-Status-PILLE (ikke knap) i collapsed dag-/enheds-række for sendt/bekræftet: `bg-good-bg text-good` (se 1b/1f) — lys grøn, IKKE solid.
+Status-PILLE (ikke knap) i collapsed dag-/enheds-række — skelner sendt fra bekræftet:
+- **Sendt til vognmand** = `bg-good-bg text-good` (LYS grøn)
+- **Bekræftet vognmand** = `bg-good text-white` (SOLID grøn, PATTERNS §1b — stærkere end sendt)
+
+Gælder ens for Asfalt kørsel (pr. dag) og Materiellevering (pr. enhed): sendt enhed/dag viser lys-grøn pille + "Ret transport"-knap (redigerbar efter afsendelse).
 
 **Regel:** `text-sm` + `py-xs` MÅ IKKE bruges på disse knapper (giver højere/federe knap → ujævn med resten). Altid `text-xs` + `py-xxxs` + `min-h-touch`.
 Set i: `AsfaltKoerselSection.tsx`, `MaterielTilstande.tsx`.
