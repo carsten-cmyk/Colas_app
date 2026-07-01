@@ -193,7 +193,7 @@ export function BilTonsAfregningSection({
 
                     return (
                       <Fragment key={afregKey}>
-                        <tr key={bil.regnr} className={(!isLast || isOpen || isGodkendt) ? 'border-b border-hairline' : ''}>
+                        <tr key={bil.regnr} className={(!isLast || isOpen) ? 'border-b border-hairline' : ''}>
                           <td className="align-middle font-inter text-xs font-semibold text-text-primary px-xs py-xs tabular-nums">{formatRegnr(bil.regnr)}</td>
                           <td className="align-middle font-inter text-xs text-text-primary px-xs py-xs">{bil.chauffoer}</td>
                           <td className="align-middle px-xs py-xs">
@@ -231,9 +231,18 @@ export function BilTonsAfregningSection({
                           </td>
                           <td className="align-middle px-xs py-xs text-right">
                             {isGodkendt ? (
-                              <span className="inline-flex items-center px-xs py-xxxs rounded-md bg-good text-white font-inter font-semibold text-xs">
-                                {afrData?.auto_godkendt ? 'Afregning auto-godkendt' : 'Afregning godkendt'}
-                              </span>
+                              // Godkendt (auto el. manuel) → kollapset: grøn pille + "Vis afregning"-toggle
+                              <div className="inline-flex items-center gap-xs">
+                                <span className="inline-flex items-center px-xs py-xxxs rounded-md bg-good text-white font-inter font-semibold text-xs">
+                                  {afrData?.auto_godkendt ? 'Afregning auto-godkendt' : 'Afregning godkendt'}
+                                </span>
+                                <button
+                                  onClick={() => toggleAfregning(afregKey)}
+                                  className="inline-flex items-center gap-xxxs border border-hairline text-dark-teal font-inter font-semibold text-xs py-xxxs px-xs rounded-md hover:bg-surface-2 transition-colors"
+                                >
+                                  {isOpen ? 'Skjul' : 'Vis afregning'}
+                                </button>
+                              </div>
                             ) : (
                               <button
                                 onClick={() => toggleAfregning(afregKey)}
@@ -244,7 +253,7 @@ export function BilTonsAfregningSection({
                             )}
                           </td>
                         </tr>
-                        {(isOpen || isGodkendt) && (() => {
+                        {isOpen && (() => {
                           // ── Vejeseddel-hjælpere ──────────────────────────────────
                           const bilVejesedler = bil.vejesedler ?? []
                           // Dagens kørte tons = sum af alle vejesedler på bilen
