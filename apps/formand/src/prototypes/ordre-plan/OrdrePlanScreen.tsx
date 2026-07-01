@@ -1098,6 +1098,7 @@ export function OrdrePlanScreen() {
           const url = new URL(window.location.href)
           url.searchParams.set('scenarie', id)
           url.searchParams.delete('samleordreId') // undgå alias-konflikt med Spor A
+          url.searchParams.delete('date')          // ryd stale dato → brug sporets defaultPlanDate (16. marts)
           window.location.assign(url.toString())
         }}
       />
