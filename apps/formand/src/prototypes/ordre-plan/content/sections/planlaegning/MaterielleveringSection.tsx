@@ -172,19 +172,19 @@ export function MaterielleveringSection({
                               if (bekraeftedeEnhederIds.has(key)) {
                                 return (
                                   <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good-bg font-inter text-xs font-semibold text-good whitespace-nowrap">
-                                    Bekræftet vognmand
+                                    Sendt til vognmand
                                   </span>
                                 )
                               }
                               if (materielSendteEnhederIds.has(key)) {
                                 return (
-                                  <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-warn-bg font-inter text-xs font-semibold text-text-secondary whitespace-nowrap">
+                                  <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good-bg font-inter text-xs font-semibold text-good whitespace-nowrap">
                                     Sendt til vognmand
                                   </span>
                                 )
                               }
                               return (
-                                <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-surface-2 font-inter text-xs font-semibold text-text-muted whitespace-nowrap">
+                                <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-warn-bg font-inter text-xs font-semibold text-text-secondary whitespace-nowrap">
                                   Planlagt
                                 </span>
                               )

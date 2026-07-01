@@ -51,14 +51,6 @@ function VognmandBadge({ plan }: VognmandBadgeProps) {
       </span>
     )
   }
-  if (plan.bekraeftet) {
-    // Solid grøn (PATTERNS §1b) — matcher Asfalt kørsel's "Bekræftet vognmand"
-    return (
-      <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good font-inter text-xs font-semibold text-white whitespace-nowrap">
-        Bekræftet vognmand
-      </span>
-    )
-  }
   if (plan.sendt) {
     // Lys grøn (bg-good-bg/text-good) — matcher Asfalt kørsel's "Sendt til vognmand"-pille.
     return (
@@ -67,8 +59,10 @@ function VognmandBadge({ plan }: VognmandBadgeProps) {
       </span>
     )
   }
+  // Planlagt (gemt, endnu ikke sendt) — lys gul (warn-bg) så den skiller sig fra
+  // grå "Ikke planlagt" og grøn "Sendt til vognmand".
   return (
-    <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-surface-2 font-inter text-xs font-semibold text-text-muted whitespace-nowrap">
+    <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-warn-bg font-inter text-xs font-semibold text-text-secondary whitespace-nowrap">
       Planlagt
     </span>
   )
@@ -434,15 +428,13 @@ export function MaterielPlanlaegTilstand({
           plan?.status === 'planlagt' && !isExpanded ? (
             <div className="flex items-center gap-xs">
               <VognmandBadge plan={plan} />
-              {!plan.bekraeftet && (
-                <button
-                  type="button"
-                  onClick={() => setExpandedId(r.id)}
-                  className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
-                >
-                  Ret transport
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setExpandedId(r.id)}
+                className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
+              >
+                Ret transport
+              </button>
             </div>
           ) : (
             <button
@@ -658,15 +650,13 @@ export function MaterielNyEtapeTilstand({
             plan?.status === 'planlagt' && !isExpanded ? (
               <div className="flex items-center gap-xs">
                 <VognmandBadge plan={plan} />
-                {!plan.bekraeftet && (
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId(r.id)}
-                    className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
-                  >
-                    Ret transport
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setExpandedId(r.id)}
+                  className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
+                >
+                  Ret transport
+                </button>
               </div>
             ) : (
               <button
