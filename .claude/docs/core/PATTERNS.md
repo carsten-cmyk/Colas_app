@@ -168,6 +168,27 @@ hover:opacity-90 transition-colors shadow-lg
 Med leading icon-circle `w-6 h-6 bg-deep-teal/20 rounded-full`.
 Set i: `DagsoversigtScreen.tsx:1193-1208`.
 
+### 2h. Sektion-handlingsknapper — planlæg / gem+send til vognmand (LÅST 2026-07-01)
+
+Alle handlingsknapper i OrdrePlan-planlægningssektionerne (**Asfalt kørsel** + **Materiellevering**) deler ÉN størrelse — kun FARVEN skifter efter rolle. Dette holder knapperne unified i højde og skrift på tværs af sektionerne.
+
+Fælles basis (identisk for alle tre roller):
+```
+inline-flex items-center gap-xxxs font-inter text-xs font-semibold
+px-sm py-xxxs rounded-lg min-h-touch
+hover:opacity-90 transition-opacity whitespace-nowrap
+```
+
+Farve pr. rolle (ENESTE forskel):
+- **Planlæg (åbn/re-åbn planlægger)** — "Planlæg transport", "Planlæg kørsel", "Ret transport": `bg-dark-teal text-white`
+- **Commit (gem + send)** — "Gem og send til vognmand", "Send til vognmand": `bg-yellow text-deep-teal`
+- **Afsendt (done, `disabled`)** — "Sendt til vognmand" (section-knap): `bg-good text-white cursor-default`
+
+Status-PILLE (ikke knap) i collapsed dag-/enheds-række for sendt/bekræftet: `bg-good-bg text-good` (se 1b/1f) — lys grøn, IKKE solid.
+
+**Regel:** `text-sm` + `py-xs` MÅ IKKE bruges på disse knapper (giver højere/federe knap → ujævn med resten). Altid `text-xs` + `py-xxxs` + `min-h-touch`.
+Set i: `AsfaltKoerselSection.tsx`, `MaterielTilstande.tsx`.
+
 ---
 
 ## 3. Tabel-headers (th)

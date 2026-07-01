@@ -247,7 +247,7 @@ export function AsfaltKoerselSection({
                             }}
                             className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
                           >
-                            Planlæg transport
+                            Ret transport
                           </button>
                         </div>
                       )}
@@ -284,9 +284,9 @@ export function AsfaltKoerselSection({
                           }
                         }
                       }}
-                      className={`inline-flex items-center gap-xxxs font-inter text-xs font-semibold px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap ${isExpanded ? 'bg-yellow text-deep-teal' : 'bg-dark-teal text-white'}`}
+                      className={`inline-flex items-center gap-xxxs font-inter text-xs font-semibold px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch ${isExpanded ? 'bg-yellow text-deep-teal' : 'bg-dark-teal text-white'}`}
                     >
-                      {isExpanded ? 'Gem og send til vognmand' : 'Planlæg kørsel'}
+                      {isExpanded ? 'Gem og send til vognmand' : 'Planlæg transport'}
                     </button>
                   )}
                 </div>
@@ -684,7 +684,7 @@ export function AsfaltKoerselSection({
                         onSetSendtTilVognmandDates(prev => new Set([...prev, day.date]))
                         setKørselExpandedId(null)
                       }}
-                      className="font-inter text-xs font-semibold text-deep-teal bg-yellow px-sm py-xxxs rounded-lg hover:opacity-90"
+                      className="inline-flex items-center font-inter text-xs font-semibold text-deep-teal bg-yellow px-sm py-xxxs rounded-lg hover:opacity-90 min-h-touch"
                     >Gem og send til vognmand</button>
                   </div>
                 </div>

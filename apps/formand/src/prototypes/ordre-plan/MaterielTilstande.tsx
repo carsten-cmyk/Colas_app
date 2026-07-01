@@ -493,7 +493,7 @@ export function MaterielPlanlaegTilstand({
             <button
               type="button"
               onClick={onSend}
-              className="inline-flex items-center font-inter text-sm font-semibold text-deep-teal bg-yellow px-sm py-xs rounded-lg hover:opacity-90 active:scale-[0.98] transition-all min-h-touch"
+              className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-deep-teal bg-yellow px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
             >
               Send til vognmand
             </button>
@@ -501,7 +501,7 @@ export function MaterielPlanlaegTilstand({
             <button
               type="button"
               disabled
-              className="inline-flex items-center font-inter text-sm font-semibold text-white bg-good px-sm py-xs rounded-lg min-h-touch cursor-default"
+              className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-good px-sm py-xxxs rounded-lg min-h-touch cursor-default"
             >
               Sendt til vognmand
             </button>
@@ -717,7 +717,7 @@ export function MaterielNyEtapeTilstand({
               <button
                 type="button"
                 onClick={onSend}
-                className="inline-flex items-center font-inter text-sm font-semibold text-deep-teal bg-yellow px-sm py-xs rounded-lg hover:opacity-90 active:scale-[0.98] transition-all min-h-touch"
+                className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-deep-teal bg-yellow px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
               >
                 Send til vognmand
               </button>
@@ -725,7 +725,7 @@ export function MaterielNyEtapeTilstand({
               <button
                 type="button"
                 disabled
-                className="inline-flex items-center font-inter text-sm font-semibold text-white bg-good px-sm py-xs rounded-lg min-h-touch cursor-default"
+                className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-good px-sm py-xxxs rounded-lg min-h-touch cursor-default"
               >
                 Sendt til vognmand
               </button>
