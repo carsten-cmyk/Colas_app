@@ -483,6 +483,53 @@ export function BekraeftedeBilerSection({
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
+  // ── Samleordre-mode: fulde tabeller pr. child-ordre (Trin B — LÅST 2026-07-01) ──
+  // Viser de SAMME fulde biler/materiel-tabeller som enkelt-ordre,
+  // men partitioneret pr. child via bilerForChild/materielForChild.
+  // Enkelt-ordre-branchen nedenfor forbliver uændret.
+  if (isSamleordreMode && samleordreCtx) {
+    const asfaltBilerAlle = (vognmandBekraeftelse?.biler ?? []).filter(b => !b.er_materiel_bil)
+    const materielItemsAlle = vognmandMaterielBekraeftelse?.items ?? []
+    return (
+      <div className="flex flex-col gap-xs -mt-[48px]">
+        <h2 className="font-poppins font-semibold text-xl text-deep-teal leading-tight mb-sm">Bekræftede biler</h2>
+        <div className="flex flex-col gap-md">
+          {samleordreCtx.children.map((child, i) => {
+            const childBiler = bilerForChild(child, asfaltBilerAlle)
+            const childMateriel = materielForChild(child, materielItemsAlle)
+            return (
+              <div key={child.orderNumber} className={i > 0 ? 'mt-md' : undefined}>
+                {/* Sub-header pr. child — 1:1 kopi af MaterielleveringSection.tsx L229-242 */}
+                <div className="flex items-center gap-xs mb-xs">
+                  <span
+                    className={[
+                      'w-[8px] h-[8px] rounded-full flex-shrink-0',
+                      child.isAnchor
+                        ? 'bg-yellow shadow-[0_0_0_2px_rgba(254,238,50,0.35)]'
+                        : 'bg-transparent border-2 border-hairline-2',
+                    ].join(' ')}
+                    aria-hidden="true"
+                  />
+                  <h3 className="font-poppins font-semibold text-md text-deep-teal">
+                    {child.udfoerelseSted}
+                  </h3>
+                </div>
+                {childBiler.length > 0
+                  ? renderBilerTabel(childBiler, child.orderNumber)
+                  : (
+                    <div className="bg-white border border-hairline rounded-xl px-sm py-sm flex items-center gap-xs text-text-muted">
+                      <span className="font-inter text-sm">Ingen bekræftede biler</span>
+                    </div>
+                  )}
+                {child.isAnchor && childMateriel.length > 0 && renderMaterielTabel(childMateriel, child.orderNumber)}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
       {/* ── Status-bokse ────────────────────────────────────────────────
