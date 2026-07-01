@@ -64,8 +64,15 @@ export interface Scenario {
   startRaekkefoelge: Record<string, [string | null, string | null, string | null]>
   startTider: Record<string, [string | null, string | null, string | null]>
 
-  // ── Default-dato + dvale ───────────────────────────────────────────────────
+  // ── Default-dato + fokus-produkt + dvale ───────────────────────────────────
   defaultPlanDate: string                                    // i dag '2026-03-17'
+  /**
+   * Produkt der er fokuseret ved mount (Spec-grid + produkt-bokse).
+   * I dag hardcodet 'p2' i OrdrePlanScreen — men A/C har egne produkt-IDs
+   * (a-p2/c-p2), så det MÅ komme fra bundtet ellers crasher `products.find(...)!`.
+   * Skal pege på et produkt der har en ikke-aflyst dag på `defaultPlanDate`.
+   */
+  defaultProductId: string                                   // i dag 'p2'
   /** Dvale-demo-dag injiceres KUN i scenarier hvor den giver mening (Spor B). null = ingen injektion */
   demoDvaleDag: string | null                                // i dag global DEMO_DVALE_DAG = '2026-05-04'
 }
@@ -132,6 +139,7 @@ const B: Scenario = {
   },
 
   defaultPlanDate: '2026-03-17',
+  defaultProductId: 'p2',  // SMA 11S toplag — har dag d2-2 på 2026-03-17 (uændret nuværende adfærd)
   // Dvale-demo-dag: en dag i gap'et mellem etape 0 (marts) og etape 1 (juli)
   demoDvaleDag: '2026-05-04',
 }
@@ -641,6 +649,7 @@ const A: Scenario = {
   },
 
   defaultPlanDate: '2026-04-14',
+  defaultProductId: 'a-p2',  // SMA 11S — har dag a-d2-1 på 2026-04-14
   demoDvaleDag: null,  // Ingen dvale-demo i Spor A — dvale-gap er juni-august (ikke angivet)
 }
 
@@ -1121,6 +1130,7 @@ const C: Scenario = {
   },
 
   defaultPlanDate: '2026-06-08',
+  defaultProductId: 'c-p2',  // SMA 11S — har dag c-d2-1 på 2026-06-08
   demoDvaleDag: null,  // Ingen dvale-demo i Spor C — gap er juli-oktober
 }
 
