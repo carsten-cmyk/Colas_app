@@ -431,7 +431,7 @@ export function MaterielPlanlaegTilstand({
               <button
                 type="button"
                 onClick={() => setExpandedId(r.id)}
-                className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
+                className="inline-flex items-center justify-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch min-w-[135px]"
               >
                 Ret transport
               </button>
@@ -444,7 +444,7 @@ export function MaterielPlanlaegTilstand({
                   ? (onGem(r.id), setExpandedId(null))
                   : setExpandedId(r.id)
               }
-              className={`inline-flex items-center gap-xxxs font-inter text-xs font-semibold px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch ${isExpanded ? 'bg-yellow text-deep-teal' : 'bg-dark-teal text-white'}`}
+              className={`inline-flex items-center justify-center gap-xxxs font-inter text-xs font-semibold px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch min-w-[135px] ${isExpanded ? 'bg-yellow text-deep-teal' : 'bg-dark-teal text-white'}`}
             >
               {isExpanded ? 'Gem transport' : 'Planlæg transport'}
             </button>
@@ -653,7 +653,7 @@ export function MaterielNyEtapeTilstand({
                 <button
                   type="button"
                   onClick={() => setExpandedId(r.id)}
-                  className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
+                  className="inline-flex items-center justify-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch min-w-[135px]"
                 >
                   Ret transport
                 </button>
@@ -666,7 +666,7 @@ export function MaterielNyEtapeTilstand({
                     ? (onGem(r.id), setExpandedId(null))
                     : setExpandedId(r.id)
                 }
-                className={`inline-flex items-center gap-xxxs font-inter text-xs font-semibold px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch ${isExpanded ? 'bg-yellow text-deep-teal' : 'bg-dark-teal text-white'}`}
+                className={`inline-flex items-center justify-center gap-xxxs font-inter text-xs font-semibold px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch min-w-[135px] ${isExpanded ? 'bg-yellow text-deep-teal' : 'bg-dark-teal text-white'}`}
               >
                 {isExpanded ? 'Gem transport' : 'Planlæg transport'}
               </button>

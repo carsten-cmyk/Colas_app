@@ -245,7 +245,7 @@ export function AsfaltKoerselSection({
                                 onUpdateStartTid(day.id, 0, '06:00')
                               }
                             }}
-                            className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
+                            className="inline-flex items-center justify-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch min-w-[135px]"
                           >
                             Ret transport
                           </button>
@@ -284,7 +284,7 @@ export function AsfaltKoerselSection({
                           }
                         }
                       }}
-                      className={`inline-flex items-center gap-xxxs font-inter text-xs font-semibold px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch ${isExpanded ? 'bg-yellow text-deep-teal' : 'bg-dark-teal text-white'}`}
+                      className={`inline-flex items-center justify-center gap-xxxs font-inter text-xs font-semibold px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch min-w-[135px] ${isExpanded ? 'bg-yellow text-deep-teal' : 'bg-dark-teal text-white'}`}
                     >
                       {isExpanded ? 'Gem og send til vognmand' : 'Planlæg transport'}
                     </button>
