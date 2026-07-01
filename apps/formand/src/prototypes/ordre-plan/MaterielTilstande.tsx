@@ -351,7 +351,7 @@ function TransportForm({
         <button
           type="button"
           onClick={() => onGem(resourceId)}
-          className="font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 min-h-touch flex items-center"
+          className="font-inter text-xs font-semibold text-deep-teal bg-yellow px-sm py-xxxs rounded-lg hover:opacity-90 min-h-touch flex items-center"
         >
           Gem transport
         </button>
@@ -444,7 +444,7 @@ export function MaterielPlanlaegTilstand({
                   ? (onGem(r.id), setExpandedId(null))
                   : setExpandedId(r.id)
               }
-              className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
+              className={`inline-flex items-center gap-xxxs font-inter text-xs font-semibold px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch ${isExpanded ? 'bg-yellow text-deep-teal' : 'bg-dark-teal text-white'}`}
             >
               {isExpanded ? 'Gem transport' : 'Planlæg transport'}
             </button>
@@ -666,7 +666,7 @@ export function MaterielNyEtapeTilstand({
                     ? (onGem(r.id), setExpandedId(null))
                     : setExpandedId(r.id)
                 }
-                className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
+                className={`inline-flex items-center gap-xxxs font-inter text-xs font-semibold px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch ${isExpanded ? 'bg-yellow text-deep-teal' : 'bg-dark-teal text-white'}`}
               >
                 {isExpanded ? 'Gem transport' : 'Planlæg transport'}
               </button>
