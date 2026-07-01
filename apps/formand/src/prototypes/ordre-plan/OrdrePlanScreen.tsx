@@ -13,7 +13,7 @@ import {
 import { TopBar } from '@/components/layout/TopBar'
 import { useRecept } from '@/hooks/useRecept'
 import { useDagsoverblik } from '@/hooks/useDagsoverblik'
-import { clusterEtaper, getMaterielUiState, DEMO_TRANSPORT_PLANER, transportKey } from './etape'
+import { clusterEtaper, getMaterielUiState, transportKey } from './etape'
 import type { Etape, MaterielUiState, MaterielTransportPlan } from './etape'
 import type { TransportPlanPatch, MaterielEnhed as MaterielEnhedTilstand } from './MaterielTilstande'
 import { formatPhone, toE164 } from '@shared/utils/phone'
@@ -28,10 +28,10 @@ import {
   getEffectiveProductTotalTons,
 } from './utils'
 import {
-  DEFAULT_KØRSEL_PARAMS, INITIAL_PRODUCTS, INITIAL_RESOURCES,
-  INITIAL_COMMENTS, INITIAL_PHOTOS, MOCK_SAMLEORDRE,
-  INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE, INITIAL_VOGNMAND_BEKRAEFTELSER,
+  DEFAULT_KØRSEL_PARAMS, INITIAL_COMMENTS, INITIAL_PHOTOS,
 } from './mocks'
+import { useScenario } from './useScenario'
+import { DevScenarioPanel } from './components/DevScenarioPanel'
 import { AflysningCell } from './components/AflysningCell'
 import { CommentCell } from './components/CommentCell'
 import { SamleordreChildTabs } from './components/SamleordreChildTabs'
@@ -44,36 +44,42 @@ export function OrdrePlanScreen() {
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
-  // Læs initial-dato + samleordreId fra URL-params (primært) eller location.state (fallback).
-  // URL-params giver bookmarkable + refreshable + deeplinkable samleordre-visning.
+  // Scenarie-bundt: ét selvstændigt, fuldt-seedet mock-bundt (Spor A/B/C) valgt via
+  // ?scenarie-param (ellers Spor B = default = uændret nuværende demo). ALT state-init
+  // nedenfor kommer fra dette bundt i stedet for spredte globale INITIAL_*-konstanter.
+  // Se ./scenarios.ts + ./useScenario.ts. Discoverability ② (OrdrePlan Fase 2).
+  const { scenario, scenarioId, wasExplicit } = useScenario()
+  // Læs initial-dato fra URL-params (primært) eller location.state (fallback).
+  // URL-params giver bookmarkable + refreshable + deeplinkable visning.
   // TODO (produktion): Også orderId fra path-param hvis nested route bygges.
   const navState = location.state as { selectedDate?: string; initialDate?: string; orderId?: string; samleordreId?: string } | null
-  const urlSamleordreId = searchParams.get('samleordreId')
   const urlSelectedDate = searchParams.get('date')
   const initialPlanDate = urlSelectedDate ?? navState?.selectedDate ?? navState?.initialDate
-  // Samleordre-mode: aktiveres når samleordreId er sat i URL eller navigation.state
-  // TODO: Erstat med Supabase når klar — hent samleordre fra samleordrer-tabel
-  const isSamleordreMode = !!(urlSamleordreId ?? navState?.samleordreId)
+  // Samleordre-mode udledes nu af bundtet (scenario.samleordre !== null), ikke af URL-param.
+  // Legacy ?samleordreId-deeplinks mapper til Spor A via useScenario — se dér.
+  const isSamleordreMode = scenario.samleordre !== null
   // Samleordre-context er state så formanden kan tilføje ekstra ordrer på dagen
   // TODO: Erstat med Supabase når klar — mutationer skal persisteres til samleordre_children
   const [samleordreCtx, setSamleordreCtx] = useState<SamleordreContext | null>(
-    isSamleordreMode ? MOCK_SAMLEORDRE : null
+    scenario.samleordre
   )
-  // Samleordre Ordredetaljer tab: hvilken child-ordre vises i spec-grid
-  const [samleordreTabOrderNr, setSamleordreTabOrderNr] = useState<string>(() =>
-    MOCK_SAMLEORDRE.children.find(c => c.isAnchor)?.orderNumber ?? MOCK_SAMLEORDRE.children[0].orderNumber
-  )
+  // Samleordre Ordredetaljer tab: hvilken child-ordre vises i spec-grid.
+  // Guard for enkelt-ordre-bundter (scenario.samleordre === null).
+  const [samleordreTabOrderNr, setSamleordreTabOrderNr] = useState<string>(() => {
+    const children = scenario.samleordre?.children ?? []
+    return children.find(c => c.isAnchor)?.orderNumber ?? children[0]?.orderNumber ?? ''
+  })
   const [activeMode, setActiveMode] = useState<OrderMode>('planlaegning')
-  const [activeProductId, setActiveProductId] = useState('p2')
+  const [activeProductId, setActiveProductId] = useState(scenario.defaultProductId)
   // "Skjul detaljer"-toggle for Ordredetaljer-spec-grid i Planlægning-mode
   const [planlaegningOrdredetaljerExpanded, setPlanlaegningOrdredetaljerExpanded] = useState(true)
-  const [products, setProducts] = useState<MockProduct[]>(INITIAL_PRODUCTS)
+  const [products, setProducts] = useState<MockProduct[]>(scenario.products)
   // Valgt dag i Bestilling-rækken (driver produkt-bokse + planlægning for ordren)
   // Prototype-default: 17. marts 2026 — den dag der har ekstra-bestillinger i mock,
   // så feature-præsentationen er umiddelbart synlig. Override via location.state.initialPlanDate
   // (fx fra Dagsoversigt-navigation).
   const [selectedPlanDate, setSelectedPlanDate] = useState<string>(
-    initialPlanDate ?? '2026-03-17'
+    initialPlanDate ?? scenario.defaultPlanDate
   )
   // "Samles på en bil" per produkt+dag: key = `${productId}__${dayId}`
   // TODO: Erstat med Supabase når klar
@@ -87,7 +93,7 @@ export function OrdrePlanScreen() {
   //
   // tilfoejMaterielOpen, materielSoeg, fjernModalId
   // → FLYTTET til MaterielleveringSection (lokal state) [Fase 2, Round 3, #11]
-  const [resources, setResources] = useState<MockResource[]>(INITIAL_RESOURCES)
+  const [resources, setResources] = useState<MockResource[]>(scenario.resources)
   const [cancellingDayId, setCancellingDayId] = useState<string | null>(null)
   // Aflys-celle (i ordredetalje-grid): inline picker-state — uafhængig pr. produkt
   const [aflysPickerProductId, setAflysPickerProductId] = useState<string | null>(null)
@@ -104,38 +110,22 @@ export function OrdrePlanScreen() {
   // kørselExpandedId → FLYTTET til AsfaltKoerselSection (lokal state) [Fase 2, Round 3, #10]
   // TODO: Erstat med Supabase når klar — afsendelsesgate for ASFALT-biler til vognmand, keyed på selectedPlanDate (ISO-dato-streng).
   // Seeder demo-dage som "Sendt til vognmand" (planlægnings-end-state: d2-1 = 16. marts, d2-2 = 17. marts).
-  const [sendtTilVognmandDates, setSendtTilVognmandDates] = useState<Set<string>>(new Set(['2026-03-16', '2026-03-17']))
+  const [sendtTilVognmandDates, setSendtTilVognmandDates] = useState<Set<string>>(new Set(scenario.sendtTilVognmandDates))
   // TODO: Erstat med Supabase når klar — afsendelsesgate for MATERIELLEVERING til vognmand.
   // Re-keyed til transportKey(resourceId, etapeId) (Round 4a).
   // Seeder r1×etape0 som "Sendt til vognmand" svarende til DEMO_TRANSPORT_PLANER (sendt:true, bekraeftet:true).
   const [materielSendteEnhederIds, setMaterielSendteEnhederIds] = useState<Set<string>>(
     () => new Set(
-      INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE.items.map(it => transportKey(it.resourceId, 0))
+      scenario.vognmandMaterielBekraeftelse.items.map(it => transportKey(it.resourceId, 0))
     )
   )
   // fabrikSendtDates → FLYTTET til AsfaltbestillingSection (lokal state) [Fase 2, Round 3, #9]
   // TODO: Erstat med Supabase — d2-1 og d2-2 er forudfyldte til demo
-  const [kørselPlanlagtIds, setKørselPlanlagtIds] = useState<Set<string>>(new Set(['d2-1', 'd2-2']))
-  // TODO: Erstat med Supabase — forudfyldte kørselordre til demo
-  const [kørselOrders, setKørselOrders] = useState<Record<string, VehicleOrder[]>>({
-    'd2-1': [
-      { id: 'vo-d21-1', type: '6 Aks', antal: 2, afregning_type: 'akkord' },
-      { id: 'vo-d21-2', type: '7 Aks', antal: 1, afregning_type: 'time' },
-    ],
-    'd2-2': [
-      { id: 'vo-d22-1', type: '6 Aks', antal: 2, afregning_type: 'time' },
-      { id: 'vo-d22-2', type: 'Sideudlægger', antal: 1, afregning_type: 'akkord' },
-    ],
-    'd2-3': [
-      { id: 'vo-d23-1', type: '6 Aks', antal: 1, afregning_type: 'akkord' },
-      { id: 'vo-d23-2', type: '7 Aks', antal: 1, afregning_type: 'time' },
-    ],
-  })
-  // TODO: Erstat med Supabase når klar — anbefaling gemmes på ordrens dag-post
-  // Demo: d2-1 (2026-03-16) viser anbefaling til vognmand-siden
-  const [startRaekkefoelge, setStartRaekkefoelge] = useState<Record<string, [string | null, string | null, string | null]>>({
-    'd2-1': ['6 Aks', '7 Aks', null],
-  })
+  const [kørselPlanlagtIds, setKørselPlanlagtIds] = useState<Set<string>>(new Set(scenario.korselPlanlagtIds))
+  // TODO: Erstat med Supabase — forudfyldte kørselordre til demo (fra scenarie-bundtet)
+  const [kørselOrders, setKørselOrders] = useState<Record<string, VehicleOrder[]>>(scenario.korselOrders)
+  // TODO: Erstat med Supabase når klar — anbefaling gemmes på ordrens dag-post (fra scenarie-bundtet)
+  const [startRaekkefoelge, setStartRaekkefoelge] = useState<Record<string, [string | null, string | null, string | null]>>(scenario.startRaekkefoelge)
 
   function updateStartRaekkefoelge(dayId: string, position: 0 | 1 | 2, value: string | null) {
     setStartRaekkefoelge(prev => ({
@@ -149,11 +139,8 @@ export function OrdrePlanScreen() {
     }))
   }
 
-  // TODO: Erstat med Supabase når klar — starttider gemmes på ordrens dag-post
-  // Demo: d2-1 har realistiske tider for de 2 første positioner
-  const [startTider, setStartTider] = useState<Record<string, [string | null, string | null, string | null]>>({
-    'd2-1': ['06:39', '06:54', null],
-  })
+  // TODO: Erstat med Supabase når klar — starttider gemmes på ordrens dag-post (fra scenarie-bundtet)
+  const [startTider, setStartTider] = useState<Record<string, [string | null, string | null, string | null]>>(scenario.startTider)
 
   function updateStartTid(dayId: string, position: 0 | 1 | 2, value: string | null) {
     setStartTider(prev => ({
@@ -184,14 +171,14 @@ export function OrdrePlanScreen() {
   const [dagVognmand, setDagVognmand] = useState<Record<string, string>>({})             // dayId -> vognmandId
   const [dagAfregning, setDagAfregning] = useState<Record<string, 'time' | 'akkord'>>({}) // dayId -> 'time' | 'akkord'
 
-  const [vognmandBekraeftelser] = useState<Record<string, VognmandBekraeftelse>>(INITIAL_VOGNMAND_BEKRAEFTELSER)
+  const [vognmandBekraeftelser] = useState<Record<string, VognmandBekraeftelse>>(scenario.vognmandBekraeftelser)
   // TODO: Erstat med Supabase når klar — opdateres via Realtime når vognmand bekræfter pr. dag.
   // Bekræftelse seedes IKKE i planlægnings-demoen — den er downstream (Udførsel).
   // Planlægnings-end-state = "Sendt til vognmand". Badge-lifecycle: gem → "Sendt til vognmand", vognmand-retur → "Bekræftet vognmand".
   const [bekraeftedeDagIds, setBekraeftedeDagIds] = useState<Set<string>>(
     () => new Set<string>()
   )
-  const [vognmandMaterielBekraeftelse] = useState<VognmandMaterielBekraeftelse>(INITIAL_VOGNMAND_MATERIEL_BEKRAEFTELSE)
+  const [vognmandMaterielBekraeftelse] = useState<VognmandMaterielBekraeftelse>(scenario.vognmandMaterielBekraeftelse)
   // TODO: Erstat med Supabase når klar — opdateres via Realtime når vognmand bekræfter pr. enhed.
   // Re-keyed til transportKey(resourceId, etapeId) (Round 4a).
   // Bekræftelse seedes IKKE i planlægnings-demoen — den er downstream (Udførsel).
@@ -250,17 +237,18 @@ export function OrdrePlanScreen() {
   // Dato-piller i Planlægning-mode: faktisk-planlagte dage + én demo-dvale-dag
   // så alle fire materiel-UX-tilstande kan nås via datovælgeren i prototype.
   //
-  // DEMO_DVALE_DAG er en dag i gap'et mellem etape 0 (marts) og etape 1 (juli)
-  // — giver 'dvale'-tilstand i materiel-sektionen.
+  // scenario.demoDvaleDag er en dag i gap'et mellem etape 0 og etape 1 for det aktive
+  // bundt — giver 'dvale'-tilstand i materiel-sektionen. Indkapslet pr. scenarie-bundt
+  // (Spor B: '2026-05-04'; Spor A/C: null = ingen dvale-injektion).
   //
   // TODO: Erstat med Supabase når klar — i produktion er alle PLAN-dage synlige
   //   i datovælgeren; dvale-tilstanden opstår naturligt ved at vælge en dag uden
   //   planlagte produkter (eller via notifikations-flow for næste etape).
-  const DEMO_DVALE_DAG = '2026-05-04'
   const planDays = useMemo(() => {
-    const all = new Set([...faktiskPlanlagteDage, DEMO_DVALE_DAG])
+    const extra = scenario.demoDvaleDag ? [scenario.demoDvaleDag] : []
+    const all = new Set([...faktiskPlanlagteDage, ...extra])
     return [...all].sort()
-  }, [faktiskPlanlagteDage])
+  }, [faktiskPlanlagteDage, scenario.demoDvaleDag])
 
   // Produkter for valgt dag (med deres day-objekt for den dag)
   // Frasorterer produkter med 0 tons i hele deres udlægningsperiode (ikke blot på valgt dag).
@@ -305,7 +293,7 @@ export function OrdrePlanScreen() {
    * TODO: Erstat med Supabase når klar — fra materiel_transport_plan-tabellen.
    */
   const [transportPlaner, setTransportPlaner] = useState<Record<string, MaterielTransportPlan>>(
-    () => ({ ...DEMO_TRANSPORT_PLANER })
+    () => ({ ...scenario.transportPlaner })
   )
 
   /**
@@ -1101,6 +1089,18 @@ export function OrdrePlanScreen() {
       {/* Tilføj materiel-modal → FLYTTET til MaterielleveringSection [Fase 2, Round 3, #11] */}
       {/* Bekræftelses-modal (Send til fabrik) → FLYTTET til AsfaltbestillingSection [Fase 2, Round 3, #9] */}
 
+      {/* Dev-only scenarie-vælger (discoverability ②) — remounter via full reload
+          så ALLE useState-initials re-evalueres fra det nye bundt. */}
+      <DevScenarioPanel
+        activeId={scenarioId}
+        wasExplicit={wasExplicit}
+        onSelect={(id) => {
+          const url = new URL(window.location.href)
+          url.searchParams.set('scenarie', id)
+          url.searchParams.delete('samleordreId') // undgå alias-konflikt med Spor A
+          window.location.assign(url.toString())
+        }}
+      />
     </div>
   )
 }
