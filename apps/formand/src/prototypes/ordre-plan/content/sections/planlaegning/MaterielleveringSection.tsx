@@ -225,22 +225,6 @@ export function MaterielleveringSection({
           <>
             {samleordreCtx.children.map((child, childIdx) => (
               <div key={child.orderNumber} className={childIdx > 0 ? 'mt-md' : undefined}>
-                {/* Sub-header pr. ordre */}
-                <div className="flex items-center gap-xs mb-xs">
-                  <span
-                    className={[
-                      'w-[8px] h-[8px] rounded-full flex-shrink-0',
-                      child.isAnchor
-                        ? 'bg-yellow shadow-[0_0_0_2px_rgba(254,238,50,0.35)]'
-                        : 'bg-transparent border-2 border-hairline-2',
-                    ].join(' ')}
-                    aria-hidden="true"
-                  />
-                  <h3 className="font-poppins font-semibold text-md text-deep-teal">
-                    {child.udfoerelseSted}
-                  </h3>
-                </div>
-
                 {child.resources.length > 0
                   ? renderMaterielTilstand({
                       materielResources: child.resources

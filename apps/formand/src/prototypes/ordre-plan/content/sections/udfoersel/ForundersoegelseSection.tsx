@@ -110,12 +110,6 @@ export function ForundersoegelseSection({
       {/* Header: vis aktiv child-sted i samleordre-mode så formanden ser hvilken ordre detaljer tilhører */}
       <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">
         Forundersøgelse
-        {isSamleordreMode && samleordreCtx && (() => {
-          const activeChildForHeader = samleordreCtx.children.find(c => c.orderNumber === samleordreTabOrderNr)
-          return activeChildForHeader ? (
-            <span className="font-inter text-sm font-normal text-text-muted ml-xs">— {activeChildForHeader.stedLabel}</span>
-          ) : null
-        })()}
       </h2>
       {/* Child-tabs — kun i samleordre-mode med 2+ children.
           PATTERN: variant='attached' kobler tab-rækken visuelt til boks-wrapperen nedenunder

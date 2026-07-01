@@ -90,11 +90,6 @@ export function KsRapporteringSection({
           samleordreCtx.children.length > 1 &&
           samleordreTabOrderNr != null
 
-        // Aktiv child til header-suffix
-        const activeChild = showChildTabs
-          ? samleordreCtx?.children.find(c => c.orderNumber === samleordreTabOrderNr)
-          : undefined
-
         // Tab-data: kun felterne SamleordreChildTabs forventer
         const childTabData = showChildTabs
           ? (samleordreCtx?.children ?? []).map(c => ({
@@ -108,7 +103,7 @@ export function KsRapporteringSection({
           <section>
             {/* PATTERN MATCH: font-poppins font-semibold text-xl text-text-primary mb-sm — KsRapporteringSection.tsx:73 */}
             <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">
-              KS-rapportering{activeChild ? ` — ${activeChild.stedLabel}` : ''}
+              KS-rapportering
             </h2>
             {/* Child-tabs — vises direkte under h2, KOBLET til boksen nedenunder (ingen gap).
                 attached-variant kræver at boksen står umiddelbart under (intet mb) + firkantet
