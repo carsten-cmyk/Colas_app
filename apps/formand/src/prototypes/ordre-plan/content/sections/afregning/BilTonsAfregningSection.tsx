@@ -233,8 +233,9 @@ export function BilTonsAfregningSection({
                             {isGodkendt ? (
                               // Godkendt (auto el. manuel) → kollapset: grøn pille + "Vis afregning"-toggle
                               <div className="inline-flex items-center gap-xs">
-                                <span className="inline-flex items-center px-xs py-xxxs rounded-md bg-good text-white font-inter font-semibold text-xs">
-                                  {afrData?.auto_godkendt ? 'Afregning auto-godkendt' : 'Afregning godkendt'}
+                                {/* Fast min-bredde (bevidst fixed) så 'Auto-godkendt' og 'Godkendt' er lige lange */}
+                                <span className="inline-flex items-center justify-center min-w-[112px] px-xs py-xxxs rounded-md bg-good text-white font-inter font-semibold text-xs">
+                                  {afrData?.auto_godkendt ? 'Auto-godkendt' : 'Godkendt'}
                                 </span>
                                 <button
                                   onClick={() => toggleAfregning(afregKey)}
