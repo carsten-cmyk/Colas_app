@@ -138,8 +138,8 @@ const B: Scenario = {
     'd2-1': ['06:39', '06:54', null],
   },
 
-  defaultPlanDate: '2026-03-17',
-  defaultProductId: 'p2',  // SMA 11S toplag — har dag d2-2 på 2026-03-17 (uændret nuværende adfærd)
+  defaultPlanDate: '2026-03-16',
+  defaultProductId: 'p2',  // SMA 11S toplag — har dag d2-1 på 2026-03-16 (250 tons, etape 0's første dag)
   // Dvale-demo-dag: en dag i gap'et mellem etape 0 (marts) og etape 1 (juli)
   demoDvaleDag: '2026-05-04',
 }
