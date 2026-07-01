@@ -106,7 +106,11 @@ export function KsRapporteringSection({
 
         return (
           <section>
-            {/* Child-tabs — vises direkte over h2 og boks (attached-variant kobler sig til boksen nedenunder) */}
+            {/* PATTERN MATCH: font-poppins font-semibold text-xl text-text-primary mb-sm — KsRapporteringSection.tsx:73 */}
+            <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">
+              KS-rapportering{activeChild ? ` — ${activeChild.stedLabel}` : ''}
+            </h2>
+            {/* Child-tabs — vises direkte under h2, over boks (attached-variant kobler sig til boksen nedenunder) */}
             {showChildTabs && (
               <div className="mb-sm">
                 <SamleordreChildTabs
@@ -117,10 +121,6 @@ export function KsRapporteringSection({
                 />
               </div>
             )}
-            {/* PATTERN MATCH: font-poppins font-semibold text-xl text-text-primary mb-sm — KsRapporteringSection.tsx:73 */}
-            <h2 className="font-poppins font-semibold text-xl text-text-primary mb-sm">
-              KS-rapportering{activeChild ? ` — ${activeChild.stedLabel}` : ''}
-            </h2>
             <div className="w-full bg-surface border border-hairline rounded-2xl shadow-sm overflow-hidden mb-sm">
               <button
                 type="button"
