@@ -147,8 +147,8 @@ const B: Scenario = {
 // ─── Spor A — Samleordre + afregning ─────────────────────────────────────────
 // TODO: Erstat med PLAN/Oracle når klar — Spor A seeds fra samleordrer-tabel + plan_dag + plan_vejebilag
 
-// Spor A benytter april-datoer (etape 0) og september-datoer (etape 1)
-// så hverdags-hullet (maj–august) garanterer 2 etaper via clusterEtaper().
+// Spor A benytter marts-datoer (etape 0) og september-datoer (etape 1)
+// så hverdags-hullet (marts–september) garanterer 2 etaper via clusterEtaper().
 
 // Produkt 1 — GAB I (anchor-ordre p1 af samleordre samle-A)
 const A_PRODUCTS: MockProduct[] = [
@@ -163,17 +163,17 @@ const A_PRODUCTS: MockProduct[] = [
     factory: { code: '29000', name: 'PROD A EAST KØGE PH', driveTimeMinutes: 36 },
     estimatedTrucks: 3,
     estimatedTonsPerTruck: 30,
-    startDate: '2026-04-14',
+    startDate: '2026-03-16',
     endDate: '2026-09-08',
     kravTilSamlinger: 'Klæbet',
     ekstraTemperaturmaalinger: true,
     entreprisekontrol: 1,
     temperaturmaaling: 1,
     days: [
-      // Etape 0 — april (bestillingen initieres på startdatoen 2026-04-14)
-      { id: 'a-d1-1', day: 1, date: '2026-04-14', tonsPlanned: 110, cancelled: false },
-      { id: 'a-d1-2', day: 2, date: '2026-04-15', tonsPlanned: 110, cancelled: false },
-      { id: 'a-d1-3', day: 3, date: '2026-04-16', tonsPlanned: 100, cancelled: false },
+      // Etape 0 — marts (bestillingen initieres på startdatoen 2026-03-16)
+      { id: 'a-d1-1', day: 1, date: '2026-03-16', tonsPlanned: 110, cancelled: false },
+      { id: 'a-d1-2', day: 2, date: '2026-03-17', tonsPlanned: 110, cancelled: false },
+      { id: 'a-d1-3', day: 3, date: '2026-03-18', tonsPlanned: 100, cancelled: false },
       // Etape 1 — september (lang hverdags-gap → ny etape i clusterEtaper)
       { id: 'a-d1-4', day: 4, date: '2026-09-07', tonsPlanned: 110, cancelled: false },
       { id: 'a-d1-5', day: 5, date: '2026-09-08', tonsPlanned: 110, cancelled: false },
@@ -190,17 +190,17 @@ const A_PRODUCTS: MockProduct[] = [
     factory: { code: '29000', name: 'PROD A EAST KØGE PH', driveTimeMinutes: 36 },
     estimatedTrucks: 4,
     estimatedTonsPerTruck: 32,
-    startDate: '2026-04-14',
-    endDate: '2026-04-16',
+    startDate: '2026-03-16',
+    endDate: '2026-03-18',
     kravTilSamlinger: 'Klæbet',
     ekstraTemperaturmaalinger: false,
     entreprisekontrol: 2,
     temperaturmaaling: 2,
     days: [
-      // Etape 0 — april (starter på a-d2-1 = startdatoen)
-      { id: 'a-d2-1', day: 1, date: '2026-04-14', tonsPlanned: 200, cancelled: false },
-      { id: 'a-d2-2', day: 2, date: '2026-04-15', tonsPlanned: 200, cancelled: false },
-      { id: 'a-d2-3', day: 3, date: '2026-04-16', tonsPlanned: 200, cancelled: false },
+      // Etape 0 — marts (starter på a-d2-1 = startdatoen)
+      { id: 'a-d2-1', day: 1, date: '2026-03-16', tonsPlanned: 200, cancelled: false },
+      { id: 'a-d2-2', day: 2, date: '2026-03-17', tonsPlanned: 200, cancelled: false },
+      { id: 'a-d2-3', day: 3, date: '2026-03-18', tonsPlanned: 200, cancelled: false },
     ],
   },
 ]
@@ -303,17 +303,17 @@ const A_SAMLEORDRE: SamleordreContext = {
 }
 
 // Vognmand-bekræftelser for Spor A:
-// Dag a-d2-1 (2026-04-14): startdatoen — BEGGE bestillingstyper initieres her.
+// Dag a-d2-1 (2026-03-16): startdatoen — BEGGE bestillingstyper initieres her.
 //   1 akkord-bil m. multilæs + pre_fordeling fordelt på BEGGE børn (anchor 30t + barn2 19.2t)
 //   1 time-bil m. timer fordelt på børn (multilæs-time-fordeling)
 //   + materiel-biler (er_materiel_bil: true)
-// Dag a-d2-2 (2026-04-15): bekræftet (Udførsel-dag)
-// Dag a-d2-3 (2026-04-16): bekræftet
+// Dag a-d2-2 (2026-03-17): bekræftet (Udførsel-dag)
+// Dag a-d2-3 (2026-03-18): bekræftet
 // TODO: Erstat med PLAN/Oracle når klar — fra vognmand.aftaler.chauffoerer[] + plan_vejebilag
 const A_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
   'a-d2-1': {
     dayId: 'a-d2-1',
-    bekraeftetTidspunkt: '13. april · 16:30',
+    bekraeftetTidspunkt: '15. marts · 16:30',
     biler: [
       // ── 1: Akkord-bil m. multilæs → tons fordelt på BEGGE børn ──────────
       {
@@ -425,7 +425,7 @@ const A_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
   },
   'a-d2-2': {
     dayId: 'a-d2-2',
-    bekraeftetTidspunkt: '14. april · 15:45',
+    bekraeftetTidspunkt: '16. marts · 15:45',
     biler: [
       {
         regnr: 'KA 55 666',
@@ -496,7 +496,7 @@ const A_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
   },
   'a-d2-3': {
     dayId: 'a-d2-3',
-    bekraeftetTidspunkt: '15. april · 16:10',
+    bekraeftetTidspunkt: '17. marts · 16:10',
     biler: [
       {
         regnr: 'KA 99 001',
@@ -537,7 +537,7 @@ const A_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
 // Materiel-bekræftelse for Spor A
 // TODO: Erstat med PLAN/Oracle når klar — fra materiel_transport_plan + vognmand.aftaler
 const A_VOGNMAND_MATERIEL_BEKRAEFTELSE: VognmandMaterielBekraeftelse = {
-  bekraeftetTidspunkt: '13. april · 17:00',
+  bekraeftetTidspunkt: '15. marts · 17:00',
   items: [
     {
       resourceId: 'a-r1',
@@ -579,7 +579,7 @@ const A_VOGNMAND_MATERIEL_BEKRAEFTELSE: VognmandMaterielBekraeftelse = {
   ],
 }
 
-// Transport-planer for Spor A: etape 0 (april) + etape 1 (september)
+// Transport-planer for Spor A: etape 0 (marts) + etape 1 (september)
 // a-r1 planlagt i etape 0; alle blank i etape 1 (demo: ny-etape-tilstand)
 // TODO: Erstat med PLAN/Oracle når klar — fra materiel_transport_plan-tabellen
 const A_TRANSPORT_PLANER: Record<string, MaterielTransportPlan> = {
@@ -593,8 +593,8 @@ const A_TRANSPORT_PLANER: Record<string, MaterielTransportPlan> = {
       postnr: '4600',
       koordinat: { lat: 55.3312, lng: 11.6847 },
     },
-    klar: { dato: '2026-04-13', tid: '14:00' },
-    lokation: { dato: '2026-04-14', tid: '06:00' },
+    klar: { dato: '2026-03-15', tid: '14:00' },
+    lokation: { dato: '2026-03-16', tid: '06:00' },
     aflaesning: 'Skovvej 18, 4400 Kalundborg',
     aflaesningKoordinat: { lat: 55.6769, lng: 11.0856 },
     kommentar: 'Kran tilgængelig på pladsen',
@@ -622,11 +622,11 @@ const A: Scenario = {
   transportPlaner: A_TRANSPORT_PLANER,
   samleordre: A_SAMLEORDRE,
 
-  // Startdatoen (2026-04-14) initierer alle 3 bestillinger:
-  // - bilbestilling: korselOrders + vognmandBekraeftelser seeded fra a-d2-1 (2026-04-14)
+  // Startdatoen (2026-03-16) initierer alle 3 bestillinger:
+  // - bilbestilling: korselOrders + vognmandBekraeftelser seeded fra a-d2-1 (2026-03-16)
   // - materielbestilling: A_TRANSPORT_PLANER a-r1:0 sendt+bekræftet
-  // - asfaltbestilling: A_PRODUCTS[].days[0].date = '2026-04-14' med tonsPlanned
-  sendtTilVognmandDates: ['2026-04-14', '2026-04-15'],
+  // - asfaltbestilling: A_PRODUCTS[].days[0].date = '2026-03-16' med tonsPlanned
+  sendtTilVognmandDates: ['2026-03-16', '2026-03-17'],
   korselPlanlagtIds: ['a-d2-1', 'a-d2-2'],
   korselOrders: {
     'a-d2-1': [
@@ -648,15 +648,15 @@ const A: Scenario = {
     'a-d2-1': ['06:50', '07:10', null],
   },
 
-  defaultPlanDate: '2026-04-14',
-  defaultProductId: 'a-p2',  // SMA 11S — har dag a-d2-1 på 2026-04-14
-  demoDvaleDag: null,  // Ingen dvale-demo i Spor A — dvale-gap er juni-august (ikke angivet)
+  defaultPlanDate: '2026-03-16',
+  defaultProductId: 'a-p2',  // SMA 11S — har dag a-d2-1 på 2026-03-16
+  demoDvaleDag: null,  // Ingen dvale-demo i Spor A — dvale-gap er marts-september (ikke angivet)
 }
 
 // ─── Spor C — Samleordre + ekstrabestilling ───────────────────────────────────
 // TODO: Erstat med PLAN/Oracle når klar — Spor C seeds fra samleordrer-tabel + plan_dag_opdatering + plan_vejebilag
 
-// Spor C benytter juni-datoer (etape 0) og november-datoer (etape 1)
+// Spor C benytter marts-datoer (etape 0) og november-datoer (etape 1)
 // Ekstrabestilling: ekstraTons på startdagen for ét produkt → EkstraBestillingBox synlig ved default-dato
 
 const C_PRODUCTS: MockProduct[] = [
@@ -671,28 +671,28 @@ const C_PRODUCTS: MockProduct[] = [
     factory: { code: '29000', name: 'PROD A EAST KØGE PH', driveTimeMinutes: 36 },
     estimatedTrucks: 3,
     estimatedTonsPerTruck: 30,
-    startDate: '2026-06-08',
+    startDate: '2026-03-16',
     endDate: '2026-11-09',
     kravTilSamlinger: 'Klæbet',
     ekstraTemperaturmaalinger: true,
     entreprisekontrol: 1,
     temperaturmaaling: 1,
     days: [
-      // Etape 0 — juni (startdatoen 2026-06-08 har ekstrabestilling)
+      // Etape 0 — marts (startdatoen 2026-03-16 har ekstrabestilling)
       {
         id: 'c-d1-1',
         day: 1,
-        date: '2026-06-08',
+        date: '2026-03-16',
         tonsPlanned: 90,
         cancelled: false,
         // Ekstrabestilling: formanden ringede fabrik og bestilte +8 tons ekstra denne dag
         // → EkstraBestillingBox vises direkte ved default-datoen (Flow 9b / SPEC §Spor C)
         // TODO: Erstat med PLAN/Oracle når klar — fra plan_dag_opdatering-tabel
-        ekstraTons: { tons: 8, bekraeftetAf: 'fabrik', tidspunkt: '2026-06-08T08:15:00+02:00' },
+        ekstraTons: { tons: 8, bekraeftetAf: 'fabrik', tidspunkt: '2026-03-16T08:15:00+01:00' },
       },
-      { id: 'c-d1-2', day: 2, date: '2026-06-09', tonsPlanned: 90, cancelled: false },
-      { id: 'c-d1-3', day: 3, date: '2026-06-10', tonsPlanned: 100, cancelled: false },
-      // Etape 1 — november (hverdags-gap august–oktober → ny etape i clusterEtaper)
+      { id: 'c-d1-2', day: 2, date: '2026-03-17', tonsPlanned: 90, cancelled: false },
+      { id: 'c-d1-3', day: 3, date: '2026-03-18', tonsPlanned: 100, cancelled: false },
+      // Etape 1 — november (hverdags-gap marts–november → ny etape i clusterEtaper)
       { id: 'c-d1-4', day: 4, date: '2026-11-09', tonsPlanned: 100, cancelled: false },
       { id: 'c-d1-5', day: 5, date: '2026-11-10', tonsPlanned: 100, cancelled: false },
     ],
@@ -708,16 +708,16 @@ const C_PRODUCTS: MockProduct[] = [
     factory: { code: '29000', name: 'PROD A EAST KØGE PH', driveTimeMinutes: 36 },
     estimatedTrucks: 3,
     estimatedTonsPerTruck: 28,
-    startDate: '2026-06-08',
-    endDate: '2026-06-10',
+    startDate: '2026-03-16',
+    endDate: '2026-03-18',
     kravTilSamlinger: 'Klæbet',
     ekstraTemperaturmaalinger: false,
     entreprisekontrol: 2,
     temperaturmaaling: 2,
     days: [
-      { id: 'c-d2-1', day: 1, date: '2026-06-08', tonsPlanned: 175, cancelled: false },
-      { id: 'c-d2-2', day: 2, date: '2026-06-09', tonsPlanned: 175, cancelled: false },
-      { id: 'c-d2-3', day: 3, date: '2026-06-10', tonsPlanned: 170, cancelled: false },
+      { id: 'c-d2-1', day: 1, date: '2026-03-16', tonsPlanned: 175, cancelled: false },
+      { id: 'c-d2-2', day: 2, date: '2026-03-17', tonsPlanned: 175, cancelled: false },
+      { id: 'c-d2-3', day: 3, date: '2026-03-18', tonsPlanned: 170, cancelled: false },
     ],
   },
 ]
@@ -814,13 +814,13 @@ const C_SAMLEORDRE: SamleordreContext = {
   ],
 }
 
-// Vognmand-bekræftelser Spor C — startdatoen 2026-06-08 initierer alle bestillinger
+// Vognmand-bekræftelser Spor C — startdatoen 2026-03-16 initierer alle bestillinger
 // Bekræftede biler på ALLE dage (krav c)
 // TODO: Erstat med PLAN/Oracle når klar — fra vognmand.aftaler.chauffoerer[] + plan_vejebilag
 const C_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
   'c-d2-1': {
     dayId: 'c-d2-1',
-    bekraeftetTidspunkt: '7. juni · 16:00',
+    bekraeftetTidspunkt: '15. marts · 16:00',
     biler: [
       {
         regnr: 'SL 11 333',
@@ -907,7 +907,7 @@ const C_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
   },
   'c-d2-2': {
     dayId: 'c-d2-2',
-    bekraeftetTidspunkt: '8. juni · 15:50',
+    bekraeftetTidspunkt: '16. marts · 15:50',
     biler: [
       {
         regnr: 'SL 33 555',
@@ -979,7 +979,7 @@ const C_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
   },
   'c-d2-3': {
     dayId: 'c-d2-3',
-    bekraeftetTidspunkt: '9. juni · 16:20',
+    bekraeftetTidspunkt: '17. marts · 16:20',
     biler: [
       {
         regnr: 'SL 55 777',
@@ -1020,7 +1020,7 @@ const C_VOGNMAND_BEKRAEFTELSER: Record<string, VognmandBekraeftelse> = {
 // Materiel-bekræftelse for Spor C
 // TODO: Erstat med PLAN/Oracle når klar — fra materiel_transport_plan + vognmand.aftaler
 const C_VOGNMAND_MATERIEL_BEKRAEFTELSE: VognmandMaterielBekraeftelse = {
-  bekraeftetTidspunkt: '7. juni · 17:10',
+  bekraeftetTidspunkt: '15. marts · 17:10',
   items: [
     {
       resourceId: 'c-r1',
@@ -1061,7 +1061,7 @@ const C_VOGNMAND_MATERIEL_BEKRAEFTELSE: VognmandMaterielBekraeftelse = {
   ],
 }
 
-// Transport-planer for Spor C: etape 0 (juni) + etape 1 (november)
+// Transport-planer for Spor C: etape 0 (marts) + etape 1 (november)
 // TODO: Erstat med PLAN/Oracle når klar — fra materiel_transport_plan-tabellen
 const C_TRANSPORT_PLANER: Record<string, MaterielTransportPlan> = {
   [transportKey('c-r1', 0)]: {
@@ -1074,8 +1074,8 @@ const C_TRANSPORT_PLANER: Record<string, MaterielTransportPlan> = {
       postnr: '4600',
       koordinat: { lat: 55.3312, lng: 11.6847 },
     },
-    klar: { dato: '2026-06-07', tid: '14:00' },
-    lokation: { dato: '2026-06-08', tid: '06:00' },
+    klar: { dato: '2026-03-15', tid: '14:00' },
+    lokation: { dato: '2026-03-16', tid: '06:00' },
     aflaesning: 'Ringgaden 32, 4200 Slagelse',
     aflaesningKoordinat: { lat: 55.3613, lng: 11.3590 },
     kommentar: 'Kran tilgængelig — ring Lars 30 min i forvejen',
@@ -1103,11 +1103,11 @@ const C: Scenario = {
   transportPlaner: C_TRANSPORT_PLANER,
   samleordre: C_SAMLEORDRE,
 
-  // Startdatoen (2026-06-08) initierer alle 3 bestillinger:
-  // - bilbestilling: korselOrders + vognmandBekraeftelser seeded fra c-d2-1 (2026-06-08)
+  // Startdatoen (2026-03-16) initierer alle 3 bestillinger:
+  // - bilbestilling: korselOrders + vognmandBekraeftelser seeded fra c-d2-1 (2026-03-16)
   // - materielbestilling: C_TRANSPORT_PLANER c-r1:0 sendt+bekræftet
-  // - asfaltbestilling: C_PRODUCTS[].days[0].date = '2026-06-08' med tonsPlanned + ekstraTons
-  sendtTilVognmandDates: ['2026-06-08', '2026-06-09'],
+  // - asfaltbestilling: C_PRODUCTS[].days[0].date = '2026-03-16' med tonsPlanned + ekstraTons
+  sendtTilVognmandDates: ['2026-03-16', '2026-03-17'],
   korselPlanlagtIds: ['c-d2-1', 'c-d2-2'],
   korselOrders: {
     'c-d2-1': [
@@ -1129,9 +1129,9 @@ const C: Scenario = {
     'c-d2-1': ['06:30', '06:50', null],
   },
 
-  defaultPlanDate: '2026-06-08',
-  defaultProductId: 'c-p2',  // SMA 11S — har dag c-d2-1 på 2026-06-08
-  demoDvaleDag: null,  // Ingen dvale-demo i Spor C — gap er juli-oktober
+  defaultPlanDate: '2026-03-16',
+  defaultProductId: 'c-p2',  // SMA 11S — har dag c-d2-1 på 2026-03-16
+  demoDvaleDag: null,  // Ingen dvale-demo i Spor C — gap er marts-november
 }
 
 // ─── Registry-eksport ─────────────────────────────────────────────────────────

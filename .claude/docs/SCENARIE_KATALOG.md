@@ -33,7 +33,7 @@ Tre selvstændige, fuldt-seedede mock-bundter (Spor A/B/C) i `scenarios.ts`. Hve
 |---|---|
 | **Flow** | FF Flow 4 (afregning) + Flow 3 (samleordre) |
 | **App + skærm** | formand → `OrdrePlanScreen` (alle 3 modes) |
-| **Sådan ses det** | `/prototyper/ordre-plan?scenarie=A` ELLER DEV-panel → "A". Afregning-mode viser 1 akkord-bil m. multilæs (tons fordelt på 2 børn) + 1 time-bil (timer fordelt på børn) i samme samleordre-afregning. Kalundborg (Skovvej + Havnegade), april + september |
+| **Sådan ses det** | `/prototyper/ordre-plan?scenarie=A` ELLER DEV-panel → "A". Afregning-mode viser 1 akkord-bil m. multilæs (tons fordelt på 2 børn) + 1 time-bil (timer fordelt på børn) i samme samleordre-afregning. Kalundborg (Skovvej + Havnegade), etape 0 = 16.–18. marts, etape 1 = september |
 | **Mock-kilde** | `scenarios.ts` → `SCENARIOS.A` (`vognmandBekraeftelser` m. multilæs-`pre_fordeling` over 2 børn) |
 | **Contract/regel** | akkord/time pr. biltype; multilæs-tonsfordeling pr. ordre; samleordre = 2 børn |
 
@@ -51,7 +51,7 @@ Tre selvstændige, fuldt-seedede mock-bundter (Spor A/B/C) i `scenarios.ts`. Hve
 |---|---|
 | **Flow** | FF Flow 9b (PLAN-push / ekstra asfalt-bestilling) + Flow 3 (samleordre) |
 | **App + skærm** | formand → `OrdrePlanScreen` (Planlægning-mode → Asfaltbestilling) |
-| **Sådan ses det** | `?scenarie=C` ELLER DEV-panel → "C". På startdagen (8. juni 2026) vises en ekstra `EkstraBestillingBox` (+8 tons, bekræftet kl. 08:15) ved siden af produktet = formanden har ringet fabrik og bestilt MERE asfalt. Slagelse (Ringgaden + Boulevarden), juni + november |
+| **Sådan ses det** | `?scenarie=C` ELLER DEV-panel → "C". På startdagen (16. marts 2026) vises en ekstra `EkstraBestillingBox` (+8 tons, bekræftet kl. 08:15) ved siden af produktet = formanden har ringet fabrik og bestilt MERE asfalt. Slagelse (Ringgaden + Boulevarden), etape 0 = 16.–18. marts, etape 1 = november |
 | **Mock-kilde** | `scenarios.ts` → `SCENARIOS.C` (`products[].days[].ekstraTons` seedet på startdag) |
 | **Contract/regel** | ekstrabestilling = ekstra asfalt-volumen bekræftet af fabrik (IKKE MKS/ekstraarbejde) |
 
