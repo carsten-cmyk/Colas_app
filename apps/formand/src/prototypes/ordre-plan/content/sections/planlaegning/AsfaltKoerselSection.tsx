@@ -2,8 +2,9 @@
  * PROTOTYPE — AsfaltKoerselSection
  *
  * Extraction fra OrdrePlanScreen.tsx L1380–1979 (ORDRET — ingen redesign).
- * Viser "Asfalt kørsel"-sektionen med dag-rækker, vognmand/afregning-valg,
- * bilbehov-dashboard og "Send til vognmand"-footer.
+ * Viser "Asfalt kørsel"-sektionen med dag-rækker, vognmand/afregning-valg og
+ * bilbehov-dashboard. Gem = "Gem og send til vognmand" (kombineret gem + afsendelse,
+ * da der kun planlægges én dag ad gangen) — ingen separat send-footer.
  *
  * Top-peer i PlanlaegningContent's rod-container (ikke inden i Ordredetaljer-wrapper).
  *
@@ -208,22 +209,22 @@ export function AsfaltKoerselSection({
                           )
                         })()}
                       </span>
-                      {/* Vognmand status badge — 3-state: Planlagt / Sendt til vognmand / Bekræftet */}
+                      {/* Vognmand status badge — 2-state: Sendt til vognmand (grøn) / Bekræftet vognmand.
+                          "Gem og send til vognmand" kombinerer gem + afsendelse, så en planlagt dag
+                          altid ER sendt → ingen separat "Planlagt"-mellemtilstand. */}
                       {erBekraeftet ? (
                         // downstream/Udførsel-tilstand — ikke seedet i planlægnings-demoen
                         <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good font-inter text-xs font-semibold text-white whitespace-nowrap">
                           Bekræftet vognmand
                         </span>
                       ) : sendtTilVognmandDates.has(day.date) ? (
-                        <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-yellow/25 font-inter text-xs font-semibold text-[#8A6A00] whitespace-nowrap">
+                        // Samme pille-stil som Materiellevering's "Bekræftet vognmand" (bg-good-bg / text-good)
+                        <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-good-bg font-inter text-xs font-semibold text-good whitespace-nowrap">
                           Sendt til vognmand
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center px-xs py-xxxs rounded-lg bg-[#F5F5F5] font-inter text-xs font-semibold text-text-muted whitespace-nowrap">
-                          Planlagt
-                        </span>
-                      )}
-                      {/* Ret-knap skjules når dagen er bekræftet af vognmand (FUNCTIONAL_FLOWS Trin 2) */}
+                      ) : null}
+                      {/* "Planlæg transport"-knap (åbner kørsels-editoren igen) skjules når dagen
+                          er bekræftet af vognmand (FUNCTIONAL_FLOWS Trin 2) */}
                       {!erBekraeftet && (
                         <div className="flex">
                           <button
@@ -244,9 +245,9 @@ export function AsfaltKoerselSection({
                                 onUpdateStartTid(day.id, 0, '06:00')
                               }
                             }}
-                            className="inline-flex items-center gap-xxxs px-xs py-xxxs rounded-lg border border-hairline font-inter text-xs font-medium text-dark-teal hover:bg-surface-2 transition-colors whitespace-nowrap min-h-touch"
+                            className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap min-h-touch"
                           >
-                            Ret
+                            Planlæg transport
                           </button>
                         </div>
                       )}
@@ -255,7 +256,9 @@ export function AsfaltKoerselSection({
                     <button
                       onClick={() => {
                         if (isExpanded) {
+                          // Gem OG send til vognmand i ét klik (planlægger kun én dag ad gangen).
                           onGemKørsel(day.id)
+                          onSetSendtTilVognmandDates(prev => new Set([...prev, day.date]))
                           setKørselExpandedId(null)
                         } else {
                           setKørselExpandedId(day.id)
@@ -281,9 +284,9 @@ export function AsfaltKoerselSection({
                           }
                         }
                       }}
-                      className="inline-flex items-center gap-xxxs font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap"
+                      className={`inline-flex items-center gap-xxxs font-inter text-xs font-semibold px-sm py-xxxs rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap ${isExpanded ? 'bg-yellow text-deep-teal' : 'bg-dark-teal text-white'}`}
                     >
-                      {isExpanded ? 'Gem kørsel' : 'Planlæg kørsel'}
+                      {isExpanded ? 'Gem og send til vognmand' : 'Planlæg kørsel'}
                     </button>
                   )}
                 </div>
@@ -669,7 +672,7 @@ export function AsfaltKoerselSection({
                     />
                   </div>
 
-                  {/* Gem */}
+                  {/* Gem og send til vognmand — kombineret gem + afsendelse i ét klik */}
                   <div className="flex justify-end gap-xs pt-xxxs">
                     <button
                       onClick={() => setKørselExpandedId(null)}
@@ -678,48 +681,17 @@ export function AsfaltKoerselSection({
                     <button
                       onClick={() => {
                         onGemKørsel(day.id)
+                        onSetSendtTilVognmandDates(prev => new Set([...prev, day.date]))
                         setKørselExpandedId(null)
                       }}
-                      className="font-inter text-xs font-semibold text-white bg-dark-teal px-sm py-xxxs rounded-lg hover:opacity-90"
-                    >Gem kørsel</button>
+                      className="font-inter text-xs font-semibold text-deep-teal bg-yellow px-sm py-xxxs rounded-lg hover:opacity-90"
+                    >Gem og send til vognmand</button>
                   </div>
                 </div>
               )}
             </div>
           )
         })}
-        {/* Send til vognmand — section-level afledt tilstand.
-            Vises KUN når der er mindst én planlagt dag.
-            Gul = usendte planlagte dage findes; grøn = alle planlagte dage er sendt.
-            Klik sender ALLE usendte planlagte dage (allerede-sendte røres ikke).
-            TODO: Erstat med Supabase når klar — insert i vognmand_bestilling-tabel */}
-        {(() => {
-          const planlagteDage = activeDays.filter(d => kørselPlanlagtIds.has(d.id))
-          if (planlagteDage.length === 0) return null
-          const usendteDage = planlagteDage.filter(d => !sendtTilVognmandDates.has(d.date))
-          const harUsendte = usendteDage.length > 0
-          return (
-            <div className="border-t border-hairline px-sm py-sm flex items-center justify-between">
-              {harUsendte ? (
-                <button
-                  type="button"
-                  onClick={() => onSetSendtTilVognmandDates(prev => new Set([...prev, ...usendteDage.map(d => d.date)]))}
-                  className="inline-flex items-center font-inter text-sm font-semibold text-deep-teal bg-yellow px-sm py-xs rounded-lg hover:opacity-90 active:scale-[0.98] transition-all min-h-touch"
-                >
-                  Send til vognmand
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled
-                  className="inline-flex items-center font-inter text-sm font-semibold text-white bg-good px-sm py-xs rounded-lg min-h-touch cursor-default"
-                >
-                  Sendt til vognmand
-                </button>
-              )}
-            </div>
-          )
-        })()}
       </div>
     </div>
   )
