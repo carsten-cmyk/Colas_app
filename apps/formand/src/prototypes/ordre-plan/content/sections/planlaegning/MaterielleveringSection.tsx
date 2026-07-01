@@ -14,7 +14,7 @@
  * Må ikke importeres i produktionskode.
  */
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Truck, Plus } from 'lucide-react'
 import {
   type Etape,
@@ -68,6 +68,108 @@ export interface MaterielleveringSectionProps {
   onFjernResource: (resourceId: string) => void
   /** Handler: tilføj en ny ressource fra katalog — katalogets items har ikke id-felt */
   onTilfoejResource: (katalogItem: { plantNumber: string; description: string; transportTag: MockResource['transportTag'] }) => void
+}
+
+// ─── Intern helper: Spor B render (enkelt-ordre, etape-bevidste presentere) ───
+
+interface MaterielTilstandScope {
+  materielResources: MaterielEnhedTilstand[]
+  aktivEtape: Etape | undefined
+  materielUiState: MaterielUiState
+  transportPlaner: Record<string, MaterielTransportPlan>
+  selectedPlanDate: string
+  etaper: Etape[]
+  onTransportChange: (resourceId: string, etapeId: number, patch: TransportPlanPatch) => void
+  onTransportGem: (resourceId: string, etapeId: number) => void
+  onMaterielSend: (etape: Etape) => void
+  setTilfoejMaterielOpen: (open: boolean) => void
+  setMaterielSoeg: (soeg: string) => void
+}
+
+function renderMaterielTilstand(scope: MaterielTilstandScope): React.ReactNode {
+  const {
+    materielResources,
+    aktivEtape,
+    materielUiState,
+    transportPlaner,
+    selectedPlanDate,
+    etaper,
+    onTransportChange,
+    onTransportGem,
+    onMaterielSend,
+    setTilfoejMaterielOpen,
+    setMaterielSoeg,
+  } = scope
+
+  // Brancher på materielUiState — afledt af selectedPlanDate + etaper
+  if (materielUiState === 'planlaeg' && aktivEtape) {
+    return (
+      <>
+        <MaterielPlanlaegTilstand
+          resources={materielResources}
+          etape={aktivEtape}
+          transportPlaner={transportPlaner}
+          onChange={(resourceId, patch) =>
+            onTransportChange(resourceId, aktivEtape.id, patch)
+          }
+          onGem={(resourceId) =>
+            onTransportGem(resourceId, aktivEtape.id)
+          }
+          onSend={() => onMaterielSend(aktivEtape)}
+        />
+        <button
+          type="button"
+          onClick={() => { setTilfoejMaterielOpen(true); setMaterielSoeg('') }}
+          className="w-full flex items-center justify-center gap-xs py-xs font-inter text-sm text-text-muted border border-hairline rounded-xl bg-surface hover:bg-surface-2 transition-colors mt-xxxs"
+        >
+          <Plus size={14} aria-hidden="true" />
+          Tilføj materiel
+        </button>
+      </>
+    )
+  }
+  if (materielUiState === 'ny-etape' && aktivEtape) {
+    return (
+      <>
+        <MaterielNyEtapeTilstand
+          resources={materielResources}
+          etape={aktivEtape}
+          transportPlaner={transportPlaner}
+          onChange={(resourceId, patch) =>
+            onTransportChange(resourceId, aktivEtape.id, patch)
+          }
+          onGem={(resourceId) =>
+            onTransportGem(resourceId, aktivEtape.id)
+          }
+          onSend={() => onMaterielSend(aktivEtape)}
+        />
+        <button
+          type="button"
+          onClick={() => { setTilfoejMaterielOpen(true); setMaterielSoeg('') }}
+          className="w-full flex items-center justify-center gap-xs py-xs font-inter text-sm text-text-muted border border-hairline rounded-xl bg-surface hover:bg-surface-2 transition-colors mt-xxxs"
+        >
+          <Plus size={14} aria-hidden="true" />
+          Tilføj materiel
+        </button>
+      </>
+    )
+  }
+  if (materielUiState === 'paa-pladsen' && aktivEtape) {
+    return (
+      <MaterielPaaPladsenTilstand
+        resources={materielResources}
+        etape={aktivEtape}
+        transportPlaner={transportPlaner}
+      />
+    )
+  }
+  // dvale (gap mellem etaper eller dag uden etape)
+  const naestEtape = etaper.find(e => e.firstDay > selectedPlanDate)
+  return (
+    <MaterielDvaleTilstand
+      naestEtapeStartDato={naestEtape?.firstDay}
+    />
+  )
 }
 
 // ─── Komponent ────────────────────────────────────────────────────────────────
@@ -205,77 +307,19 @@ export function MaterielleveringSection({
         )}
 
         {/* Normal mode: etape-bevidste presentere (Round 4a) */}
-        {!isSamleordreMode && (() => {
-          // Brancher på materielUiState — afledt af selectedPlanDate + etaper
-          if (materielUiState === 'planlaeg' && aktivEtape) {
-            return (
-              <>
-                <MaterielPlanlaegTilstand
-                  resources={materielResources}
-                  etape={aktivEtape}
-                  transportPlaner={transportPlaner}
-                  onChange={(resourceId, patch) =>
-                    onTransportChange(resourceId, aktivEtape.id, patch)
-                  }
-                  onGem={(resourceId) =>
-                    onTransportGem(resourceId, aktivEtape.id)
-                  }
-                  onSend={() => onMaterielSend(aktivEtape)}
-                />
-                <button
-                  type="button"
-                  onClick={() => { setTilfoejMaterielOpen(true); setMaterielSoeg('') }}
-                  className="w-full flex items-center justify-center gap-xs py-xs font-inter text-sm text-text-muted border border-hairline rounded-xl bg-surface hover:bg-surface-2 transition-colors mt-xxxs"
-                >
-                  <Plus size={14} aria-hidden="true" />
-                  Tilføj materiel
-                </button>
-              </>
-            )
-          }
-          if (materielUiState === 'ny-etape' && aktivEtape) {
-            return (
-              <>
-                <MaterielNyEtapeTilstand
-                  resources={materielResources}
-                  etape={aktivEtape}
-                  transportPlaner={transportPlaner}
-                  onChange={(resourceId, patch) =>
-                    onTransportChange(resourceId, aktivEtape.id, patch)
-                  }
-                  onGem={(resourceId) =>
-                    onTransportGem(resourceId, aktivEtape.id)
-                  }
-                  onSend={() => onMaterielSend(aktivEtape)}
-                />
-                <button
-                  type="button"
-                  onClick={() => { setTilfoejMaterielOpen(true); setMaterielSoeg('') }}
-                  className="w-full flex items-center justify-center gap-xs py-xs font-inter text-sm text-text-muted border border-hairline rounded-xl bg-surface hover:bg-surface-2 transition-colors mt-xxxs"
-                >
-                  <Plus size={14} aria-hidden="true" />
-                  Tilføj materiel
-                </button>
-              </>
-            )
-          }
-          if (materielUiState === 'paa-pladsen' && aktivEtape) {
-            return (
-              <MaterielPaaPladsenTilstand
-                resources={materielResources}
-                etape={aktivEtape}
-                transportPlaner={transportPlaner}
-              />
-            )
-          }
-          // dvale (gap mellem etaper eller dag uden etape)
-          const naestEtape = etaper.find(e => e.firstDay > selectedPlanDate)
-          return (
-            <MaterielDvaleTilstand
-              naestEtapeStartDato={naestEtape?.firstDay}
-            />
-          )
-        })()}
+        {!isSamleordreMode && renderMaterielTilstand({
+          materielResources,
+          aktivEtape,
+          materielUiState,
+          transportPlaner,
+          selectedPlanDate,
+          etaper,
+          onTransportChange,
+          onTransportGem,
+          onMaterielSend,
+          setTilfoejMaterielOpen,
+          setMaterielSoeg,
+        })}
 
       </section>
 
